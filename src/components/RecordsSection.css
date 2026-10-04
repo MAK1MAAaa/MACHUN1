@@ -1,0 +1,71 @@
+.records-browser { min-width: 0; }
+.records-browser .records-heading { flex-wrap: wrap; }
+.records-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin: 22px 0 16px; }
+.records-mode { display: inline-flex; gap: 3px; padding: 4px; background: var(--surface-2); border: 1px solid var(--line-soft); border-radius: 10px; }
+.records-mode button { color: var(--muted); background: transparent; border: 1px solid transparent; border-radius: 7px; padding: 9px 14px; font-size: 0.8rem; font-weight: 700; }
+.records-mode button[aria-pressed="true"] { color: #30483b; border-color: var(--line); background: #fff; box-shadow: 0 2px 5px rgba(65, 91, 66, 0.06); }
+.records-count, .records-page-status { color: var(--muted); font-size: 0.75rem; }
+.records-filters { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 10px; }
+.records-filter, .records-browser .records-filter-search { display: grid; gap: 6px; width: 92px; min-width: 0; color: var(--muted); font-size: 0.74rem; }
+.records-browser .records-filter-search { flex: 1 1 210px; width: auto; max-width: 320px; }
+.records-genre-filter { width: 168px; }
+.records-version-filter { width: 132px; }
+.records-source-filter { width: 118px; }
+.records-filter select, .records-page-jump select { color: #30483b; border: 1px solid var(--line); border-radius: 7px; background: #fff; padding: 6px 8px; font-size: 0.78rem; min-height: 36px; width: 100%; min-width: 0; }
+.records-browser .record-search input { width: 100%; height: 36px; min-width: 0; padding: 6px 10px; font-size: 0.78rem; letter-spacing: normal; }
+.records-filter-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.records-unplayed-toggle, .records-reset, .records-page-controls button { border: 1px solid var(--line); border-radius: 7px; color: #4c6655; background: rgba(255, 255, 255, 0.8); font-size: 0.74rem; padding: 8px 10px; min-height: 36px; white-space: nowrap; }
+.records-unplayed-toggle:hover:not(:disabled), .records-reset:hover, .records-page-controls button:hover:not(:disabled) { border-color: #9bb38e; background: var(--surface-2); }
+.records-unplayed-toggle[aria-pressed="true"] { background: #47725d; border-color: #47725d; color: #fff; }
+.records-unplayed-toggle[aria-pressed="true"]:hover:not(:disabled) { background: #3e6552; color: #fff; }
+.records-reset { background: transparent; }
+.records-unplayed-toggle:disabled { opacity: 0.45; cursor: not-allowed; }
+.records-browser .record-table-wrap { min-width: 0; width: 100%; max-width: 100%; margin-top: 16px; }
+.records-browser .record-table { table-layout: fixed; min-width: 1280px; }
+.records-col-rank { width: 46px; }
+.records-col-difficulty,
+.records-col-level,
+.records-col-constant,
+.records-col-genre,
+.records-col-version,
+.records-col-source,
+.records-col-score,
+.records-col-rating,
+.records-col-actions { width: 114px; }
+.records-browser .record-table th, .records-browser .record-table td { text-align: left; vertical-align: middle; padding: 12px 6px; }
+.records-browser .record-table th:not(:last-child), .records-browser .record-table td:not(:last-child) { border-right: 1px solid var(--line-soft); }
+.records-browser .record-table th { font-size: 1rem; letter-spacing: normal; }
+.records-browser .record-table td { overflow-wrap: anywhere; }
+.records-browser .record-song-cell { justify-content: flex-start; gap: 8px; min-width: 0; width: 100%; }
+.records-browser .record-cover { width: 36px; height: 36px; }
+.records-browser .record-song-info { min-width: 0; flex: 0 1 320px; max-width: calc(100% - 44px); }
+.record-title-details { display: block; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border: 0; border-radius: 3px; background: transparent; color: inherit; padding: 3px 0; font: inherit; font-weight: 700; text-align: left; }
+.record-title-details:hover { color: var(--cyan); text-decoration: underline; text-underline-offset: 3px; }
+.records-browser .diff-tag { margin-right: 0; }
+.records-browser .score-source { max-width: 100%; padding: 4px 5px; letter-spacing: normal; }
+.records-score-sort { display: inline-flex; align-items: center; justify-content: flex-start; gap: 5px; min-height: 30px; border: 1px solid transparent; border-radius: 7px; background: transparent; color: inherit; padding: 3px 0; font: inherit; text-align: left; cursor: pointer; white-space: nowrap; }
+.records-score-sort:hover { border-color: var(--line); background: var(--surface-2); }
+.records-score-sort span { font-size: 1rem; }
+.records-source-note { margin: 10px 0 0; color: var(--muted); font-size: 0.72rem; }
+.records-browser .records-metadata-cell { font-size: 0.7rem; color: var(--muted); }
+.records-unplayed { color: var(--muted); font-size: 0.72rem; white-space: nowrap; }
+.records-browser .row-actions { justify-content: flex-start; align-items: center; gap: 4px; white-space: nowrap; }
+.records-browser .row-actions button { padding: 5px 6px; }
+
+.records-pagination { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 16px; }
+.records-page-controls { display: flex; gap: 6px; align-items: center; }
+.records-page-controls button { min-height: 38px; }
+.records-page-controls button:disabled { opacity: 0.45; cursor: not-allowed; }
+.records-page-jump { width: 62px; }
+.records-page-jump select { min-height: 38px; padding: 8px 5px; }
+.records-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+@media (max-width: 700px) {
+  .records-toolbar { margin-top: 18px; }
+  .records-browser .records-filter-search { flex-basis: 100%; max-width: none; }
+  .records-filter { flex: 1 1 calc(50% - 5px); width: auto; }
+  .records-filter-actions { width: 100%; }
+  .records-pagination { align-items: flex-start; flex-direction: column; }
+  .records-page-controls { width: 100%; justify-content: space-between; gap: 5px; }
+  .records-page-controls button { font-size: 0.7rem; padding: 8px 7px; }
+  .records-page-jump { width: 50px; }
+}
