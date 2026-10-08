@@ -7,6 +7,8 @@ import type {
   SingleRating,
 } from "../types";
 import { calculateRating } from "./rating";
+import { readScoreAchievements } from "./scoreAchievements";
+import { upsertHighScore } from "./storage";
 
 function normalizeAliases(aliases: unknown): string[] {
   if (!Array.isArray(aliases)) return [];
@@ -90,10 +92,9 @@ export function importBackup(
       rating: calculateRating(score, chart.constant),
       updatedAt: typeof candidate.updatedAt === "string" ? candidate.updatedAt : new Date().toISOString(),
       source: parseSource(candidate.source),
+      ...readScoreAchievements(candidate),
     };
-    const existing = state.scores[key];
-    if (!existing || score > existing.score) {
-      state.scores[key] = record;
+    if (upsertHighScore(state, record) !== "rejected") {
       report.importedScores += 1;
     } else {
       report.skippedScores += 1;
@@ -115,6 +116,6 @@ export function importBackup(
 }
 
 function parseSource(value: unknown): ScoreSource {
-  if (value === "rin" || value === "otogame" || value === "lxns") return value;
+  if (value === "rin" || value === "otogame" || value === "lxns" || value === "munet") return value;
   return "manual";
 }

@@ -439,11 +439,13 @@ async function checkRecordsBrowsing(page: Page, outputDirectory: string, mark: (
     await section.getByRole("button", { name: "下一页", exact: true }).click();
     assert((await section.locator(".records-page-status").innerText()).startsWith("第 2 /"));
   }
-  await section.getByLabel("定数", { exact: true }).selectOption("13.0");
-  assert((await section.locator(".table-empty").innerText()).includes("暂无匹配谱面"));
-  assert.equal(Number(await section.locator(".table-empty").getAttribute("colspan")), await header.locator("th").count());
-  assert(await section.getByRole("button", { name: "下一页", exact: true }).isDisabled());
+  const constants = section.getByLabel("定数", { exact: true });
+  assert.deepEqual(await constants.locator("option").evaluateAll((options) => options.map((option) => (option as HTMLOptionElement).value).filter(Boolean)), ["13.5", "13.6", "13.7", "13.8", "13.9"]);
+  await constants.selectOption("13.5");
   await section.getByLabel("等级", { exact: true }).selectOption("13");
+  assert.equal(await constants.inputValue(), "");
+  assert.deepEqual(await constants.locator("option").evaluateAll((options) => options.map((option) => (option as HTMLOptionElement).value).filter(Boolean)), ["13.0", "13.1", "13.2", "13.3", "13.4"]);
+  await constants.selectOption("13.0");
   const thirteenCharts = catalog.filter((chart) => chart.constant === 13);
   assert(thirteenCharts.length > 10, "13.0+ catalog must include paginated 13.0 charts");
   assert.equal(await tableRows.count(), 10);
@@ -466,7 +468,7 @@ async function checkRecordsBrowsing(page: Page, outputDirectory: string, mark: (
   await section.getByLabel("等级", { exact: true }).selectOption("");
   await section.getByLabel("定数", { exact: true }).selectOption("");
   assert((await section.locator(".records-page-status").innerText()).startsWith("第 1 /"));
-  mark("13 and 13+ group their own 0.1 constants, combine with difficulty filters, reset pagination and render incompatible filters as an empty table");
+  mark("13 and 13+ group their own 0.1 constants, combine with difficulty filters, reset pagination and clear incompatible constant selections");
   const unplayed = catalog.find((chart) => chart.id.length >= 4 && !seed.scores[`${chart.id}:${chart.difficulty}`])!;
   assert(unplayed, "fixture must contain an unplayed catalog chart");
   const unplayedKey = `${unplayed.id}:${unplayed.difficulty}`;
@@ -526,7 +528,7 @@ async function checkRecordsBrowsing(page: Page, outputDirectory: string, mark: (
   mark("empty catalog rows span every column, reset restores all filters and mobile table scrolls internally without viewport overflow");
 }
 
-async function checkCompactTablesAndCopy(page: Page, outputDirectory: string, mark: (message: string) => void): Promise<void> {
+async function checkCompactTablesAndDetails(page: Page, outputDirectory: string, mark: (message: string) => void): Promise<void> {
   const section = page.locator(".records-browser");
   const table = section.locator(".record-table");
   const header = table.locator("thead");
@@ -535,10 +537,11 @@ async function checkCompactTablesAndCopy(page: Page, outputDirectory: string, ma
   const longChart = catalog.filter((chart) => /[^\x00-\x7f]/.test(chart.title))
     .sort((left, right) => right.title.length - left.title.length)[0];
   assert(longChart.title.length > 40, "catalog must provide a genuinely long title for truncation testing");
-  assert(/[^\x00-\x7f]/.test(longChart.title), "copy fixture must exercise Unicode text");
+  assert(/[^\x00-\x7f]/.test(longChart.title), "details fixture must exercise Unicode text");
   const before = await readState(page);
   const fixture = structuredClone(before);
-  fixture.scores[`${longChart.id}:${longChart.difficulty}`] = chartRecord(longChart, 1_009_999, "manual");
+  fixture.scores[`${longChart.id}:${longChart.difficulty}`] = { ...chartRecord(longChart, 1_009_999, "manual"), combo: "aj" };
+  fixture.nicknameOverrides[longChart.id] = ["详情回归测试别名"];
   await page.evaluate(({ key, state }) => localStorage.setItem(key, JSON.stringify(state)), { key: STORAGE_KEY, state: fixture });
   await page.reload({ waitUntil: "networkidle" });
   const readHeaderLabels = async () => header.locator("th").allTextContents().then((texts) => texts.map((text) => text.trim().replace(/\s*[↕↑↓]\s*$/, "")));
@@ -554,66 +557,59 @@ async function checkCompactTablesAndCopy(page: Page, outputDirectory: string, ma
     const dimensions = await table.evaluate((element) => {
       const song = element.querySelector<HTMLElement>("thead th:nth-child(" + (element.querySelector(".records-col-rank") ? "2" : "1") + ")")!;
       const headerSizes = [...element.querySelectorAll("thead th")].map((cell) => Number.parseFloat(getComputedStyle(cell).fontSize));
-      const centered = [...element.querySelectorAll("thead th, tbody tr:first-child td")].every((cell) => getComputedStyle(cell).textAlign === "center");
+      const leftAligned = [...element.querySelectorAll("thead th, tbody tr:first-child td")].every((cell) => getComputedStyle(cell).textAlign === "left");
       return {
         song: song.getBoundingClientRect().width,
         difficulty: element.querySelector<HTMLElement>(".records-col-difficulty")!.getBoundingClientRect().width,
         level: element.querySelector<HTMLElement>(".records-col-level")!.getBoundingClientRect().width,
         constant: element.querySelector<HTMLElement>(".records-col-constant")!.getBoundingClientRect().width,
         source: element.querySelector<HTMLElement>(".records-col-source")!.getBoundingClientRect().width,
-        headerSizes, centered,
+        headerSizes, leftAligned,
+        actions: element.querySelector<HTMLElement>(".records-col-actions")!.getBoundingClientRect().width,
       };
     });
-    assert(dimensions.headerSizes.every((size) => size >= 14), "every table header should use a legible enlarged font");
-    assert(dimensions.centered, "headers and cells must be centered in both modes");
-    assert(dimensions.difficulty <= 85 && dimensions.level <= 65 && dimensions.constant <= 75 && dimensions.source <= 100, "auxiliary columns should remain compact");
+    assert(dimensions.headerSizes.every((size) => size >= 16), "every table header should use a legible enlarged font");
+    assert(dimensions.leftAligned, "headers and cells must be left aligned in both modes");
+    assert([dimensions.difficulty, dimensions.level, dimensions.constant, dimensions.source].every((width) => Math.abs(width - dimensions.actions) < 1), "auxiliary columns use the same width as actions");
     assert(dimensions.song > Math.max(dimensions.difficulty, dimensions.level, dimensions.constant, dimensions.source), "the title receives more space than compact auxiliary columns");
     assert(await wrapper.evaluate((element) => element.scrollWidth <= element.clientWidth + 1), "1440px desktop must display all columns without horizontal scrolling");
     await section.screenshot({ path: join(outputDirectory, `desktop-compact-${isRating ? "rating" : "catalog"}.png`) });
   }
-  mark("Rating and catalog tables share ten centered columns, with one additional Rating rank column, enlarged headers and compact auxiliary widths without desktop scrolling");
+  mark("Rating and catalog tables share ten left-aligned columns, with one additional Rating rank column, enlarged headers and compact auxiliary widths without desktop scrolling");
 
   await section.getByRole("button", { name: "Rating 排名", exact: true }).click();
   await section.getByRole("searchbox").fill(longChart.id);
   const row = table.locator("tbody tr").filter({ has: page.getByText(`ID ${longChart.id}`, { exact: true }) })
     .filter({ has: page.getByText(longChart.difficulty, { exact: true }) });
-  const titleButton = row.locator(".record-title-copy");
-  const feedback = section.locator(".records-copy-status");
+  const titleButton = row.locator(".record-title-details");
   assert.equal(await titleButton.innerText(), longChart.title);
   assert.equal(await titleButton.getAttribute("title"), longChart.title);
-  assert.equal(await titleButton.getAttribute("aria-label"), `复制歌曲名称：${longChart.title}`);
+  assert.equal(await titleButton.getAttribute("aria-label"), `查看歌曲详情：${longChart.title}`);
   const titleLayout = await titleButton.evaluate((element) => {
     const style = getComputedStyle(element);
     return { nowrap: style.whiteSpace, overflow: style.overflow, ellipsis: style.textOverflow, width: element.clientWidth, fullWidth: element.scrollWidth };
   });
   assert.deepEqual([titleLayout.nowrap, titleLayout.overflow, titleLayout.ellipsis], ["nowrap", "hidden", "ellipsis"]);
-  assert(titleLayout.fullWidth > titleLayout.width, "a long song name should visibly truncate within its own column");
-  await titleButton.hover();
-  assert.equal(await titleButton.getAttribute("title"), longChart.title, "hover exposes the original full title through its native tooltip");
-  const stateBeforeCopy = await readState(page);
-  assert(await page.evaluate(() => navigator.clipboard.writeText.toString().includes("clipboard.calls.push")), "isolated clipboard stub must be installed before any title is clicked");
-  await titleButton.click({ button: "left", clickCount: 1 });
-  await feedback.filter({ hasText: "已复制" }).waitFor();
-  assert.equal(await feedback.getAttribute("role"), "status");
-  const copied = await page.evaluate(() => window.__smokeClipboard.calls);
-  assert.deepEqual(copied, [longChart.title], "one left click must copy the complete title exactly once");
-  assert(Buffer.from(copied[0]).equals(Buffer.from(longChart.title)), "Unicode title bytes must be preserved");
-  assert.deepEqual(await readState(page), stateBeforeCopy);
-  mark("long song titles stay on one truncated line, expose the full hover title and copy the exact complete Unicode title on one left click without changing stored scores");
-
-  await page.evaluate(() => { window.__smokeClipboard.mode = "denied"; });
-  await titleButton.click({ button: "left", clickCount: 1 });
-  await feedback.filter({ hasText: "复制失败" }).waitFor();
-  assert.deepEqual(await page.evaluate(() => window.__smokeClipboard.fallbackCalls), [], "denied clipboard access must not be retried through the legacy path");
-  assert.deepEqual(await readState(page), stateBeforeCopy);
-  await page.evaluate(() => { window.__smokeClipboard.mode = "missing"; });
-  await titleButton.click({ button: "left", clickCount: 1 });
-  await feedback.filter({ hasText: "已复制" }).waitFor();
-  assert.deepEqual(await page.evaluate(() => window.__smokeClipboard.fallbackCalls), [longChart.title]);
-  assert.equal(await page.locator('textarea[aria-hidden="true"]').count(), 0);
-  assert(await titleButton.evaluate((element) => document.activeElement === element), "legacy copy should restore focus to the initiating title button");
-  assert.deepEqual(await readState(page), stateBeforeCopy);
-  mark("clipboard denial gives failure feedback without bypassing permission, and legacy fallback copies complete text, cleans up and restores focus; actual system clipboard remains untouched");
+  assert(titleLayout.fullWidth > titleLayout.width, "a long song name should truncate inside its own column");
+  const stateBeforeDetails = await readState(page);
+  await titleButton.click();
+  const details = page.getByRole("dialog", { name: longChart.title, exact: true });
+  await details.waitFor({ state: "visible" });
+  assert.equal(await details.locator(".song-details-chart").count(), 3);
+  assert.deepEqual(await details.locator(".song-details-difficulty").allTextContents(), ["EXP", "MAS", "ULT"]);
+  const selected = details.locator(`.song-details-${longChart.difficulty.toLowerCase()}`);
+  assert.equal(await selected.locator(".score-grade").innerText(), "SSS+");
+  assert.equal(await selected.locator(".score-combo-aj").innerText(), "AJ");
+  assert((await details.locator(".song-details-aliases").innerText()).includes("详情回归测试别名"));
+  assert.equal(await details.getByRole("button", { name: "我的游玩记录", exact: true }).count(), 0);
+  await page.keyboard.press("Escape");
+  await details.waitFor({ state: "hidden" });
+  await titleButton.click();
+  await details.getByRole("button", { name: "关闭歌曲详情", exact: true }).click();
+  await details.waitFor({ state: "hidden" });
+  assert.deepEqual(await page.evaluate(() => window.__smokeClipboard.calls), []);
+  assert.deepEqual(await readState(page), stateBeforeDetails);
+  mark("long Unicode titles truncate and open details; EXP/MAS/ULT, grade, AJ and expanded aliases are retained; close and Escape preserve scores without copying");
 
   await page.setViewportSize({ width: 390, height: 844 });
   await section.screenshot({ path: join(outputDirectory, "mobile-compact-rating.png") });
@@ -706,6 +702,7 @@ async function main(): Promise<void> {
     await previewToggle.click();
     assert.equal(await previewToggle.getAttribute("aria-expanded"), "true");
     assert.equal(await page.locator(".b30-card").count(), 30);
+    assert.equal(await page.locator(".b30-grid").evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(" ").length), 3);
     await previewToggle.click();
     assert.equal(await page.locator(".b30-card").count(), 0);
     const axis = getB30Axis(Object.values(seed.scores));
@@ -714,10 +711,10 @@ async function main(): Promise<void> {
     assert.equal(await metrics.nth(0).locator("strong").innerText(), axis.max.toFixed(1));
     assert((await metrics.nth(1).innerText()).includes("B30 − 0.2 向上取整"));
     assert.equal(await metrics.nth(1).locator("strong").innerText(), axis.min.toFixed(1));
-    assert.equal(await metrics.nth(2).locator("strong").innerText(), axis.middle.toFixed(2).replace(/0$/, ""));
-    mark("B30 image preview is collapsed by default and its chart displays rounded upper/lower bounds plus midpoint");
+    assert.equal(await metrics.nth(2).locator("strong").innerText(), (Math.floor((Object.values(seed.scores).sort((a, b) => b.rating - a.rating).slice(0, 30).reduce((sum, record) => sum + record.rating, 0) / 30 + 1e-9) * 100) / 100).toFixed(2));
+    mark("B30 image preview is collapsed by default and its chart displays rounded upper/lower bounds plus truncated B30 average Rating");
     await checkRecordsBrowsing(page, outputDirectory, mark);
-    await checkCompactTablesAndCopy(page, outputDirectory, mark);
+    await checkCompactTablesAndDetails(page, outputDirectory, mark);
 
     await sourceCard("munet").getByRole("button", { name: "绑定账号", exact: true }).click();
     await waitStatus("munet", "等待网页登录");
@@ -814,8 +811,8 @@ async function main(): Promise<void> {
         assert.equal(data.next_rating_list.length, item.candidates ? 20 : 0);
       } else {
         assert(buffer.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])));
-        assert.equal(buffer.readUInt32BE(16), item.candidates ? 2360 : 1440);
-        assert.equal(buffer.readUInt32BE(20), item.candidates ? 1792 : 1760);
+        assert.equal(buffer.readUInt32BE(16), 2360);
+        assert.equal(buffer.readUInt32BE(20), item.candidates ? 1792 : 1120);
       }
       assert(!buffer.includes(Buffer.from(fakeToken)));
       downloadedFiles.push(path);

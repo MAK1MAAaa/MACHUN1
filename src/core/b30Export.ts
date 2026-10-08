@@ -1,8 +1,10 @@
-import type { CatalogChart, Difficulty, ScoreSource, SingleRating } from "../types";
+import type { CatalogChart, ComboStatus, Difficulty, FullChainStatus, ScoreAchievements, ScoreSource, SingleRating } from "../types";
 import { B30_SIZE, chartKey, compareRatings, getB30 } from "./b30";
 import { SCORE_SOURCE_LABELS } from "./sources";
+import { scoreGrade } from "./rating";
+import { CHAIN_LABELS, COMBO_LABELS, mergeScoreAchievements } from "./scoreAchievements";
 
-export interface B30ExportSlot {
+export interface B30ExportSlot extends ScoreAchievements {
   rank: number;
   id: string;
   title: string;
@@ -47,6 +49,7 @@ export function createB30Export(
       rating: record.rating,
       coverUrl: charts.get(chartKey(record))?.coverUrl ?? "",
       source: record.source,
+      ...mergeScoreAchievements(record, {}),
     };
   });
 
@@ -101,6 +104,7 @@ export function createB30CandidatesExport(
       rating: record.rating,
       coverUrl: charts.get(chartKey(record))?.coverUrl ?? "",
       source: record.source,
+      ...mergeScoreAchievements(record, {}),
     };
   });
   return { ...data, candidates };
@@ -111,7 +115,16 @@ interface OtoB30Record {
   difficulty: number;
   music: { name: string };
   score: number;
+  full_combo?: "fullcombo" | "alljustice" | "alljusticecritical";
+  full_chain?: "fchain" | "fullchain2" | "fullchain";
 }
+
+const EXPORTED_COMBO: Record<ComboStatus, NonNullable<OtoB30Record["full_combo"]>> = {
+  fc: "fullcombo", aj: "alljustice", ajc: "alljusticecritical",
+};
+const EXPORTED_CHAIN: Record<FullChainStatus, NonNullable<OtoB30Record["full_chain"]>> = {
+  fchain: "fchain", gold: "fullchain2", platinum: "fullchain",
+};
 
 export interface OtoB30Export {
   code: 0;
@@ -131,6 +144,8 @@ export function createOtoB30Export(scores: Iterable<SingleRating>, withCandidate
     difficulty: levels[record.difficulty],
     music: { name: record.title },
     score: record.score,
+    ...(record.combo ? { full_combo: EXPORTED_COMBO[record.combo] } : {}),
+    ...(record.fullChain ? { full_chain: EXPORTED_CHAIN[record.fullChain] } : {}),
   });
   return {
     code: 0,
@@ -348,9 +363,24 @@ function drawFilledCard(
   const lines = titleLines(context, slot.title, contentWidth, 2);
   lines.forEach((line, index) => context.fillText(line, contentX, y + 54 + index * 23));
 
+  const badges = [
+    { label: scoreGrade(slot.score), background: "#fff2c9", color: "#80571a" },
+    ...(slot.combo ? [{ label: COMBO_LABELS[slot.combo], background: slot.combo === "fc" ? "#e2f5e6" : slot.combo === "aj" ? "#ffedcc" : "#ede3ff", color: slot.combo === "fc" ? "#246842" : slot.combo === "aj" ? "#9b5718" : "#6442a0" }] : []),
+    ...(slot.fullChain ? [{ label: CHAIN_LABELS[slot.fullChain], background: slot.fullChain === "gold" ? "#fff1bf" : "#e4f2fa", color: slot.fullChain === "gold" ? "#87611c" : "#43677c" }] : []),
+  ];
+  let badgeX = contentX;
+  context.font = '800 11px Inter, "PingFang SC", sans-serif';
+  for (const badge of badges) {
+    const badgeWidth = context.measureText(badge.label).width + 12;
+    roundedRect(context, badgeX, y + height - 52, badgeWidth, 18, 4);
+    context.fillStyle = badge.background;
+    context.fill();
+    context.fillStyle = badge.color;
+    context.fillText(badge.label, badgeX + 6, y + height - 39);
+    badgeX += badgeWidth + 5;
+  }
   context.fillStyle = "#667085";
   context.font = '700 10px Inter, "PingFang SC", sans-serif';
-  context.fillText("SCORE", contentX, y + height - 35);
   context.textAlign = "right";
   context.fillText("RATING", x + width - 15, y + height - 35);
 
@@ -394,8 +424,9 @@ export async function downloadB30Png(data: B30ExportV3 | B30CandidatesExport): P
   const canvas = document.createElement("canvas");
   const withCandidates = "candidates" in data;
   const slots = withCandidates ? [...data.b30, ...data.candidates] : data.b30;
-  const columns = withCandidates ? 5 : 3;
-  const width = withCandidates ? 2360 : 1440;
+  const columns = 5;
+  const rows = Math.ceil(slots.length / columns);
+  const width = 2360;
   const margin = 40;
   const columnGap = 14;
   const rowGap = 12;
@@ -403,7 +434,7 @@ export async function downloadB30Png(data: B30ExportV3 | B30CandidatesExport): P
   const cardHeight = 148;
   const cardWidth = (width - margin * 2 - columnGap * (columns - 1)) / columns;
   const candidateGap = withCandidates ? 32 : 0;
-  const height = headerHeight + cardHeight * 10 + rowGap * 9 + margin + candidateGap;
+  const height = headerHeight + cardHeight * rows + rowGap * (rows - 1) + margin + candidateGap;
   canvas.width = width;
   canvas.height = height;
 

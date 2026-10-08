@@ -23,6 +23,7 @@ import {
 import { mergeSyncResult } from "./core/sync";
 import { SourceSyncControls, useSourceSync } from "./components/SourceSyncControls";
 import { RecordsSection } from "./components/RecordsSection";
+import { ScoreBadges } from "./components/ScoreBadges";
 import {
   importSourceFile,
   SCORE_SOURCE_LABELS,
@@ -673,7 +674,7 @@ function App() {
                         <div className="b30-bar-track">
                           {record ? (
                             <div className="b30-bar-column" style={{ height: `${Math.min(barHeight, 100)}%` }}>
-                              <span className="b30-bar-tooltip">{record.rating.toFixed(4)}<small>{record.title}</small></span>
+                              <span className="b30-bar-tooltip">{record.rating.toFixed(4)}<small>{record.title}</small><ScoreBadges record={record} /></span>
                             </div>
                           ) : <div className="b30-bar-empty-mark" />}
                         </div>
@@ -707,6 +708,7 @@ function App() {
                           <SourceTag source={record.source} />
                         </div>
                         <h3 title={record.title}>{record.title}</h3>
+                        <ScoreBadges record={record} />
                       </div>
                       <div className="card-stats">
                         <div><span>分数</span><strong>{formatScore(record.score)}</strong></div>

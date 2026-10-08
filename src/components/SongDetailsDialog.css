@@ -72,6 +72,7 @@
 .song-details-difficulty { font-size: 15px; }
 .song-details-constant { font-size: 20px; font-variant-numeric: tabular-nums; }
 .song-details-score { margin-left: auto; font-size: 23px; font-variant-numeric: tabular-nums; }
+.song-details-score .score-badges { justify-content: flex-end; margin-top: 5px; }
 
 .song-details-aliases { margin-top: 22px; padding: 20px; border-radius: 16px; background: #ece6f8; }
 .song-details-aliases h3 { margin: 0 0 14px; font-size: 18px; font-weight: 600; }

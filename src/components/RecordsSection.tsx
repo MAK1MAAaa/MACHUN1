@@ -16,6 +16,7 @@ import {
 import { SCORE_SOURCE_LABELS } from "../core/sources";
 import { DIFFICULTIES, SCORE_SOURCES, type CatalogChart, type SingleRating } from "../types";
 import { SongDetailsDialog } from "./SongDetailsDialog";
+import { ScoreBadges } from "./ScoreBadges";
 import "./RecordsSection.css";
 
 export interface RecordsSectionProps {
@@ -25,21 +26,6 @@ export interface RecordsSectionProps {
   onEdit: (chart: CatalogChart, record?: SingleRating) => void;
   onDelete: (record: SingleRating) => void;
   disabled: boolean;
-}
-
-function scoreGrade(score: number): string {
-  if (score >= 1_009_000) return "SSS+";
-  if (score >= 1_007_500) return "SSS";
-  if (score >= 1_005_000) return "SS+";
-  if (score >= 1_000_000) return "SS";
-  if (score >= 990_000) return "S+";
-  if (score >= 975_000) return "S";
-  if (score >= 950_000) return "AAA";
-  if (score >= 925_000) return "AA";
-  if (score >= 900_000) return "A";
-  if (score >= 800_000) return "BBB";
-  if (score >= 500_000) return "C";
-  return "D";
 }
 
 export function RecordsSection({ records, scores, nicknameOverrides, onEdit, onDelete, disabled }: RecordsSectionProps) {
@@ -242,7 +228,7 @@ export function RecordsSection({ records, scores, nicknameOverrides, onEdit, onD
                 <td className="records-metadata-cell">{chart.genre}</td>
                 <td className="records-metadata-cell">{chart.version}</td>
                 <td>{record ? <span className={`score-source ${record.source}`}>{SCORE_SOURCE_LABELS[record.source]}</span> : <span className="records-unplayed">未游玩</span>}</td>
-                <td>{record ? <>{formatScore(record.score)}<small>{scoreGrade(record.score)}</small></> : "—"}</td>
+                <td className="records-score-cell">{record ? <>{formatScore(record.score)}<ScoreBadges record={record} /></> : "—"}</td>
                 <td>{record ? <strong className="rating-cell">{record.rating.toFixed(4)}</strong> : "—"}</td>
                 <td>
                   <div className="row-actions">

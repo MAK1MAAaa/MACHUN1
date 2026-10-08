@@ -7,6 +7,7 @@ import type {
 } from "../types";
 import { calculateRating } from "./rating";
 import { upsertHighScore } from "./storage";
+import { mergeScoreAchievements, readScoreAchievements } from "./scoreAchievements";
 
 export type ExternalScoreSource = Exclude<ScoreSource, "manual">;
 
@@ -158,7 +159,11 @@ export function importSourcePayload(
       const detail = entry && typeof entry === "object" && !Array.isArray(entry)
         ? entry as Record<string, unknown>
         : {};
-      candidates.push({ musicId: detail.musicId, level: detail.level, scoreMax: detail.scoreMax });
+      candidates.push({
+        musicId: detail.musicId, level: detail.level, scoreMax: detail.scoreMax,
+        updatedAt: parseUpdatedAt(detail, now),
+        ...readScoreAchievements(detail),
+      });
     }
   } else {
     collectScoreCandidates(payload, candidates);
@@ -201,9 +206,13 @@ export function importSourcePayload(
       rating: calculateRating(score, chart.constant),
       updatedAt: parseUpdatedAt(candidate, now),
       source,
+      ...readScoreAchievements(candidate, score),
     };
     const previous = recordsByChart.get(key);
-    if (!previous || record.score > previous.score) recordsByChart.set(key, record);
+    recordsByChart.set(key, {
+      ...(previous && previous.score >= record.score ? previous : record),
+      ...mergeScoreAchievements(previous ?? {}, record),
+    });
   }
 
   const state = structuredClone(current);

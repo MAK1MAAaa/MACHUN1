@@ -2,6 +2,7 @@ import { useEffect, useId, useRef } from "react";
 import { chartKey } from "../core/b30";
 import { formatScore } from "../core/rating";
 import { DIFFICULTIES, type CatalogChart, type SingleRating } from "../types";
+import { ScoreBadges } from "./ScoreBadges";
 import "./SongDetailsDialog.css";
 
 export interface SongDetailsDialogProps {
@@ -70,7 +71,9 @@ export function SongDetailsDialog({ chart, charts, scores, aliases, onClose }: S
             <li key={difficulty} className={`song-details-chart song-details-${difficulty.toLowerCase()}`}>
               <span className="song-details-difficulty">{difficulty}</span>
               <span className="song-details-constant" aria-label={`${difficulty} 定数`}>{songChart ? songChart.constant.toFixed(1) : "/"}</span>
-              <span className="song-details-score" aria-label={`${difficulty} 成绩`}>{record ? formatScore(record.score) : ""}</span>
+              <span className="song-details-score" aria-label={`${difficulty} 成绩`}>
+                {record && <>{formatScore(record.score)}<ScoreBadges record={record} /></>}
+              </span>
             </li>
           );
         })}
