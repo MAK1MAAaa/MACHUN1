@@ -37,7 +37,7 @@ const provider: BrowserProvider = {
 };
 const options = {
   store, providers: { rin: provider, munet: provider, otogame: provider }, bindPollMs: 50, bindTimeoutMs: 20_000,
-  launcher: { async open(path: string, url: string) { opened = await browserLauncher.open(path, url, false); return opened; } },
+  launcher: { async open(path: string, url: string, visible: boolean) { opened = await browserLauncher.open(path, url, visible); return opened; } },
 };
 const first = new SourceManager(options);
 const restored = new SourceManager(options);

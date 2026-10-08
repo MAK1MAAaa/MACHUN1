@@ -1,0 +1,16 @@
+services:
+  machun1:
+    image: machun1:manual-login-amd64
+    platform: linux/amd64
+    restart: unless-stopped
+    shm_size: 1gb
+    ports:
+      - "127.0.0.1:${MACHUN_PUBLISH_PORT:-4399}:4399"
+    environment:
+      MACHUN_PUBLIC_ORIGIN: ${MACHUN_PUBLIC_ORIGIN:?请填写完整访问地址}
+      MACHUN_ACCESS_PASSWORD: ${MACHUN_ACCESS_PASSWORD:?请设置至少12位的访问密码}
+    volumes:
+      - machun_data:/data
+
+volumes:
+  machun_data:

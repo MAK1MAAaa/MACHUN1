@@ -6,13 +6,18 @@ import type { ExternalScoreSource } from "../src/core/sources";
 import type { SourceManager } from "./manager";
 import { safeError } from "./manager";
 import { SyncError } from "./provider";
+import { createAccessGate } from "./access";
+import { attachDesktopProxy } from "./desktopProxy";
 
 export type HttpManager = Pick<SourceManager, "connections" | "bind" | "unbind" | "sync">;
 
-interface HttpOptions {
+export interface HttpOptions {
   manager: HttpManager;
   distDirectory?: string;
   additionalOrigins?: string[];
+  publicOrigin?: string;
+  accessPassword?: string;
+  remoteDesktopPort?: number;
 }
 
 function json(response: ServerResponse, status: number, body: unknown): void {
@@ -44,6 +49,7 @@ const CONTENT_TYPES: Record<string, string> = {
 };
 
 export function createAppServer(options: HttpOptions) {
+  const authenticate = createAccessGate(options.accessPassword, options.publicOrigin?.startsWith("https://"));
   const server = createServer((request, response) => {
     void handle(request, response).catch((error: unknown) => {
       if (response.headersSent) { response.destroy(); return; }
@@ -53,17 +59,38 @@ export function createAppServer(options: HttpOptions) {
   });
   server.requestTimeout = 30_000;
   server.headersTimeout = 15_000;
-
-  async function handle(request: IncomingMessage, response: ServerResponse): Promise<void> {
+  function validate(request: IncomingMessage, websocket = false): void {
     const address = server.address();
     const port = address && typeof address === "object" ? address.port : 0;
     const allowedHosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`]);
+    if (options.publicOrigin) allowedHosts.add(new URL(options.publicOrigin).host);
     if (!allowedHosts.has(request.headers.host ?? "")) throw new SyncError("FORBIDDEN", "不允许的访问地址。", 403);
-    const allowedOrigins = new Set([...allowedHosts].map((host) => `http://${host}`).concat(options.additionalOrigins ?? []));
+    const allowedOrigins = new Set([`http://127.0.0.1:${port}`, `http://localhost:${port}`, ...(options.additionalOrigins ?? [])]);
+    if (options.publicOrigin) allowedOrigins.add(options.publicOrigin);
     const origin = request.headers.origin;
-    if (origin && !allowedOrigins.has(origin)) throw new SyncError("FORBIDDEN", "不允许跨站访问本地服务。", 403);
-    const path = new URL(request.url ?? "/", `http://127.0.0.1:${port}`).pathname;
+    if ((origin && !allowedOrigins.has(origin)) || (websocket && !origin) || request.headers["sec-fetch-site"] === "cross-site") {
+      throw new SyncError("FORBIDDEN", "不允许跨站访问服务。", 403);
+    }
+  }
+  const desktop = options.remoteDesktopPort ? attachDesktopProxy(server, {
+    port: options.remoteDesktopPort, authenticate, validate,
+    active: () => options.manager.connections().find((item) => item.status === "binding" && item.loginUrl)?.loginUrl,
+  }) : undefined;
+
+  async function handle(request: IncomingMessage, response: ServerResponse): Promise<void> {
+    validate(request);
+    const path = new URL(request.url ?? "/", "http://127.0.0.1").pathname;
     const method = request.method ?? "GET";
+    if (path === "/healthz" && method === "GET") { json(response, 200, { status: "ok" }); return; }
+    if (!authenticate(request, response)) {
+      response.setHeader("WWW-Authenticate", 'Basic realm="MACHUN1", charset="UTF-8"');
+      throw new SyncError("ACCESS_REQUIRED", "请输入部署访问账号和密码。", 401);
+    }
+    if (path.startsWith("/login-view/")) {
+      if (!desktop) throw new SyncError("NOT_FOUND", "当前服务使用本机登录窗口。", 404);
+      await desktop(request, response, path);
+      return;
+    }
 
     if (path.startsWith("/api/")) {
       if (request.headers["sec-fetch-site"] === "cross-site") throw new SyncError("FORBIDDEN", "不允许跨站访问本地服务。", 403);

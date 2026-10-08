@@ -1,13 +1,12 @@
 import { chromium } from "playwright";
 import type { BrowserSession } from "./provider";
 import { SyncError } from "./provider";
-import { attachAutomaticLogin, type CredentialReader } from "./credentials";
 
 export interface BrowserLauncher {
   open(profilePath: string, url: string, visible: boolean): Promise<BrowserSession>;
 }
 
-export function createBrowserLauncher(readCredentials?: CredentialReader): BrowserLauncher {
+export function createBrowserLauncher(): BrowserLauncher {
   return {
     async open(profilePath, url, visible) {
       let context;
@@ -36,8 +35,6 @@ export function createBrowserLauncher(readCredentials?: CredentialReader): Brows
       const page = context.pages()[0] ?? await context.newPage();
       try {
         await page.goto(url, { waitUntil: "domcontentloaded" });
-        // Entry clicks must not race the initial navigation and abort its goto promise.
-        if (visible && readCredentials) attachAutomaticLogin(context, readCredentials);
         return { context, page };
       } catch {
         await context.close();

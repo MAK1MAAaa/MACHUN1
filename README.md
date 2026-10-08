@@ -1,14 +1,14 @@
 # MACHUN1
 
-在本机运行的 CHUNITHM Mate 成绩管理工具。通过网页管理综合最高分、计算单曲 Rating 和 B30，并从 MuNET、Rin服、大饼及国服落雪手动同步成绩。
+CHUNITHM Mate 成绩管理工具。通过网页管理综合最高分、计算单曲 Rating 和 B30，并从 MuNET、Rin服、大饼及国服落雪手动同步成绩。
 
-采用 React、TypeScript、Vite 和 Node.js，网页登录由 Playwright 完成。仅供本地使用，无独立数据库、定时同步或 QQ Bot。
+采用 React、TypeScript、Vite 和 Node.js，网页登录由 Playwright 完成。本分支 `codex/manual-login-docker` 支持本机运行和单人 Docker 部署，取消账号密码自动填写；`main` 保留原本的可选自动登录流程。无独立数据库、定时同步或 QQ Bot。
 
 ## 功能概览
 
 - **四个成绩来源**：分别绑定、同步、重新登录和解绑，也支持离线文件导入。
 - **综合最高分**：同一歌曲和难度保留一条成绩，默认只接受更高分，标注其来源；可手动录入、改分和删除。
-- **B30 与候选20**：网页 B30 预览为 3 列 × 10 行，普通 PNG 为 5 列 × 6 行，候选20 PNG 为 5 列 × 10 行；图片预览默认折叠，另有两种 JSON 导出。
+- **B30 与候选20**：桌面网页 B30 为 3 列 × 10 行，平板两列、手机单列；普通 PNG 为 5 列 × 6 行，候选20 PNG 为 5 列 × 10 行；图片预览默认折叠，另有两种 JSON 导出。
 - **评级与达成标记**：读取并保存 FC、AJ、AJC 及来源提供的 FULL CHAIN，成绩表、详情卡和分表图片统一显示 SSS+、SSS、SS+ 等评级。
 - **成绩浏览**：Rating 排名与曲库筛选两种表格，每页 10 项；支持曲名、别名和 ID 搜索。
 - **曲库筛选**：难度、等级、定数、分类、版本、成绩来源、未游玩谱面及分数排序。
@@ -19,7 +19,7 @@
 
 ## 环境要求
 
-首版以 macOS 桌面环境为目标，其他系统尚未完成实际账号验收。
+本机支持 macOS 桌面；部署镜像目标为 Linux amd64，手机通过浏览器访问。四个来源的真实账号登录仍需在目标服务器逐一验收。
 
 | 组件 | 要求 |
 | --- | --- |
@@ -55,8 +55,9 @@ pnpm start
 | `pnpm browser:install` | 安装用于来源登录的 Chromium。 |
 | `pnpm test` | 执行 Vitest 测试。 |
 | `pnpm test:watch` | 以监听模式运行 Vitest。 |
+| `pnpm docker:package` | 构建 linux/amd64 镜像并输出 `release/machun1-manual-login-amd64.tar.gz` 和 SHA-256 校验文件。 |
 
-一次运行一种服务模式即可。服务仅监听 `127.0.0.1`，校验 Host、请求来源和本地 API 标记，不开放跨站访问。
+一次运行一种服务模式即可。本机默认仅监听 `127.0.0.1`，校验 Host、请求来源和 API 标记；Docker 模式额外要求部署访问密码和明确的访问地址，不开放跨站访问。
 
 **成绩按浏览器和访问地址分别保存。** `4399` 与 `4400`、`127.0.0.1` 与 `localhost` 的 `localStorage` 不共享。开发和正式模式都使用 `http://127.0.0.1:4399/` 时，可继续读取同一浏览器中的成绩。
 
@@ -81,31 +82,34 @@ pnpm start
 
 请求有间隔，限流时按服务器提示等待并显示进度。每页最多重试 3 次，单次等待上限 15 分钟，一次同步累计等待上限 35 分钟。历史很多时请保持服务和页面运行；乱序、分页位置变化或失败不会导入部分结果，也不会推进同步位置。
 
-### 可选自动登录
+### 手动登录窗口
 
-复制模板后填入本地配置：
+- 本机点击“绑定账号”或“重新登录”后打开独立浏览器窗口。自行选择 BCN 登录入口或填写 MuNET 用户名密码，完成验证码和授权后，窗口关闭并回到成绩页面。
+- Docker 部署在网页内打开远程浏览器窗口，手机也可操作滑块、按钮和输入框。手机输入可使用窗口左侧 noVNC 工具栏的键盘；画面太小时可在工具栏设置中关闭缩放后移动查看。
+- “返回成绩页面”只收起窗口，不取消绑定；点击“打开登录窗口”继续。成功、失败或取消后窗口自动关闭，后台复用已保存会话。
+- Docker 同时只允许一个来源打开可见登录窗口；各来源同步仍互相独立。等待登录上限为 5 分钟，超时后重新绑定。
+- 本分支不读取 `BCN_EMAIL / BCN_PASSWORD / MUNET_USERNAME / MUNET_PASSWORD`，已有 `.env` 不会被修改或打包。落雪继续使用个人 Token。
+
+## Docker 与 1Panel 部署
+
+详细操作见 [1Panel 部署说明](docs/1panel.md)。镜像包含 Chromium、虚拟显示和 noVNC，不需要在服务器安装桌面；只有应用端口 4399 对外提供访问，内部 5900/6080 不映射。
 
 ```bash
+# 本机生成可导入镜像（需要 Docker）
+pnpm docker:package
+
+# 服务器导入镜像归档
+docker load -i machun1-manual-login-amd64.tar.gz
+
+# 编辑模板，设置真实访问地址与随机访问密码，然后启动
 cp -n .env.example .env
 chmod 600 .env
+docker compose up -d
 ```
 
-上述复制命令不会覆盖已有 `.env`；已有配置时直接编辑现有文件。模板只包含以下空变量：
+浏览器访问账号为 `machun`，密码为 `MACHUN_ACCESS_PASSWORD`，它仅保护部署页面，与各门户账号无关。`MACHUN_PUBLIC_ORIGIN` 必须与浏览器实际访问的协议、主机和端口完全一致；支持 HTTPS 反向代理，需转发原 Host 和 WebSocket。默认只映射服务器回环端口，由 1Panel 反向代理提供外部入口。
 
-```dotenv
-BCN_EMAIL=
-BCN_PASSWORD=
-MUNET_USERNAME=
-MUNET_PASSWORD=
-```
-
-- Rin服和大饼共用 BCN 邮箱密码，自动选择 BEMANICN 入口，在核实的官方登录表单中填入。
-- MuNET 使用用户名和密码自动填写登录表单，滑块、验证码、二次验证或授权确认仍需手动完成。
-- 点击“绑定账号”或“重新登录”时才执行；每个绑定窗口最多自动提交一次，失败不会循环重试，已有输入内容时交由用户继续操作。
-- 空值使用手动登录；后台同步继续复用会话。修改文件后重新打开绑定窗口即可读取，同名进程环境变量优先。
-- 含 `#` 或空格的值应加引号。凭据不要使用 `VITE_` 前缀，避免进入前端构建。
-
-`.env` 是本机明文凭据文件，仅供后台读取，不写入成绩、API 响应或导出。不要提交或分享填写后的文件。
+登录状态、Token 和大饼缓存写入 `machun_data` 命名卷的 `/data`；普通重启、更新镜像保留数据，删除卷会清除绑定。成绩仍保存在各浏览器的 `localStorage`，换手机、域名或协议不会自动迁移成绩，可重新同步来源。镜像和导出归档不含个人密码、Token 或现有会话。
 
 ## 文件导入与成绩规则
 
@@ -168,7 +172,7 @@ JSON 仅导出已有记录，含 `song_id`、曲名、难度、分数，以及�
 | --- | --- | --- |
 | 浏览器 `localStorage` 的 `chunithm-mate-b30:v2` | 全部综合成绩、来源、个人别名；旧版 v1 自动迁移。 | “清空全部本地数据”删除当前访问地址的成绩和别名，不解除后台绑定。 |
 | `.machun.local/` | 登录会话、绑定身份、落雪 Token、大饼成绩缓存与同步位置。 | “解绑”删除对应来源会话/Token/缓存，保留网页中已合并成绩。 |
-| `.env` | 可选的自动登录邮箱、用户名和密码。 | 不因网页清空或解绑而删除，需自行管理。 |
+| `.env` | Docker Compose 的访问地址、端口和部署访问密码，本分支不读取门户密码。 | 不因网页清空或解绑而删除，需自行管理。 |
 
 后台目录权限设为 `0700`，绑定记录为 `0600`，凭据未另行加密。正式模式只公开 `dist/`，开发模式屏蔽凭据及会话文件；后台仅返回规范化成绩和统计，不返回 Cookie、Token 或原始账号存档。这些本地敏感文件已由 `.gitignore` 排除。
 
@@ -190,10 +194,13 @@ src/
 server/
   index.ts / http.ts            本机服务、API 和静态资源
   manager.ts / store.ts         绑定、同步调度与本地会话保存
-  credentials.ts / portalLogin.ts 自动登录与门户登录入口
+  config.ts / access.ts / desktopProxy.ts 部署配置、访问鉴权与登录窗口代理
   providers/                   四个成绩来源的接口适配
 scripts/                       曲库维护和隔离浏览器检查
-.env.example                   无凭据的自动登录模板
+.env.example                   无个人凭据的部署配置模板
+Dockerfile / compose.yaml      amd64 镜像与容器编排
+docker/entrypoint.sh            虚拟显示、远程登录及服务进程管理
+docs/1panel.md                 1Panel 镜像导入和反向代理说明
 ```
 
 ## 曲库与别名维护
@@ -245,10 +252,11 @@ Vitest 覆盖 Rating、成绩解析与合并、来源适配、历史分页、会
 # 需先构建；使用模拟后台，不绑定个人账号
 pnpm exec tsx scripts/smoke-ui.ts
 pnpm exec tsx scripts/smoke-sessions.ts
-pnpm exec tsx scripts/smoke-auto-login.ts
+pnpm exec tsx scripts/smoke-mobile.ts
+node scripts/smoke-docker.mjs
 ```
 
-**当前检查状态（2026-10-08）：** `pnpm test` 的 392 项测试、`pnpm build` 及隔离网页检查通过。网页检查覆盖 3×10 预览、5×6 / 5×10 PNG 导出、歌曲详情、联动筛选、移动端内部滚动、成绩合并与解绑；新增回归覆盖 FC/AJ/AJC/FULL CHAIN 解析、保存与 JSON 往返。模拟检查不能代替四个来源的真实账号验收。
+**当前检查状态（2026-10-08）：** `pnpm test` 的 383 项测试、`pnpm build`、隔离网页检查和真实浏览器会话检查通过。本分支删除自动登录测试，并增加部署配置、鉴权、WebSocket、单窗口登录及移动端检查；覆盖桌面 3×10 预览、5×6 / 5×10 PNG、320–1440 像素布局及手动登录后返回。amd64 镜像已在本机 Docker 中通过启动、真实 noVNC 鼠标登录、AJ 同步、重启复用会话和解绑检查，生成的 gzip 镜像归档另经 `docker load` 验证。模拟门户检查不能代替四个来源的真实账号或目标 1Panel 服务器验收。
 
 ## 常见问题与边界
 
@@ -274,6 +282,7 @@ git remote -v
 git status --short
 git log -1 --oneline
 git push -u origin main
+git push -u origin codex/manual-login-docker
 ```
 
 后续修改时先检查内容，再提交并推送：

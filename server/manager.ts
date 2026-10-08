@@ -1,4 +1,5 @@
 import { setTimeout as delay } from "node:timers/promises";
+import { randomUUID } from "node:crypto";
 import type { ExternalScoreSource } from "../src/core/sources";
 import { importSourcePayload } from "../src/core/sources";
 import { CATALOG_VERSION, catalogByKey } from "../src/core/catalog";
@@ -25,6 +26,7 @@ export interface ManagerOptions {
   lxns?: LxnsProvider;
   bindTimeoutMs?: number;
   bindPollMs?: number;
+  remoteLogin?: boolean;
 }
 
 export function safeError(error: unknown): SyncError {
@@ -113,11 +115,15 @@ export class SourceManager {
       bound: true, identity: binding.identity, status: "ready", error: null,
       lastAttemptAt: null, lastSuccessAt: null,
     });
+    delete slot.connection.loginUrl;
   }
 
   async bind(source: ExternalScoreSource, token?: string): Promise<SourceConnection> {
     const slot = this.slot(source);
     this.available(slot);
+    if (source !== "lxns" && this.options.remoteLogin && [...this.slots.values()].some((other) => other.operation === "bind" && other.connection.source !== "lxns")) {
+      throw new SyncError("BUSY", "另一个来源的登录窗口正在使用，请先完成或取消该绑定。", 409);
+    }
     if (source === "lxns") {
       const normalized = token?.trim();
       if (!normalized || normalized.length > 4096 || /[\r\n\x00-\x1f]/.test(normalized)) {
@@ -136,6 +142,7 @@ export class SourceManager {
       slot.connection.status = "binding";
       slot.connection.error = null;
       slot.abort = new AbortController();
+      if (this.options.remoteLogin) slot.connection.loginUrl = `/login-view/vnc.html?autoconnect=true&resize=scale&path=login-view/websockify&session=${randomUUID()}`;
       const signal = slot.abort.signal;
       const task = this.operate(slot, "bind", () => this.bindBrowser(source, slot, signal));
       // Binding runs while the user completes the portal's own login window.
@@ -205,6 +212,7 @@ export class SourceManager {
       slot.session = undefined;
       if (profile && !committed) await this.options.store.removeProfile(profile).catch(() => undefined);
       slot.abort = undefined;
+      delete slot.connection.loginUrl;
     }
   }
 

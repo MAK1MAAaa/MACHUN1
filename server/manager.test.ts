@@ -38,7 +38,7 @@ function browserSession(url = "https://portal.example/login") {
   };
 }
 
-async function setup() {
+async function setup(remoteLogin = false) {
   const directory = await mkdtemp(join(tmpdir(), "machun-manager-"));
   folders.push(directory);
   const provider: BrowserProvider = {
@@ -48,7 +48,7 @@ async function setup() {
   const launcher = {
     open: vi.fn(async () => browserSession().session),
   };
-  const options = { store: new SourceStore(directory), providers: { rin: provider, munet: provider, otogame: provider }, launcher, bindPollMs: 2, bindTimeoutMs: 2000 };
+  const options = { store: new SourceStore(directory), providers: { rin: provider, munet: provider, otogame: provider }, launcher, bindPollMs: 2, bindTimeoutMs: 2000, remoteLogin };
   const manager = new SourceManager(options);
   managers.push(manager);
   await manager.initialize();
@@ -61,6 +61,24 @@ async function bound(manager: SourceManager, source: "rin" | "otogame" = "rin") 
 }
 
 describe("local source manager", () => {
+  it("offers a remote window only during binding and permits one visible window", async () => {
+    const { manager, provider } = await setup(true);
+    vi.mocked(provider.identify).mockRejectedValue(new SyncError("AUTH_REQUIRED", "等待登录", 401));
+    const pending = await manager.bind("rin");
+    expect(pending.loginUrl).toMatch(/^\/login-view\/vnc\.html\?/);
+    await expect(manager.bind("munet")).rejects.toMatchObject({ code: "BUSY" });
+    vi.mocked(provider.identify).mockResolvedValue(identity);
+    await vi.waitFor(() => expect(manager.connections().find((item) => item.source === "rin")?.status).toBe("ready"));
+    expect(manager.connections().find((item) => item.source === "rin")).not.toHaveProperty("loginUrl");
+    vi.mocked(provider.identify).mockRejectedValue(new SyncError("AUTH_REQUIRED", "等待登录", 401));
+    expect((await manager.bind("munet")).loginUrl).toBeTruthy();
+    expect(await manager.unbind("munet")).not.toHaveProperty("loginUrl");
+  });
+  it("does not expose a remote login URL for native browser windows", async () => {
+    const { manager, provider } = await setup();
+    vi.mocked(provider.identify).mockRejectedValue(new SyncError("AUTH_REQUIRED", "等待登录", 401));
+    expect(await manager.bind("rin")).not.toHaveProperty("loginUrl");
+  });
   it("starts without upstream calls and restores a saved profile after restart", async () => {
     const { manager, provider, options, launcher, directory } = await setup();
     expect(provider.identify).not.toHaveBeenCalled();

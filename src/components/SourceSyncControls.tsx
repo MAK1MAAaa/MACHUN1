@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createSyncClient } from "../core/syncClient";
 import type { ExternalScoreSource, SourceMergeOptions } from "../core/sources";
 import { SYNC_SOURCES, type ConnectionStatus, type SourceConnection, type SyncResult } from "../syncTypes";
+import { isLocalLoginUrl, RemoteLoginDialog } from "./RemoteLoginDialog";
 
 type PendingOperation = "bind" | "sync" | "unbind";
 type Connections = Record<ExternalScoreSource, SourceConnection>;
@@ -121,7 +122,10 @@ type SourceSyncController = ReturnType<typeof useSourceSync>;
 export function SourceSyncControls({ source, controller, mergeOptions }: { source: ExternalScoreSource; controller: SourceSyncController; mergeOptions?: SourceMergeOptions }) {
   const [token, setToken] = useState("");
   const [editingToken, setEditingToken] = useState(false);
+  const [hiddenLogin, setHiddenLogin] = useState(false);
   const connection = controller.connections[source];
+  useEffect(() => { setHiddenLogin(false); }, [connection.loginUrl]);
+  const remoteLogin = connection.status === "binding" && isLocalLoginUrl(connection.loginUrl);
   const operation = controller.pending[source];
   const running = connection.status === "binding" || connection.status === "syncing";
   const busy = Boolean(operation) || running;
@@ -150,7 +154,9 @@ export function SourceSyncControls({ source, controller, mergeOptions }: { sourc
       <span>个人 API Token</span>
       <input type="password" value={token} onChange={(event) => setToken(event.target.value)} placeholder="首次绑定时填写" autoComplete="off" disabled={busy} />
     </label>}
-    {connection.status === "binding" && <p className="source-sync-note">已配置 .env 时会自动登录；验证码或授权确认请在弹出窗口完成，本页会自动更新。</p>}
+    {connection.status === "binding" && <p className="source-sync-note">请在登录窗口内手动登录并完成验证码或授权确认；绑定成功后会自动返回成绩页面。</p>}
+    {remoteLogin && hiddenLogin && <button className="source-login-reopen" type="button" onClick={() => setHiddenLogin(false)}>打开登录窗口</button>}
+    {remoteLogin && !hiddenLogin && <RemoteLoginDialog source={source} url={connection.loginUrl!} onClose={() => setHiddenLogin(true)} />}
     {source === "otogame" && <p className="source-sync-note">首次遍历全部可用游玩历史，之后只读取新记录；仅合并当前 13.0+ 曲库中的谱面。历史位置失效时可全量校准，已有最高分保留。</p>}
     {(operation === "sync" || connection.status === "syncing") && connection.progress && <p className="source-sync-note" role="status">
       已读取 {connection.progress.completedPages} 页。

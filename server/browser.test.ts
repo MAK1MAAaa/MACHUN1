@@ -1,10 +1,9 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-const mocks = vi.hoisted(() => ({ launch: vi.fn(), autofill: vi.fn() }));
+const mocks = vi.hoisted(() => ({ launch: vi.fn() }));
 vi.mock("playwright", () => ({ chromium: { launchPersistentContext: mocks.launch } }));
-vi.mock("./credentials", () => ({ attachAutomaticLogin: mocks.autofill }));
 import { browserLauncher, createBrowserLauncher } from "./browser";
 
-beforeEach(() => { mocks.launch.mockReset(); mocks.autofill.mockReset(); });
+beforeEach(() => { mocks.launch.mockReset(); });
 
 function context() {
   const page = { goto: vi.fn().mockResolvedValue(undefined) };
@@ -12,17 +11,15 @@ function context() {
 }
 
 describe("dedicated browser launcher", () => {
-  it("attaches optional credentials only to visible binding windows", async () => {
+  it("opens manual binding windows and reuses profiles headlessly for sync", async () => {
     const fake = context();
-    const readCredentials = vi.fn().mockResolvedValue(null);
     mocks.launch.mockResolvedValue(fake.value);
-    const launcher = createBrowserLauncher(readCredentials);
+    const launcher = createBrowserLauncher();
     await launcher.open("/private/tmp/machun-test-only", "https://bemanicn.com/login", false);
-    expect(mocks.autofill).not.toHaveBeenCalled();
-    expect(readCredentials).not.toHaveBeenCalled();
+    expect(mocks.launch).toHaveBeenLastCalledWith("/private/tmp/machun-test-only", expect.objectContaining({ headless: true }));
     await launcher.open("/private/tmp/machun-test-only", "https://bemanicn.com/login", true);
-    expect(mocks.autofill).toHaveBeenCalledExactlyOnceWith(fake.value, readCredentials);
-    expect(fake.page.goto.mock.invocationCallOrder[1]).toBeLessThan(mocks.autofill.mock.invocationCallOrder[0]);
+    expect(mocks.launch).toHaveBeenLastCalledWith("/private/tmp/machun-test-only", expect.objectContaining({ headless: false }));
+    expect(fake.page.goto).toHaveBeenCalledTimes(2);
   });
 
   it("falls back to installed Chrome with the same isolated directory when Chromium is missing", async () => {
@@ -42,8 +39,7 @@ describe("dedicated browser launcher", () => {
     const fake = context();
     fake.page.goto.mockRejectedValue(new Error("sensitive browser diagnostic"));
     mocks.launch.mockResolvedValue(fake.value);
-    await expect(createBrowserLauncher(vi.fn()).open("/private/tmp/machun-test-only", "https://example.com", true)).rejects.toMatchObject({ code: "NETWORK_ERROR" });
+    await expect(createBrowserLauncher().open("/private/tmp/machun-test-only", "https://example.com", true)).rejects.toMatchObject({ code: "NETWORK_ERROR" });
     expect(fake.value.close).toHaveBeenCalled();
-    expect(mocks.autofill).not.toHaveBeenCalled();
   });
 });
