@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SourceConnection, SyncResult } from "../syncTypes";
 import { createSyncClient, LOCAL_SERVICE_MESSAGE } from "./syncClient";
 
@@ -10,6 +10,7 @@ const connection: SourceConnection = {
 function response(payload: unknown, status = 200) {
   return new Response(JSON.stringify(payload), { status, headers: { "Content-Type": "application/json" } });
 }
+afterEach(() => vi.unstubAllGlobals());
 
 describe("local source sync client", () => {
   it("restores source connection states from the local service", async () => {
@@ -72,6 +73,25 @@ describe("local source sync client", () => {
   it("preserves server errors for actionable source status", async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(response({ code: "auth_required", error: "登录已失效，请重新登录" }, 401));
     await expect(createSyncClient(fetcher).sync("rin")).rejects.toMatchObject({ code: "auth_required", message: "登录已失效，请重新登录" });
+  });
+
+  it("sends national repair mode to the server without sending any user identity", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(response({ records: [] }));
+    await createSyncClient(fetcher).sync("lxns", undefined, { overwriteMunet: true });
+    expect(fetcher).toHaveBeenCalledWith("/api/sources/lxns/sync", expect.objectContaining({ body: '{"mergeOptions":{"overwriteMunet":true}}' }));
+  });
+
+  it("portal expiry keeps the web account logged in; only UNAUTHORIZED expires it", async () => {
+    const window = new EventTarget(); const expired = vi.fn(); window.addEventListener("machun-session-expired", expired);
+    vi.stubGlobal("window", window);
+    const fetcher = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(response({ code: "AUTH_REQUIRED", error: "重新登录门户" }, 401))
+      .mockResolvedValueOnce(response({ code: "UNAUTHORIZED", error: "网页登录失效" }, 401));
+    const client = createSyncClient(fetcher);
+    await expect(client.sync("rin")).rejects.toMatchObject({ code: "AUTH_REQUIRED" });
+    expect(expired).not.toHaveBeenCalled();
+    await expect(client.list()).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+    expect(expired).toHaveBeenCalledOnce();
   });
 
   it("explains how to start the service when offline or served without a backend", async () => {

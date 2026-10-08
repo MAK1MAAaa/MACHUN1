@@ -16,6 +16,7 @@ async function requestJson(
   session: BrowserSession,
   url: string,
   options: { method?: "GET" | "POST"; headers?: Record<string, string>; data?: unknown; v3?: boolean } = {},
+  acceptedErrors: readonly number[] = [],
 ): Promise<{ status: number; payload: unknown }> {
   try {
     // MuNET accepts requests from its portal browser, but rejects Playwright's
@@ -51,7 +52,7 @@ async function requestJson(
     if (result.status >= 300 && result.status < 400) {
       throw new SyncError("REDIRECT_REJECTED", "服务器返回了重定向，已停止同步，请重新登录。");
     }
-    if (result.status === 401 || result.status === 403) return { status: result.status, payload: null };
+    if (result.status === 401 || result.status === 403 || acceptedErrors.includes(result.status)) return { status: result.status, payload: null };
     if (result.status < 200 || result.status >= 300) {
       throw new SyncError("UPSTREAM_ERROR", `成绩服务器请求失败（HTTP ${result.status}）。`);
     }
@@ -98,8 +99,8 @@ async function createClient(session: BrowserSession) {
     refreshed = true;
     const result = await requestJson(session, `${API_V3}/api/v3/TokenExchange/RefreshToken`, {
       method: "POST", headers: headers(), data: { token: state.refreshToken, auId: Number(initialSubject) }, v3: true,
-    });
-    if (result.status === 401 || result.status === 403 || typeof result.payload !== "string" || !result.payload) {
+    }, [400]);
+    if (result.status === 400 || result.status === 401 || result.status === 403 || typeof result.payload !== "string" || !result.payload) {
       throw new SyncError("AUTH_REQUIRED", "MuNET 登录已过期，请重新网页登录。", 401);
     }
     const token = result.payload;

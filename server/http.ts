@@ -6,19 +6,18 @@ import type { ExternalScoreSource } from "../src/core/sources";
 import type { SourceManager } from "./manager";
 import { safeError } from "./manager";
 import { SyncError } from "./provider";
-import { createAccessGate } from "./access";
-import { attachDesktopProxy } from "./desktopProxy";
+import type { AccountBackend } from "./accountService";
+import { readSessionCookie, sessionCookie } from "./auth";
+import { mergeOptions } from "./workspace";
 
 export type HttpManager = Pick<SourceManager, "connections" | "bind" | "unbind" | "sync">;
 
-export interface HttpOptions {
-  manager: HttpManager;
+interface HttpOptions {
+  manager?: HttpManager;
+  accounts?: AccountBackend;
   distDirectory?: string;
   additionalOrigins?: string[];
   publicOrigin?: string;
-  accessPassword?: string;
-  allowRequestHost?: boolean;
-  remoteDesktopPort?: number;
 }
 
 function json(response: ServerResponse, status: number, body: unknown): void {
@@ -26,7 +25,7 @@ function json(response: ServerResponse, status: number, body: unknown): void {
   response.end(JSON.stringify(body));
 }
 
-async function body(request: IncomingMessage): Promise<Record<string, unknown>> {
+async function body(request: IncomingMessage, limit = 16 * 1024): Promise<Record<string, unknown>> {
   if (request.headers["content-type"]?.split(";")[0].trim().toLowerCase() !== "application/json") {
     throw new SyncError("INVALID_REQUEST", "请求必须使用 JSON。", 415);
   }
@@ -34,7 +33,7 @@ async function body(request: IncomingMessage): Promise<Record<string, unknown>> 
   let size = 0;
   for await (const chunk of request) {
     size += Buffer.byteLength(chunk);
-    if (size > 16 * 1024) throw new SyncError("INVALID_REQUEST", "请求内容过大。", 413);
+    if (size > limit) throw new SyncError("INVALID_REQUEST", "请求内容过大。", 413);
     chunks.push(Buffer.from(chunk));
   }
   try {
@@ -50,7 +49,6 @@ const CONTENT_TYPES: Record<string, string> = {
 };
 
 export function createAppServer(options: HttpOptions) {
-  const authenticate = createAccessGate(options.accessPassword, options.publicOrigin?.startsWith("https://"));
   const server = createServer((request, response) => {
     void handle(request, response).catch((error: unknown) => {
       if (response.headersSent) { response.destroy(); return; }
@@ -60,63 +58,61 @@ export function createAppServer(options: HttpOptions) {
   });
   server.requestTimeout = 30_000;
   server.headersTimeout = 15_000;
-  function validate(request: IncomingMessage, websocket = false): void {
+
+  async function handle(request: IncomingMessage, response: ServerResponse): Promise<void> {
     const address = server.address();
     const port = address && typeof address === "object" ? address.port : 0;
     const allowedHosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`]);
     if (options.publicOrigin) allowedHosts.add(new URL(options.publicOrigin).host);
-    const host = request.headers.host ?? "";
-    let requestAddress: URL | undefined;
-    if (options.allowRequestHost) {
-      try {
-        if (!host || /[\s\\/@?#,]/.test(host)) throw new Error("invalid host");
-        requestAddress = new URL(`http://${host}`);
-        if (!requestAddress.hostname || requestAddress.pathname !== "/") throw new Error("invalid host");
-      } catch { throw new SyncError("FORBIDDEN", "不允许的访问地址。", 403); }
-    } else if (!allowedHosts.has(host)) throw new SyncError("FORBIDDEN", "不允许的访问地址。", 403);
-    const allowedOrigins = new Set([`http://127.0.0.1:${port}`, `http://localhost:${port}`, ...(options.additionalOrigins ?? [])]);
+    if (!allowedHosts.has(request.headers.host ?? "")) throw new SyncError("FORBIDDEN", "不允许的访问地址。", 403);
+    const allowedOrigins = new Set([...allowedHosts].map((host) => `http://${host}`).concat(options.additionalOrigins ?? []));
     if (options.publicOrigin) allowedOrigins.add(options.publicOrigin);
     const origin = request.headers.origin;
-    let sameOrigin = origin ? allowedOrigins.has(origin) : true;
-    if (origin && requestAddress) {
-      try {
-        const address = new URL(origin);
-        // Accept HTTP or HTTPS behind a proxy, but never trust a forwarded Host.
-        sameOrigin = ["http:", "https:"].includes(address.protocol) && address.origin === origin
-          && address.host === new URL(`${address.protocol}//${host}`).host;
-      } catch { sameOrigin = false; }
-    }
-    const topLevelNavigation = !websocket && request.method === "GET" && request.headers["sec-fetch-mode"] === "navigate"
-      && request.headers["sec-fetch-dest"] === "document" && !/^\/(?:api|login-view)(?:\/|$)/.test(new URL(request.url ?? "/", "http://127.0.0.1").pathname);
-    if (!sameOrigin || (websocket && !origin) || (request.headers["sec-fetch-site"] === "cross-site" && !topLevelNavigation)) {
-      throw new SyncError("FORBIDDEN", "不允许跨站访问服务。", 403);
-    }
-  }
-  const desktop = options.remoteDesktopPort ? attachDesktopProxy(server, {
-    port: options.remoteDesktopPort, authenticate, validate,
-    active: () => options.manager.connections().find((item) => item.status === "binding" && item.loginUrl)?.loginUrl,
-  }) : undefined;
-
-  async function handle(request: IncomingMessage, response: ServerResponse): Promise<void> {
-    validate(request);
-    const path = new URL(request.url ?? "/", "http://127.0.0.1").pathname;
+    if (origin && !allowedOrigins.has(origin)) throw new SyncError("FORBIDDEN", "不允许跨站访问本地服务。", 403);
+    const path = new URL(request.url ?? "/", `http://127.0.0.1:${port}`).pathname;
     const method = request.method ?? "GET";
-    if (path === "/healthz" && method === "GET") { json(response, 200, { status: "ok" }); return; }
-    if (!authenticate(request, response)) {
-      response.setHeader("WWW-Authenticate", 'Basic realm="MACHUN1", charset="UTF-8"');
-      throw new SyncError("ACCESS_REQUIRED", "请输入部署访问账号和密码。", 401);
-    }
-    if (path.startsWith("/login-view/")) {
-      if (!desktop) throw new SyncError("NOT_FOUND", "当前服务使用本机登录窗口。", 404);
-      await desktop(request, response, path);
-      return;
-    }
 
     if (path.startsWith("/api/")) {
       if (request.headers["sec-fetch-site"] === "cross-site") throw new SyncError("FORBIDDEN", "不允许跨站访问本地服务。", 403);
+      const accounts = options.accounts;
+      const token = readSessionCookie(request.headers.cookie);
+      const write = () => {
+        if (request.headers["x-machun-request"] !== "1") throw new SyncError("FORBIDDEN", "缺少本地请求标记。", 403);
+      };
+      if (path.startsWith("/api/auth/")) {
+        if (!accounts) throw new SyncError("DATABASE_UNAVAILABLE", "账号服务尚未配置。", 503);
+        if (path === "/api/auth/session" && method === "GET") {
+          json(response, 200, { user: await accounts.auth.account(token) }); return;
+        }
+        if (path === "/api/auth/login" && method === "POST") {
+          write();
+          const login = await accounts.auth.login(await body(request), request.socket.remoteAddress ?? "local");
+          response.setHeader("Set-Cookie", sessionCookie(login.token));
+          json(response, 200, { user: login.user }); return;
+        }
+        if (path === "/api/auth/logout" && method === "POST") {
+          write(); await body(request); await accounts.auth.logout(token);
+          response.setHeader("Set-Cookie", sessionCookie("", true));
+          json(response, 200, { user: null }); return;
+        }
+        throw new SyncError("NOT_FOUND", "接口不存在。", 404);
+      }
+      const user = accounts ? await accounts.auth.account(token) : null;
+      if (accounts && !user) throw new SyncError("UNAUTHORIZED", "请先登录。", 401);
+      if (accounts && user) {
+        // Install the database catalogue before recalculating any user's workspace.
+        await accounts.catalog();
+        if (path === "/api/catalog" && method === "GET") { json(response, 200, await accounts.catalog()); return; }
+        if (path === "/api/workspace" && method === "GET") { json(response, 200, await accounts.workspace.get(user.username)); return; }
+        if ((path === "/api/workspace/actions" || path === "/api/workspace/migrate") && method === "POST") {
+          write(); const input = await body(request, 22 * 1024 * 1024);
+          json(response, 200, path.endsWith("/migrate") ? await accounts.workspace.migrate(user.username, input) : await accounts.workspace.action(user.username, input)); return;
+        }
+      }
+      const manager = accounts && user ? await accounts.manager(user.username) : options.manager;
+      if (!manager) throw new SyncError("DATABASE_UNAVAILABLE", "账号服务尚未配置。", 503);
       if (path === "/api/sources" && method === "GET") {
-        json(response, 200, { sources: options.manager.connections() });
-        return;
+        json(response, 200, { sources: manager.connections() }); return;
       }
       const match = /^\/api\/sources\/([^/]+)\/(bind|binding|sync)$/.exec(path);
       if (!match || !(SYNC_SOURCES as readonly string[]).includes(match[1])) throw new SyncError("NOT_FOUND", "接口不存在。", 404);
@@ -129,17 +125,20 @@ export function createAppServer(options: HttpOptions) {
       const source = rawSource as ExternalScoreSource;
       if (action === "bind") {
         if (input.token !== undefined && typeof input.token !== "string") throw new SyncError("INVALID_REQUEST", "Token 格式无效。", 400);
-        const connection = await options.manager.bind(source, input.token as string | undefined);
+        const connection = await manager.bind(source, input.token as string | undefined);
         json(response, source === "lxns" ? 200 : 202, { connection });
       } else if (action === "binding") {
-        json(response, 200, { connection: await options.manager.unbind(source) });
+        json(response, 200, { connection: await manager.unbind(source) });
       } else {
         if (input.full !== undefined && (typeof input.full !== "boolean" || source !== "otogame")) {
           throw new SyncError("INVALID_REQUEST", "全量校准参数无效。", 400);
         }
-        json(response, 200, input.full === undefined
-          ? await options.manager.sync(source)
-          : await options.manager.sync(source, { full: input.full }));
+        const optionsForMerge = mergeOptions(input.mergeOptions, source);
+        const result = input.full === undefined ? await manager.sync(source) : await manager.sync(source, { full: input.full });
+        if (accounts && user) {
+          const workspace = await accounts.workspace.mergeSync(user.username, result, optionsForMerge);
+          json(response, 200, { ...result, report: workspace.report ?? result.report, workspace });
+        } else json(response, 200, result);
       }
       return;
     }

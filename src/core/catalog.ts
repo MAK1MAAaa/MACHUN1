@@ -1,8 +1,8 @@
 import catalogData from "../data/catalog.json";
 import type { CatalogChart, Difficulty } from "../types";
 
-export const CATALOG_DATE = "2026-09-17";
-export const CATALOG_VERSION = `Mate-${CATALOG_DATE}-13plus`;
+export let CATALOG_DATE = "2026-10-08";
+export let CATALOG_VERSION = `Mate-${CATALOG_DATE}-13plus`;
 
 function isDifficulty(value: unknown): value is Difficulty {
   return value === "EXP" || value === "MAS" || value === "ULT";
@@ -63,8 +63,19 @@ export function validateCatalog(value: unknown): CatalogChart[] {
   });
 }
 
-export const catalog = validateCatalog(catalogData);
+export let catalog = validateCatalog(catalogData);
 
-export const catalogByKey: Map<string, CatalogChart> = new Map(
+export let catalogByKey: Map<string, CatalogChart> = new Map(
   catalog.map((chart) => [`${chart.id}:${chart.difficulty}`, chart] as const),
 );
+
+/** Install the authenticated database snapshot before mounting the workspace. */
+export function installCatalogSnapshot(snapshot: { date: string; version: string; charts: CatalogChart[] }): void {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(snapshot.date) || typeof snapshot.version !== "string" || !snapshot.version) throw new Error("曲库版本无效");
+  const validated = validateCatalog(snapshot.charts);
+  if (!validated.length) throw new Error("数据库曲库为空");
+  catalog = validated;
+  catalogByKey = new Map(catalog.map(chart => [`${chart.id}:${chart.difficulty}`, chart]));
+  CATALOG_DATE = snapshot.date;
+  CATALOG_VERSION = snapshot.version;
+}

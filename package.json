@@ -7,14 +7,21 @@
     "dev": "concurrently --kill-others --names api,web \"tsx watch server/index.ts --dev\" \"vite\"",
     "start": "pnpm build && tsx server/index.ts",
     "browser:install": "playwright install chromium",
-    "docker:package": "node scripts/package-docker.mjs",
+    "catalog:refresh": "node scripts/refresh-catalog.mjs",
+    "db:setup": "tsx scripts/db-setup.ts",
+    "db:tunnel": "ssh -N -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -L 127.0.0.1:13306:127.0.0.1:3306 tencent",
+    "db:catalog": "tsx scripts/db-catalog.ts",
+    "test:mysql": "tsx scripts/test-mysql.ts",
     "build": "tsc -b && vite build",
     "preview": "tsx server/index.ts --preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "docker:package": "node scripts/package-docker.mjs"
   },
   "dependencies": {
+    "drizzle-orm": "^0.45.3",
     "fuse.js": "^7.1.0",
+    "mysql2": "^3.24.5",
     "playwright": "^1.63.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
@@ -32,6 +39,8 @@
   },
   "packageManager": "pnpm@10.15.0",
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild"]
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
   }
 }

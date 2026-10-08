@@ -59,6 +59,19 @@ describe("MuNET browser provider", () => {
     expect(mock.fetch).toHaveBeenCalledTimes(3);
   });
 
+  it("requires login when the server rejects an expired refresh token with HTTP 400", async () => {
+    const mock = session([response(null, 401), response(null, 400)]);
+    await expect(munetProvider.identify(mock.value)).rejects.toMatchObject({ code: "AUTH_REQUIRED" });
+    expect(mock.fetch).toHaveBeenCalledTimes(2);
+    expect(mock.storage.get("token")).toBe(token());
+  });
+
+  it("still reports HTTP 400 on the score endpoint as an upstream failure", async () => {
+    const mock = session([response(userHome), response(null, 400)]);
+    await expect(munetProvider.fetchScores(mock.value, identity)).rejects.toMatchObject({ code: "UPSTREAM_ERROR" });
+    expect(mock.fetch).toHaveBeenCalledTimes(2);
+  });
+
   it("rejects a refreshed token for another account", async () => {
     const mock = session([response(null, 401), response(token("99"))]);
     await expect(munetProvider.identify(mock.value)).rejects.toMatchObject({ code: "IDENTITY_CHANGED" });

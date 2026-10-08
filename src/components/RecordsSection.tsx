@@ -25,10 +25,11 @@ export interface RecordsSectionProps {
   nicknameOverrides: Record<string, string[]>;
   onEdit: (chart: CatalogChart, record?: SingleRating) => void;
   onDelete: (record: SingleRating) => void;
+  onAliases?: (id: string, aliases: string[]) => Promise<void>;
   disabled: boolean;
 }
 
-export function RecordsSection({ records, scores, nicknameOverrides, onEdit, onDelete, disabled }: RecordsSectionProps) {
+export function RecordsSection({ records, scores, nicknameOverrides, onEdit, onDelete, onAliases, disabled }: RecordsSectionProps) {
   const [mode, setMode] = useState<RecordsViewMode>("rating");
   const [filters, setFilters] = useState<RecordsFilters>({ ...EMPTY_RECORDS_FILTERS });
   const [requestedPage, setRequestedPage] = useState(1);
@@ -265,6 +266,8 @@ export function RecordsSection({ records, scores, nicknameOverrides, onEdit, onD
         charts={selectedSongCharts}
         scores={scores}
         aliases={selectedAliases}
+        personalAliases={nicknameOverrides[selectedChart.id] ?? []}
+        onSaveAliases={onAliases ? (aliases) => onAliases(selectedChart.id, aliases) : undefined}
         onClose={() => setSelectedChart(null)}
       />}
     </section>

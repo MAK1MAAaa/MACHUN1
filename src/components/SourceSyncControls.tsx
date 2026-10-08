@@ -2,11 +2,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createSyncClient } from "../core/syncClient";
 import type { ExternalScoreSource, SourceMergeOptions } from "../core/sources";
 import { SYNC_SOURCES, type ConnectionStatus, type SourceConnection, type SyncResult } from "../syncTypes";
-import { isLocalLoginUrl, RemoteLoginDialog } from "./RemoteLoginDialog";
 
 type PendingOperation = "bind" | "sync" | "unbind";
 type Connections = Record<ExternalScoreSource, SourceConnection>;
-const client = createSyncClient();
 
 function initialConnections(): Connections {
   return Object.fromEntries(SYNC_SOURCES.map((source) => [source, {
@@ -25,6 +23,8 @@ function errorText(error: unknown): string {
 }
 
 export function useSourceSync(onSynced: (result: SyncResult, mergeOptions?: SourceMergeOptions) => void) {
+  const abort = useRef(new AbortController());
+  const client = useRef(createSyncClient(fetch, () => abort.current.signal)).current;
   const [connections, setConnections] = useState(initialConnections);
   const [pending, setPending] = useState<Partial<Record<ExternalScoreSource, PendingOperation>>>({});
   const [serviceError, setServiceError] = useState<string | null>(null);
@@ -62,9 +62,17 @@ export function useSourceSync(onSynced: (result: SyncResult, mergeOptions?: Sour
     } finally {
       if (requestRevision >= appliedListRevision.current) setLoading(false);
     }
-  }, []);
+  }, [client]);
 
-  useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => {
+    if (abort.current.signal.aborted) abort.current = new AbortController();
+    void refresh();
+    return () => {
+      abort.current.abort();
+      for (const source of SYNC_SOURCES) revisions.current[source]++;
+      appliedListRevision.current = ++listRevision.current;
+    };
+  }, [refresh]);
   const hasRunningTask = Object.values(connections).some((item) => item.status === "binding" || item.status === "syncing")
     || Object.keys(pending).length > 0;
   useEffect(() => {
@@ -86,7 +94,7 @@ export function useSourceSync(onSynced: (result: SyncResult, mergeOptions?: Sour
     const selectedMergeOptions = mergeOptions ? { ...mergeOptions } : undefined;
     try {
       if (operation === "sync") {
-        const result = await client.sync(source, full ? { full: true } : undefined);
+        const result = await client.sync(source, full ? { full: true } : undefined, mergeOptions);
         if (revision !== revisions.current[source]) return false;
         syncedCallback.current(result, selectedMergeOptions);
         setConnections((current) => ({ ...current, [source]: result.connection }));
@@ -122,10 +130,7 @@ type SourceSyncController = ReturnType<typeof useSourceSync>;
 export function SourceSyncControls({ source, controller, mergeOptions }: { source: ExternalScoreSource; controller: SourceSyncController; mergeOptions?: SourceMergeOptions }) {
   const [token, setToken] = useState("");
   const [editingToken, setEditingToken] = useState(false);
-  const [hiddenLogin, setHiddenLogin] = useState(false);
   const connection = controller.connections[source];
-  useEffect(() => { setHiddenLogin(false); }, [connection.loginUrl]);
-  const remoteLogin = connection.status === "binding" && isLocalLoginUrl(connection.loginUrl);
   const operation = controller.pending[source];
   const running = connection.status === "binding" || connection.status === "syncing";
   const busy = Boolean(operation) || running;
@@ -154,9 +159,7 @@ export function SourceSyncControls({ source, controller, mergeOptions }: { sourc
       <span>个人 API Token</span>
       <input type="password" value={token} onChange={(event) => setToken(event.target.value)} placeholder="首次绑定时填写" autoComplete="off" disabled={busy} />
     </label>}
-    {connection.status === "binding" && <p className="source-sync-note">请在登录窗口内手动登录并完成验证码或授权确认；绑定成功后会自动返回成绩页面。</p>}
-    {remoteLogin && hiddenLogin && <button className="source-login-reopen" type="button" onClick={() => setHiddenLogin(false)}>打开登录窗口</button>}
-    {remoteLogin && !hiddenLogin && <RemoteLoginDialog source={source} url={connection.loginUrl!} onClose={() => setHiddenLogin(true)} />}
+    {connection.status === "binding" && <p className="source-sync-note">请在弹出窗口完成登录、验证码或授权确认，本页会自动更新。</p>}
     {source === "otogame" && <p className="source-sync-note">首次遍历全部可用游玩历史，之后只读取新记录；仅合并当前 13.0+ 曲库中的谱面。历史位置失效时可全量校准，已有最高分保留。</p>}
     {(operation === "sync" || connection.status === "syncing") && connection.progress && <p className="source-sync-note" role="status">
       已读取 {connection.progress.completedPages} 页。

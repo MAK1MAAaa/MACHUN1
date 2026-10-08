@@ -47,6 +47,43 @@ describe("Rin browser provider", () => {
     expect(JSON.parse(mock.storage.get("currentAccount")!).accessToken).toBe("renewed");
   });
 
+  it("uses a portal renewal that completes during the first unauthorized request", async () => {
+    const mock = session([response(null, 401), response(me())]);
+    const fetch = mock.fetch.getMockImplementation()!;
+    mock.fetch.mockImplementationOnce(async (...args) => {
+      mock.storage.set("currentAccount", JSON.stringify({ ...account, accessToken: "portal-renewed" }));
+      return fetch(...args);
+    });
+    await expect(rinProvider.identify(mock.value)).resolves.toEqual(identity);
+    expect(mock.fetch).toHaveBeenCalledTimes(2);
+    expect(mock.fetch.mock.calls[1]?.[1]).toMatchObject({ headers: { Authorization: "Bearer portal-renewed" } });
+    expect(mock.fetch.mock.calls.some(([url]) => url.endsWith("/auth/refresh"))).toBe(false);
+  });
+
+  it("keeps a newer portal token when the same session renews concurrently", async () => {
+    const mock = session([response(null, 401), response({ status: { code: 92001 }, data: { accessToken: "renewed" } }), response(me())]);
+    const fetch = mock.fetch.getMockImplementation()!;
+    mock.fetch.mockImplementation(async (...args) => {
+      if (args[0].endsWith("/auth/refresh")) mock.storage.set("currentAccount", JSON.stringify({ ...account, accessToken: "portal-renewed" }));
+      return fetch(...args);
+    });
+    await expect(rinProvider.identify(mock.value)).resolves.toEqual(identity);
+    expect(JSON.parse(mock.storage.get("currentAccount")!).accessToken).toBe("portal-renewed");
+    expect(mock.fetch.mock.calls[2]?.[1]).toMatchObject({ headers: { Authorization: "Bearer portal-renewed" } });
+  });
+
+  it("still rejects a different session appearing during renewal", async () => {
+    const mock = session([response(null, 401), response({ status: { code: 92001 }, data: { accessToken: "renewed" } })]);
+    const fetch = mock.fetch.getMockImplementation()!;
+    mock.fetch.mockImplementation(async (...args) => {
+      if (args[0].endsWith("/auth/refresh")) mock.storage.set("currentAccount", JSON.stringify({ ...account, accessToken: "other-access", refreshToken: "other-refresh" }));
+      return fetch(...args);
+    });
+    await expect(rinProvider.identify(mock.value)).rejects.toMatchObject({ code: "IDENTITY_CHANGED" });
+    expect(mock.fetch).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(mock.storage.get("currentAccount")!).accessToken).toBe("other-access");
+  });
+
   it("stops after one refresh when authentication is still rejected", async () => {
     const mock = session([response(null, 401), response({ status: { code: 92001 }, data: { accessToken: "renewed" } }), response(null, 401)]);
     await expect(rinProvider.identify(mock.value)).rejects.toMatchObject({ code: "AUTH_REQUIRED" });

@@ -3,30 +3,30 @@ import { catalog, catalogByKey, CATALOG_VERSION, validateCatalog } from "./catal
 
 describe("Mate catalog snapshot", () => {
   it("contains only unique 13.0+ EXP/MAS/ULT charts", () => {
-    expect(catalog).toHaveLength(1498);
+    expect(catalog).toHaveLength(1507);
     const keys = new Set(catalog.map((chart) => `${chart.id}:${chart.difficulty}`));
     expect(keys.size).toBe(catalog.length);
     expect(catalog.every((chart) => chart.constant >= 13)).toBe(true);
     expect(catalog.every((chart) => ["EXP", "MAS", "ULT"].includes(chart.difficulty))).toBe(true);
     expect(catalog.every((chart) => /^https:\/\/otoge-db\.net\/chunithm\/jacket\/.+\.jpg$/.test(chart.coverUrl))).toBe(true);
-    expect(catalog.every((chart) => (chart.bpm === null || chart.bpm > 0) && chart.notes.total > 0)).toBe(true);
+    expect(catalog.every((chart) => (chart.bpm === null || chart.bpm > 0) && chart.notes.total >= 0)).toBe(true);
     expect(catalog.every((chart) => [chart.notes.tap, chart.notes.hold, chart.notes.slide, chart.notes.air, chart.notes.flick].every(Number.isInteger))).toBe(true);
   });
 
   it("extends the existing snapshot with the full 13.0–13.9 range", () => {
-    expect(CATALOG_VERSION).toBe("Mate-2026-09-17-13plus");
+    expect(CATALOG_VERSION).toBe("Mate-2026-10-08-13plus");
     expect(catalog.slice(0, 823).every((chart) => chart.constant >= 14)).toBe(true);
-    const additions = catalog.slice(823);
+    const additions = catalog.slice(823, 1498);
     expect(additions).toHaveLength(675);
     expect(additions.every((chart) => chart.constant >= 13 && chart.constant < 14)).toBe(true);
     expect(new Set(additions.map((chart) => chart.constant))).toEqual(new Set([
       13, 13.1, 13.2, 13.3, 13.4, 13.5, 13.6, 13.7, 13.8, 13.9,
     ]));
     expect(additions.every((chart) => chart.bpm !== null && chart.bpm > 0)).toBe(true);
-    expect(new Set(catalog.map((chart) => chart.id)).size).toBe(1235);
-    // Keep the original September 17 release boundary when widening constants.
-    expect(catalogByKey.has("3058:MAS")).toBe(false);
-    expect(catalogByKey.has("3059:MAS")).toBe(false);
+    expect(new Set(catalog.map((chart) => chart.id)).size).toBe(1243);
+    // September 25 charts are now included in the October 8 snapshot.
+    expect(catalogByKey.has("3058:MAS")).toBe(true);
+    expect(catalogByKey.has("3059:MAS")).toBe(true);
   });
 
   it("adds lower difficulties for existing songs and supplements verified missing notes", () => {
@@ -40,6 +40,15 @@ describe("Mate catalog snapshot", () => {
     expect(catalogByKey.get("3050:MAS")).toMatchObject({ constant: 13.1, bpm: 180 });
   });
 
+  it("adds September 25 songs, the new ULT and October 8 photo constants without inventing unknown data", () => {
+    for (const [id, constant] of [["3058", 13.9], ["3057", 14.6], ["3059", 13.4], ["3052", 13.1], ["3054", 13], ["3055", 15.1], ["3064", 14.1], ["3062", 14.7]] as const) {
+      expect(catalogByKey.get(`${id}:MAS`)).toMatchObject({ id, difficulty: "MAS", constant, version: "MATE" });
+    }
+    expect(catalogByKey.get("2317:ULT")).toMatchObject({ constant: 15, version: "SUN", nickname: catalogByKey.get("2317:MAS")?.nickname });
+    expect(catalogByKey.get("3055:MAS")).toMatchObject({ bpm: null, notes: { total: 0 } });
+    expect(catalogByKey.has("3055:EXP")).toBe(false);
+  });
+
   it("provides the same remote cover URL for every chart of a song", () => {
     const coversBySong = new Map<string, string>();
     for (const chart of catalog) {
@@ -47,7 +56,7 @@ describe("Mate catalog snapshot", () => {
       if (expected) expect(chart.coverUrl).toBe(expected);
       else coversBySong.set(chart.id, chart.coverUrl);
     }
-    expect(coversBySong.size).toBe(1235);
+    expect(coversBySong.size).toBe(1243);
   });
 
   it("contains normalized alias lists shared by every chart of a song", () => {
