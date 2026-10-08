@@ -26,7 +26,7 @@ export interface SourceConnection {
   lastSuccessAt: string | null;
   error: string | null;
   progress?: SyncProgress;
-  loginUrl?: string;
+  bindingMode?: 'window' | 'companion';
 }
 
 export interface SyncResult {

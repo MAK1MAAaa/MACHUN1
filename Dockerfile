@@ -1,25 +1,27 @@
-FROM node:24-bookworm-slim AS build
+FROM node:24-bookworm-slim AS dependencies
 WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@10.15.0 --activate
 COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
+FROM dependencies AS build
 COPY . .
-RUN pnpm build && pnpm prune --prod && rm -rf node_modules/.tmp node_modules/.vite
+RUN pnpm build
+
+FROM dependencies AS production-dependencies
+RUN pnpm prune --prod && rm -rf node_modules/.tmp node_modules/.vite
 
 FROM node:24-bookworm-slim AS runtime
 ENV NODE_ENV=production \
-    DISPLAY=:99 \
     PLAYWRIGHT_BROWSERS_PATH=/opt/playwright \
     MACHUN_LISTEN_HOST=0.0.0.0 \
     MACHUN_PORT=1650 \
     MACHUN_DATA_DIR=/data \
-    MACHUN_REMOTE_LOGIN=1
+    MACHUN_BINDING_MODE=companion
 WORKDIR /app
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    tini xvfb x11-utils fluxbox x11vnc novnc websockify ca-certificates fonts-noto-cjk \
+RUN apt-get update && apt-get install -y --no-install-recommends tini ca-certificates fonts-noto-cjk \
     && rm -rf /var/lib/apt/lists/*
-COPY --from=build /app/package.json ./
-COPY --from=build /app/node_modules ./node_modules
+COPY --from=production-dependencies /app/package.json ./
+COPY --from=production-dependencies /app/node_modules ./node_modules
 RUN node node_modules/playwright/cli.js install --with-deps chromium \
     && rm -rf /var/lib/apt/lists/* \
     && chmod -R a+rX /opt/playwright \
@@ -27,6 +29,7 @@ RUN node node_modules/playwright/cli.js install --with-deps chromium \
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/server ./server
 COPY --from=build /app/src ./src
+COPY --from=build /app/db ./db
 COPY --from=build /app/LICENSE ./LICENSE
 COPY docker/entrypoint.sh /usr/local/bin/machun-entrypoint
 RUN chmod 755 /usr/local/bin/machun-entrypoint

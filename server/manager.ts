@@ -1,11 +1,13 @@
 import { setTimeout as delay } from "node:timers/promises";
-import { randomUUID } from "node:crypto";
+import { stat } from "node:fs/promises";
 import type { ExternalScoreSource } from "../src/core/sources";
 import { importSourcePayload } from "../src/core/sources";
 import { CATALOG_VERSION, catalogByKey } from "../src/core/catalog";
 import { EMPTY_STATE } from "../src/core/storage";
 import { SYNC_SOURCES, type BrowserSource, type SourceConnection, type SourceIdentity, type SyncOptions, type SyncProgress, type SyncResult } from "../src/syncTypes";
-import { SyncError, type BrowserProvider, type BrowserSession, type OtogameCheckpoint } from "./provider";
+import { requireIdentity, SyncError, type BrowserProvider, type BrowserSession, type OtogameCheckpoint } from "./provider";
+import type { PortableSession } from "../src/sourceBindingTypes";
+import { capturePortableSession, validatePortableSession } from "./portableSession";
 import { SourceStore, type SavedBinding, type SavedSource } from "./store";
 import { browserLauncher, type BrowserLauncher } from "./browser";
 import { LxnsProvider } from "./providers/lxns";
@@ -26,7 +28,7 @@ export interface ManagerOptions {
   lxns?: LxnsProvider;
   bindTimeoutMs?: number;
   bindPollMs?: number;
-  remoteLogin?: boolean;
+  companionLogin?: boolean;
 }
 
 export function safeError(error: unknown): SyncError {
@@ -55,8 +57,13 @@ export class SourceManager {
           source, status: saved.binding ? "ready" : "unbound", bound: Boolean(saved.binding),
           identity: saved.binding?.identity ?? null, lastAttemptAt: saved.lastAttemptAt,
           lastSuccessAt: saved.lastSuccessAt, error: null,
+          bindingMode: this.options.companionLogin && source !== 'lxns' ? 'companion' : 'window',
         },
       });
+      if (source !== 'lxns' && saved.binding?.profile && !saved.binding.session) {
+        try { await stat(this.options.store.profilePath(saved.binding.profile)); }
+        catch { Object.assign(this.slot(source).connection, { status: 'auth_required', error: '旧浏览器目录不在当前服务器，请用登录助手重新绑定；已有成绩保留。' }); }
+      }
     }
   }
 
@@ -98,7 +105,7 @@ export class SourceManager {
     return safe;
   }
 
-  private async commitBinding(slot: Slot, binding: SavedBinding): Promise<void> {
+  private async commitBinding(slot: Slot, binding: SavedBinding, persist?: (saved: SavedSource) => Promise<void>): Promise<void> {
     const previous = slot.saved.binding;
     const cache = slot.saved.otogameCache;
     const saved: SavedSource = {
@@ -106,7 +113,7 @@ export class SourceManager {
       ...(cache && cache.identity.id === binding.identity.id && cache.identity.cardId === binding.identity.cardId
         ? { otogameCache: cache } : {}),
     };
-    await this.options.store.save(slot.connection.source, saved);
+    if (persist) await persist(saved); else await this.options.store.save(slot.connection.source, saved);
     slot.saved = saved;
     if (previous?.profile && previous.profile !== binding.profile) {
       await this.options.store.removeProfile(previous.profile).catch(() => undefined);
@@ -115,15 +122,43 @@ export class SourceManager {
       bound: true, identity: binding.identity, status: "ready", error: null,
       lastAttemptAt: null, lastSuccessAt: null,
     });
-    delete slot.connection.loginUrl;
+  }
+
+  async bindPortable(source: BrowserSource, input: PortableSession, expected: SourceIdentity,
+    persist?: (saved: SavedSource) => Promise<void>, signal?: AbortSignal): Promise<SourceConnection> {
+    const slot = this.slot(source);
+    this.available(slot);
+    const state = validatePortableSession(source, input);
+    if (!this.launcher.openPortable) throw new SyncError('BROWSER_UNAVAILABLE', '浏览器不支持可移植会话。', 503);
+    return this.operate(slot, 'bind', async () => {
+      slot.connection.status = 'binding'; slot.connection.error = null;
+      const cancelled = () => { if (signal?.aborted) throw new SyncError('TASK_CANCELLED', '绑定任务已取消或失效。', 409); };
+      const onAbort = () => { void slot.session?.context.close().catch(() => undefined); };
+      signal?.addEventListener('abort', onAbort, { once: true });
+      try {
+        cancelled();
+        const provider = this.options.providers[source];
+        slot.session = await this.launcher.openPortable!(state, provider.loginUrl);
+        cancelled();
+        const identity = await provider.identify(slot.session);
+        requireIdentity(identity, expected);
+        const session = await capturePortableSession(slot.session.context, source);
+        await slot.session.context.close(); slot.session = undefined;
+        cancelled();
+        await this.commitBinding(slot, { identity, session }, persist);
+        return structuredClone(slot.connection);
+      } catch (error) { throw this.fail(slot, error); }
+      finally {
+        signal?.removeEventListener('abort', onAbort);
+        await slot.session?.context.close().catch(() => undefined); slot.session = undefined;
+      }
+    });
   }
 
   async bind(source: ExternalScoreSource, token?: string): Promise<SourceConnection> {
     const slot = this.slot(source);
     this.available(slot);
-    if (source !== "lxns" && this.options.remoteLogin && [...this.slots.values()].some((other) => other.operation === "bind" && other.connection.source !== "lxns")) {
-      throw new SyncError("BUSY", "另一个来源的登录窗口正在使用，请先完成或取消该绑定。", 409);
-    }
+    if (source !== 'lxns' && this.options.companionLogin) throw new SyncError('COMPANION_REQUIRED', '请创建绑定任务并在电脑运行登录助手。', 409);
     if (source === "lxns") {
       const normalized = token?.trim();
       if (!normalized || normalized.length > 4096 || /[\r\n\x00-\x1f]/.test(normalized)) {
@@ -142,7 +177,6 @@ export class SourceManager {
       slot.connection.status = "binding";
       slot.connection.error = null;
       slot.abort = new AbortController();
-      if (this.options.remoteLogin) slot.connection.loginUrl = `/login-view/vnc.html?autoconnect=true&resize=scale&path=login-view/websockify&session=${randomUUID()}`;
       const signal = slot.abort.signal;
       const task = this.operate(slot, "bind", () => this.bindBrowser(source, slot, signal));
       // Binding runs while the user completes the portal's own login window.
@@ -194,11 +228,12 @@ export class SourceManager {
         }
         if (identity) {
           if (signal.aborted) return;
-          // Close first to flush localStorage and cookies before recording the profile.
+          const portable = await capturePortableSession(session.context, source).catch(() => undefined);
+          // Close first to flush the legacy profile, while keeping a portable snapshot when available.
           await session.context.close();
           slot.session = undefined;
           if (signal.aborted) return;
-          await this.commitBinding(slot, { identity, profile });
+          await this.commitBinding(slot, { identity, profile, ...(portable ? { session: portable } : {}) });
           committed = true;
           return;
         }
@@ -212,7 +247,6 @@ export class SourceManager {
       slot.session = undefined;
       if (profile && !committed) await this.options.store.removeProfile(profile).catch(() => undefined);
       slot.abort = undefined;
-      delete slot.connection.loginUrl;
     }
   }
 
@@ -266,7 +300,15 @@ export class SourceManager {
         payload = await this.lxns.fetchScores(binding.token!, binding.identity);
       } else {
         const provider = this.options.providers[source];
-        slot.session = await this.launcher.open(this.options.store.profilePath(binding.profile!), provider.loginUrl, false);
+        if (binding.session) {
+          if (!this.launcher.openPortable) throw new SyncError('BROWSER_UNAVAILABLE', '浏览器不支持可移植会话。', 503);
+          slot.session = await this.launcher.openPortable(binding.session, provider.loginUrl);
+        } else {
+          if (!binding.profile) throw new SyncError('AUTH_REQUIRED', '请重新绑定该来源。', 401);
+          try { await stat(this.options.store.profilePath(binding.profile)); }
+          catch { throw new SyncError('AUTH_REQUIRED', '旧浏览器目录缺失，请用登录助手重新绑定。', 401); }
+          slot.session = await this.launcher.open(this.options.store.profilePath(binding.profile), provider.loginUrl, false);
+        }
         if (this.closing) throw new SyncError("SHUTTING_DOWN", "服务正在关闭。", 503);
         if (source === "otogame" && provider.fetchScoreChanges) {
           previousCache = slot.saved.otogameCache;
@@ -281,6 +323,13 @@ export class SourceManager {
           checkpoint = batch.checkpoint;
         } else {
           payload = await provider.fetchScores(slot.session, binding.identity, onProgress);
+        }
+        const session = await capturePortableSession(slot.session.context, source).catch(error => {
+          if (binding.session) throw error; return undefined;
+        });
+        if (session) {
+          const renewed = { ...slot.saved, binding: { ...binding, session } };
+          await this.options.store.save(source, renewed); slot.saved = renewed;
         }
         await slot.session.context.close();
         slot.session = undefined;

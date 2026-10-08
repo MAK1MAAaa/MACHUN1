@@ -1,4 +1,5 @@
-import { boolean, char, datetime, decimal, double, int, json, mysqlEnum, mysqlTable, primaryKey, varchar } from 'drizzle-orm/mysql-core';
+import { boolean, char, datetime, decimal, double, index, int, json, mysqlEnum, mysqlTable, primaryKey, varchar } from 'drizzle-orm/mysql-core';
+import type { BindingTaskStatus } from '../../src/sourceBindingTypes';
 import type { ChartNoteProfile, Difficulty } from '../../src/types';
 import type { SavedSource } from '../store';
 
@@ -50,3 +51,14 @@ export const sourceStates = mysqlTable('source_states', {
   source: mysqlEnum('source', ['rin', 'munet', 'otogame', 'lxns']).notNull(),
   state: json('state').$type<SavedSource>().notNull(),
 }, table => [primaryKey({ columns: [table.username, table.source] })]);
+export const bindingTasks = mysqlTable('source_binding_tasks', {
+  id: char('id', { length: 36 }).primaryKey(),
+  username: varchar('username', { length: 64 }).notNull().references(() => users.username),
+  source: mysqlEnum('source', ['rin', 'munet', 'otogame']).notNull(),
+  sessionHash: char('session_hash', { length: 64 }).notNull(),
+  codeHash: char('code_hash', { length: 64 }).notNull(),
+  bootId: char('boot_id', { length: 36 }).notNull(),
+  status: mysqlEnum('status', ['pending', 'validating', 'complete', 'failed', 'cancelled', 'expired']).$type<BindingTaskStatus>().notNull(),
+  expiresAt: datetime('expires_at', { mode: 'date', fsp: 3 }).notNull(),
+  error: varchar('error', { length: 512 }),
+}, table => [index('binding_owner_source').on(table.username, table.source), index('binding_expiry').on(table.expiresAt)]);

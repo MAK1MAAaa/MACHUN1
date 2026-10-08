@@ -2,7 +2,7 @@ import type { SourceMergeOptions } from "./sources";
 import type { ExternalScoreSource } from "./sources";
 import type { SourceConnection, SyncOptions, SyncResult } from "../syncTypes";
 
-export const LOCAL_SERVICE_MESSAGE = "无法连接本地服务，请确认 pnpm start 和 SSH 隧道正在运行；当前页面数据保留。";
+export const LOCAL_SERVICE_MESSAGE = "无法连接服务，请检查网络及后台服务；当前页面数据保留。";
 
 export class SyncClientError extends Error {
   constructor(public readonly code: string, message: string) {

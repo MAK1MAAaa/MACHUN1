@@ -1,0 +1,9 @@
+.companion-binding { margin: 12px 0; padding: 14px; border: 1px solid var(--line); border-radius: 12px; min-width: 0; background: var(--surface); }
+.companion-binding p { font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+.companion-binding label { display: block; margin: 12px 0 6px; font-size: 14px; }
+.companion-binding textarea, .companion-binding input { display: block; box-sizing: border-box; width: 100%; margin-top: 6px; padding: 10px; border: 1px solid var(--line); border-radius: 8px; font: 14px/1.5 monospace; background: #fff; color: #2e403b; }
+.companion-binding button { min-height: 44px; margin: 4px 8px 4px 0; padding: 8px 14px; border: 1px solid var(--line); border-radius: 8px; font: inherit; font-size: 14px; color: #365f42; background: #e1edde; cursor: pointer; }
+.companion-binding button:disabled { opacity: .55; cursor: wait; }
+.companion-binding button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.companion-binding [role=alert] { color: #a52c38; }
+@media(max-width:660px) { .companion-binding textarea, .companion-binding input { font-size: 16px; } }

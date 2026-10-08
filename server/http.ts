@@ -9,10 +9,11 @@ import { SyncError } from "./provider";
 import type { AccountBackend } from "./accountService";
 import { readSessionCookie, sessionCookie } from "./auth";
 import { mergeOptions } from "./workspace";
+import type { BrowserSource } from '../src/syncTypes';
 
 export type HttpManager = Pick<SourceManager, "connections" | "bind" | "unbind" | "sync">;
 
-interface HttpOptions {
+export interface HttpOptions {
   manager?: HttpManager;
   accounts?: AccountBackend;
   distDirectory?: string;
@@ -65,12 +66,13 @@ export function createAppServer(options: HttpOptions) {
     const allowedHosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`]);
     if (options.publicOrigin) allowedHosts.add(new URL(options.publicOrigin).host);
     if (!allowedHosts.has(request.headers.host ?? "")) throw new SyncError("FORBIDDEN", "不允许的访问地址。", 403);
-    const allowedOrigins = new Set([...allowedHosts].map((host) => `http://${host}`).concat(options.additionalOrigins ?? []));
+    const allowedOrigins = new Set([`http://127.0.0.1:${port}`, `http://localhost:${port}`, ...(options.additionalOrigins ?? [])]);
     if (options.publicOrigin) allowedOrigins.add(options.publicOrigin);
     const origin = request.headers.origin;
     if (origin && !allowedOrigins.has(origin)) throw new SyncError("FORBIDDEN", "不允许跨站访问本地服务。", 403);
     const path = new URL(request.url ?? "/", `http://127.0.0.1:${port}`).pathname;
     const method = request.method ?? "GET";
+    if (path === '/healthz' && method === 'GET') { json(response, 200, { status: 'ok' }); return; }
 
     if (path.startsWith("/api/")) {
       if (request.headers["sec-fetch-site"] === "cross-site") throw new SyncError("FORBIDDEN", "不允许跨站访问本地服务。", 403);
@@ -79,6 +81,15 @@ export function createAppServer(options: HttpOptions) {
       const write = () => {
         if (request.headers["x-machun-request"] !== "1") throw new SyncError("FORBIDDEN", "缺少本地请求标记。", 403);
       };
+      const companion = /^\/api\/companion\/binding-tasks\/([a-f0-9-]{36})$/.exec(path);
+      if (companion) {
+        if (!accounts?.bindingTasks) throw new SyncError('NOT_FOUND', '登录助手未配置。', 404);
+        const code = /^Bearer ([A-Za-z0-9_-]{43})$/.exec(request.headers.authorization ?? '')?.[1] ?? '';
+        if (method === 'GET') json(response, 200, await accounts.bindingTasks.companion(companion[1], code));
+        else if (method === 'POST') { write(); json(response, 202, await accounts.bindingTasks.submit(companion[1], code, await body(request, 192 * 1024))); }
+        else throw new SyncError('METHOD_NOT_ALLOWED', '不支持该请求方法。', 405);
+        return;
+      }
       if (path.startsWith("/api/auth/")) {
         if (!accounts) throw new SyncError("DATABASE_UNAVAILABLE", "账号服务尚未配置。", 503);
         if (path === "/api/auth/session" && method === "GET") {
@@ -87,12 +98,15 @@ export function createAppServer(options: HttpOptions) {
         if (path === "/api/auth/login" && method === "POST") {
           write();
           const login = await accounts.auth.login(await body(request), request.socket.remoteAddress ?? "local");
-          response.setHeader("Set-Cookie", sessionCookie(login.token));
+          response.setHeader("Set-Cookie", sessionCookie(login.token, false, options.publicOrigin?.startsWith('https://')));
           json(response, 200, { user: login.user }); return;
         }
         if (path === "/api/auth/logout" && method === "POST") {
-          write(); await body(request); await accounts.auth.logout(token);
-          response.setHeader("Set-Cookie", sessionCookie("", true));
+          write(); await body(request);
+          const user = await accounts.auth.account(token);
+          await accounts.auth.logout(token);
+          if (user && token) await accounts.bindingTasks?.cancelFor(user.username, undefined, token);
+          response.setHeader("Set-Cookie", sessionCookie("", true, options.publicOrigin?.startsWith('https://')));
           json(response, 200, { user: null }); return;
         }
         throw new SyncError("NOT_FOUND", "接口不存在。", 404);
@@ -100,6 +114,16 @@ export function createAppServer(options: HttpOptions) {
       const user = accounts ? await accounts.auth.account(token) : null;
       if (accounts && !user) throw new SyncError("UNAUTHORIZED", "请先登录。", 401);
       if (accounts && user) {
+        const task = /^\/api\/source-binding-tasks\/([a-f0-9-]{36})$/.exec(path);
+        const createTask = /^\/api\/sources\/(rin|munet|otogame)\/binding-tasks$/.exec(path);
+        if (task || createTask) {
+          if (!accounts.bindingTasks) throw new SyncError('NOT_FOUND', '登录助手未配置。', 404);
+          if (createTask && method === 'POST') { write(); await body(request); json(response, 201, await accounts.bindingTasks.create(user.username, createTask[1] as BrowserSource, token!)); }
+          else if (task && method === 'GET') json(response, 200, await accounts.bindingTasks.get(user.username, task[1]));
+          else if (task && method === 'DELETE') { write(); await body(request); json(response, 200, await accounts.bindingTasks.cancel(user.username, task[1])); }
+          else throw new SyncError('METHOD_NOT_ALLOWED', '不支持该请求方法。', 405);
+          return;
+        }
         // Install the database catalogue before recalculating any user's workspace.
         await accounts.catalog();
         if (path === "/api/catalog" && method === "GET") { json(response, 200, await accounts.catalog()); return; }
@@ -128,6 +152,7 @@ export function createAppServer(options: HttpOptions) {
         const connection = await manager.bind(source, input.token as string | undefined);
         json(response, source === "lxns" ? 200 : 202, { connection });
       } else if (action === "binding") {
+        if (accounts && user && source !== 'lxns') await accounts.bindingTasks?.cancelFor(user.username, source);
         json(response, 200, { connection: await manager.unbind(source) });
       } else {
         if (input.full !== undefined && (typeof input.full !== "boolean" || source !== "otogame")) {

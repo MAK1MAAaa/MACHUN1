@@ -16,12 +16,10 @@ export function runtimeConfig(environment: NodeJS.ProcessEnv, projectRoot: strin
     }
     publicOrigin = url.origin;
   }
-  const accessPassword = environment.MACHUN_ACCESS_PASSWORD || undefined;
-  if (accessPassword && accessPassword.length < 12) throw new Error("MACHUN_ACCESS_PASSWORD 至少需要 12 位。");
+  if (host === '0.0.0.0' && !publicOrigin?.startsWith('https://')) throw new Error('部署服务必须配置 HTTPS 的 MACHUN_PUBLIC_ORIGIN。');
   return {
-    development, port, host, publicOrigin, accessPassword,
-    allowRequestHost: host === "0.0.0.0" && !publicOrigin,
+    development, port, host, publicOrigin,
     dataDirectory: resolve(environment.MACHUN_DATA_DIR ?? resolve(projectRoot, ".machun.local")),
-    remoteDesktop: environment.MACHUN_REMOTE_LOGIN === "1",
+    companionLogin: environment.MACHUN_BINDING_MODE === "companion",
   };
 }

@@ -11,7 +11,7 @@ import { eq } from 'drizzle-orm';
 import { prepareTestDatabase } from './mysql-test-fixture';
 import { AccountService, MysqlSourceStore } from '../server/accountService';
 import { createAppServer, type HttpManager } from '../server/http';
-import { users, workspaces } from '../server/db/schema';
+import { users, workspaces, bindingTasks } from '../server/db/schema';
 import { hashPassword } from '../server/auth';
 import { createDatabase } from '../server/db/connection';
 import { catalog } from '../src/core/catalog';
@@ -68,7 +68,7 @@ class FakeManager implements HttpManager {
   }
 }
 const managers = new Map<string, FakeManager>();
-const server = createAppServer({ accounts: { get auth() { return service.auth; }, get workspace() { return service.workspace; }, catalog: () => service.catalog(),
+const server = createAppServer({ accounts: { get bindingTasks() { return service.bindingTasks; }, get auth() { return service.auth; }, get workspace() { return service.workspace; }, catalog: () => service.catalog(),
   async manager(username) {
     let manager = managers.get(username);
     if (!manager) { manager = new FakeManager(new MysqlSourceStore(fixture.db, username, directory)); managers.set(username, manager); }
@@ -243,6 +243,35 @@ try {
   assert.equal(Object.keys((await state(mobile)).scores).length, 50);
   assert.equal((await state(mobile)).nicknameOverrides['3055'][0], '个人测试别名');
   assert.equal(await mobile.evaluate(key => localStorage.getItem(key), STORAGE_KEY), null);
+  await mobile.locator('.source-tools-toggle').click();
+  const mobileManager = managers.get('root')!;
+  for (const connection of mobileManager.state.values()) if (connection.source !== 'lxns') connection.bindingMode = 'companion';
+  await mobile.reload(); await mobile.locator('.source-tools-toggle').click();
+  const mobileCard = mobile.locator('.source-card.rin');
+  await mobileCard.getByRole('button', { name: '重新登录', exact: true }).click();
+  await mobileCard.getByRole('button', { name: '生成绑定任务', exact: true }).click();
+  const command = mobileCard.getByLabel('助手命令', { exact: true }); await command.waitFor();
+  const commandText = await command.inputValue();
+  assert(commandText.includes('pnpm login:remote --server ')); assert(commandText.includes(' --task '));
+  const code = await mobileCard.getByLabel('绑定码', { exact: true }).inputValue(); assert.equal(code.length, 43); assert(!commandText.includes(code));
+  const beforeCancel = await state(mobile);
+  for (const width of [320, 390, 768, 1440]) {
+    await mobile.setViewportSize({ width, height: 900 });
+    assert(await mobile.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `mobile viewport ${width} overflow`);
+  }
+  await mobile.setViewportSize({ width: 390, height: 844 });
+  await mobileCard.locator('.companion-binding').screenshot({ path: join(output, 'mobile-companion-binding.png') });
+  await mobileCard.getByRole('button', { name: '取消绑定任务', exact: true }).click();
+  assert.deepEqual(await state(mobile), beforeCancel);
+  await mobileCard.getByRole('button', { name: '重新登录', exact: true }).click();
+  await mobileCard.getByRole('button', { name: '生成绑定任务', exact: true }).click();
+  await command.waitFor(); const nextCommand = await command.inputValue(); const taskId = nextCommand.split(' --task ')[1];
+  await fixture.db.update(bindingTasks).set({ status: 'complete' }).where(eq(bindingTasks.id, taskId));
+  await mobileCard.locator('.companion-binding').getByRole('status').filter({ hasText: /^绑定成功$/ }).waitFor();
+  await mobileCard.getByRole('button', { name: '关闭', exact: true }).click();
+  assert(await mobileCard.getByRole('button', { name: '同步成绩', exact: true }).isEnabled());
+  assert.equal(await mobile.locator('iframe').count(), 0);
+  mark('companion command/code, cancelled task preservation, completion polling and 320/390/768/1440 layouts pass without a remote desktop');
   await mobile.screenshot({ path: join(output, 'mobile-root.png'), fullPage: true });
   await secondContext.close(); await context.close();
   mark('a fresh browser reads root data from MySQL without localStorage, and login works at mobile width');

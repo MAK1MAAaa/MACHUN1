@@ -2,7 +2,7 @@
 
 在本机运行的 CHUNITHM Mate 成绩管理工具。通过网页管理综合最高分、计算单曲 Rating 和 B30，并从 MuNET、Rin服、大饼及国服落雪手动同步成绩。
 
-采用 React、TypeScript、Vite、Node.js、mysql2 和 Drizzle。当前 `main` 使用 MySQL 保存账号数据，本机通过 SSH 隧道连接；门户登录由 Playwright 完成。只有登录页面，没有注册接口，不进行启动同步、定时同步或 QQ Bot。
+采用 React、TypeScript、Vite、Node.js、mysql2 和 Drizzle。本分支使用 MySQL 保存账号数据；本机通过 SSH 隧道连接，Docker 通过 1Panel 网络连接数据库。门户登录采用电脑 Playwright 助手，部署端只运行无界面同步。只有登录页面，没有注册接口，不进行启动同步、定时同步或 QQ Bot。
 
 ## 功能概览
 
@@ -107,32 +107,26 @@ API 包括 `POST /api/auth/login`、`GET /api/auth/session`、`POST /api/auth/lo
 
 请求有间隔，限流时按服务器提示等待并显示进度。每页最多重试 3 次，单次等待上限 15 分钟，一次同步累计等待上限 35 分钟。历史很多时请保持服务和页面运行；乱序、分页位置变化或失败不会导入部分结果，也不会推进同步位置。
 
-### 可选自动登录
+### Docker 部署与本机登录助手
 
-复制模板后填入本地配置：
+当前 `codex/manual-login-docker` 分支使用 MySQL 多用户账户。部署端没有 VNC 或密码自动填写；电脑手动完成门户登录后，手机可独立同步。`main` 保留本机门户自动登录能力。
+
+1. 电脑安装 Node.js 24、pnpm，检出与镜像匹配的分支，运行 `pnpm install` 和 `pnpm browser:install`。
+2. 部署网页登录后，展开来源工具，点击“绑定账号 / 重新登录”，生成绑定任务。
+3. 在电脑项目目录粘贴网页助手命令，例如：
 
 ```bash
-cp -n .env.example .env
-chmod 600 .env
+pnpm login:remote --server https://chuni.example.com --task <网页任务ID>
 ```
 
-上述复制命令不会覆盖已有 `.env`；已有配置时直接编辑现有文件。模板还包含 MySQL 连接配置，门户凭据为以下空变量：
+4. 终端提示时粘贴绑定码，输入不会显示；绑定码不放入命令、URL 或 `.env`。
+5. 在独立官方门户窗口手动登录并完成验证码，助手自动回传必要的登录状态。服务器核对账号和卡片后，网页显示绑定成功。
 
-```dotenv
-BCN_EMAIL=
-BCN_PASSWORD=
-MUNET_USERNAME=
-MUNET_PASSWORD=
-```
+绑定码仅保存哈希，10 分钟有效、仅能提交一次。取消、重新生成、网页退出、网页会话失效或服务重启后未完成任务作废。响应丢失时重新运行同一命令会查询结果，不重复提交。只传三个来源必要的 localStorage Token 字段，排除门户密码、BCN Cookie、个人日常浏览器目录。助手临时目录结束后清理。
 
-- **门户 `.env` 凭据仅供网页 `root` 使用**，其他用户通过自己的独立浏览器目录手动登录。
-- Rin服和大饼共用 BCN 邮箱密码，自动选择 BEMANICN 入口，在核实的官方登录表单中填入。
-- MuNET 使用用户名和密码自动填写登录表单，滑块、验证码、二次验证或授权确认仍需手动完成。
-- 点击“绑定账号”或“重新登录”时才执行；每个绑定窗口最多自动提交一次，失败不会循环重试，已有输入内容时交由用户继续操作。
-- 空值使用手动登录；后台同步继续复用会话。修改文件后重新打开绑定窗口即可读取，同名进程环境变量优先。
-- 含 `#` 或空格的值应加引号。凭据不要使用 `VITE_` 前缀，避免进入前端构建。
+可移植会话按用户和来源存入 MySQL，续期后更新；服务器无界面 Chromium 完成后续取分，电脑无需在线。原浏览器目录仍兼容，但服务器没有目录时需用助手重新绑定，已合并成绩不受影响。同账号同卡重新绑定保留大饼缓存，验证失败保留旧绑定。落雪仍填写个人 API Token。
 
-`.env` 是本机明文凭据文件，仅供后台读取，不写入成绩、API 响应或导出。不要提交或分享填写后的文件。
+详见 [1Panel 部署说明](docs/1panel.md)。构建命令 `pnpm docker:package` 生成 `release/machun1-companion-20261008-amd64-1650.tar.gz` 和 `.sha256`；旧 1650 归档保留。镜像端口与宿主机入口均为 1650，通过 HTTPS 域名反代。数据库迁移必须由管理连接显式执行，应用只使用 CRUD 账号，不自动迁移正式库。
 
 ## 文件导入与成绩规则
 
@@ -202,7 +196,7 @@ JSON 仅导出已有记录，含 `song_id`、曲名、难度、分数，以及�
 | MySQL `machun1` | 共享曲库；按用户保存成绩、个人别名、来源绑定、Token、大饼同步位置和网页会话哈希。 | “清空当前账号数据”仅删除该用户的成绩和个人别名；解绑删除该用户对应绑定与缓存。 |
 | `.machun.local/users/<用户名 SHA-256>/profiles/` | 每位用户独立的门户浏览器目录。 | 解绑移除对应用户的当前浏览器目录，保留已经合并的成绩和旧迁移副本。 |
 | 原浏览器 `localStorage` 与旧 `.machun.local/` 文件 | 一次性迁移的原副本。 | 应用保留，不自动覆盖或清理。 |
-| `.env` | MySQL 连接及 `root` 可选自动登录凭据。 | 不因网页清空或解绑而删除。 |
+| `.env` | MySQL 连接及 HTTPS 访问地址。 | 不因网页清空或解绑而删除。 |
 
 本地浏览器目录权限为 `0700`，`.env` 为 `0600`。正式模式只公开 `dist/`，开发模式屏蔽凭据及会话文件。个人导出、数据库连接和浏览器目录均由 `.gitignore` 排除。
 
@@ -224,11 +218,11 @@ server/
   auth.ts / workspace.ts       登录会话、事务化用户数据操作
   accountService.ts / db/       用户来源隔离、Drizzle 表和 MySQL 连接
   manager.ts / store.ts         绑定、同步调度与浏览器目录
-  credentials.ts / portalLogin.ts 自动登录与门户登录入口
+  bindingTasks.ts / portableSession.ts 一次性绑定任务与最小会话
   providers/                   四个成绩来源的接口适配
 db/migrations/                 受版本管理的 SQL
 scripts/                       曲库维护、数据库管理和隔离测试
-.env.example                   无凭据的 MySQL 与自动登录模板
+.env.example                   无凭据的 MySQL 与部署模板
 ```
 
 ## 曲库与别名维护
@@ -319,3 +313,5 @@ git push
 项目源代码沿用仓库已有的 [Apache License 2.0](LICENSE)。外部曲库、别名、曲绘、歌曲和其他素材不因此统一适用该许可证，应遵守各自来源的许可与权利声明。
 
 本工具与 SEGA CORPORATION 及上述成绩服务无隶属关系。CHUNITHM 和相关商标、曲绘、歌曲及其他素材归各自权利人所有。曲绘使用 OTOGE DB 的公开远程地址，仓库不保存图片文件。
+
+Docker 分支的验收范围、三服真实会话移植结果及 MuNET 续期限制见 [本机助手验证记录](docs/companion-rollout.md)。

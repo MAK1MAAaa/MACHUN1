@@ -51,34 +51,19 @@ async function setup(options: Partial<HttpOptions> = {}) {
 const writeHeaders = { "Content-Type": "application/json", "X-Machun-Request": "1" };
 
 describe("local HTTP boundary", () => {
-  it("accepts IP and reverse-proxy hosts without environment setup while rejecting foreign origins", async () => {
-    const { send, manager } = await setup({ allowRequestHost: true });
-    for (const [host, origin] of [["192.0.2.10:1650", "http://192.0.2.10:1650"], ["chuni.example", "https://chuni.example"], ["[2001:db8::1]:1650", "http://[2001:db8::1]:1650"]]) {
-      const status = await send("/api/sources", { headers: { Host: host, Origin: origin } });
-      expect(status.status).toBe(200);
-      expect(status.headers["www-authenticate"]).toBeUndefined();
-      expect((await send("/api/sources/rin/sync", { method: "POST", headers: { ...writeHeaders, Host: host, Origin: origin }, body: "{}" })).status).toBe(200);
+  it("accepts only the configured HTTPS host and rejects foreign origins and forwarded hosts", async () => {
+    const { send } = await setup({ publicOrigin: 'https://chuni.example' });
+    expect((await send('/api/sources', { headers: { Host: 'chuni.example', Origin: 'https://chuni.example' } })).status).toBe(200);
+    for (const headers of ([{ Host: 'foreign.example' }, { Host: 'chuni.example', Origin: 'http://chuni.example' }, { Host: 'chuni.example', Origin: 'https://foreign.example' }, { Host: 'foreign.example', 'X-Forwarded-Host': 'chuni.example' }] as Record<string, string>[])) {
+      expect((await send('/api/sources', { headers })).status).toBe(403);
     }
-    expect(manager.sync).toHaveBeenCalledTimes(3);
-    for (const origin of ["https://another.example", "http://192.0.2.10:1651", "null"]) {
-      expect((await send("/api/sources", { headers: { Host: "192.0.2.10:1650", Origin: origin } })).status).toBe(403);
-    }
-    expect((await send("/api/sources", { headers: { Host: "192.0.2.10:1650", "X-Forwarded-Host": "another.example", Origin: "https://another.example" } })).status).toBe(403);
   });
-  it("rejects malformed dynamic hosts and cross-site API requests", async () => {
-    const { send } = await setup({ allowRequestHost: true });
-    for (const host of ["user@chuni.example", "chuni.example/path", "chuni.example?query", "chuni.example:bad", "chuni.example,another.example"]) {
-      expect((await send("/api/sources", { headers: { Host: host } })).status).toBe(403);
-    }
-    expect((await send("/api/sources", { headers: { Host: "chuni.example", "Sec-Fetch-Site": "cross-site" } })).status).toBe(403);
-  });
-  it("allows opening the page from a panel link without allowing cross-site API navigation", async () => {
-    const { send } = await setup({ allowRequestHost: true });
-    const headers = { Host: "192.0.2.10:1650", "Sec-Fetch-Site": "cross-site", "Sec-Fetch-Mode": "navigate", "Sec-Fetch-Dest": "document" };
-    expect((await send("/", { headers })).status).toBe(200);
-    expect((await send("/api/sources", { headers })).status).toBe(403);
-    expect((await send("/other/../api/sources", { headers })).status).toBe(403);
-    expect((await send("/other/../login-view/vnc.html", { headers })).status).toBe(403);
+  it("allows panel page navigation while refusing cross-site API requests", async () => {
+    const { send } = await setup({ publicOrigin: 'https://chuni.example' });
+    const headers = { Host: 'chuni.example', 'Sec-Fetch-Site': 'cross-site', 'Sec-Fetch-Mode': 'navigate', 'Sec-Fetch-Dest': 'document' };
+    expect((await send('/', { headers })).status).toBe(200);
+    expect((await send('/api/sources', { headers })).status).toBe(403);
+    expect((await send('/login-view/vnc.html', { headers })).status).toBe(404);
   });
   it("serves the app and safe status metadata", async () => {
     const { send } = await setup();

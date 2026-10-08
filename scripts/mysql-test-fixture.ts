@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { randomBytes } from 'node:crypto';
 import { createConnection } from 'mysql2/promise';
 import { createDatabase } from '../server/db/connection';
@@ -11,7 +11,8 @@ export async function prepareTestDatabase() {
   const parsed = new URL(adminUrl);
   if (parsed.protocol !== 'mysql:' || parsed.hostname !== '127.0.0.1' || !parsed.port || parsed.username !== 'root' || parsed.pathname.length > 1) throw new Error('只允许测试容器的本机 MySQL URL。');
   const admin = await createConnection({ uri: adminUrl, multipleStatements: true, timezone: 'Z' });
-  const migration = await readFile(new URL('../db/migrations/0001_accounts.sql', import.meta.url), 'utf8');
+  const directory = new URL('../db/migrations/', import.meta.url);
+  const migration = (await Promise.all((await readdir(directory)).filter(name => /^\d+.*\.sql$/.test(name)).sort().map(name => readFile(new URL(name, directory), 'utf8')))).join('\n');
   try {
     await admin.query(migration);
     const password = randomBytes(32).toString('hex');

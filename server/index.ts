@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+import { parseEnv } from "node:util";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 import { safeError } from "./manager";
@@ -7,11 +9,13 @@ import { AccountService } from "./accountService";
 import { createDatabase, databaseUrl } from "./db/connection";
 
 const projectRoot = fileURLToPath(new URL("../", import.meta.url));
-const config = runtimeConfig(process.env, projectRoot, process.argv);
+let environment = { ...process.env };
+try { environment = { ...parseEnv(await readFile(resolve(projectRoot, ".env"), "utf8")), ...process.env }; } catch { /* Docker uses environment variables. */ }
+const config = runtimeConfig(environment, projectRoot, process.argv);
 const { development, port } = config;
 try {
   const connection = createDatabase(await databaseUrl(projectRoot));
-  const accounts = new AccountService(connection.db, config.dataDirectory, projectRoot);
+  const accounts = new AccountService(connection.db, config.dataDirectory, projectRoot, { companionLogin: config.companionLogin });
   const server = createAppServer({
     accounts,
     publicOrigin: config.publicOrigin,
@@ -23,7 +27,7 @@ try {
     void accounts.close().finally(() => connection.pool.end()).finally(() => { process.exitCode = 1; });
   });
   server.listen(port, config.host, () => {
-    console.log(`MACHUN1 ${development ? "同步 API" : "本地服务"}：http://127.0.0.1:${port}`);
+    console.log(`MACHUN1 ${development ? "同步 API" : "服务"}：${config.publicOrigin ?? `http://127.0.0.1:${port}`}`);
   });
   let stopping = false;
   const stop = async () => {

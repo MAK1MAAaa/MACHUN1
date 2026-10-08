@@ -21,6 +21,7 @@ import type { CatalogSnapshot } from '../src/accountTypes';
 import type { ExternalScoreSource } from '../src/core/sources';
 import type { HttpManager } from './http';
 import { SyncError } from './provider';
+import { BindingTaskService } from './bindingTasks';
 
 export class MysqlSourceStore extends SourceStore {
   constructor(private readonly db: Database, readonly username: string, base: string) {
@@ -45,16 +46,19 @@ export interface AccountBackend {
   workspace: Pick<WorkspaceRepository, 'get' | 'action' | 'migrate' | 'mergeSync'>;
   catalog(): Promise<CatalogSnapshot>;
   manager(username: string): Promise<HttpManager>;
+  bindingTasks?: BindingTaskService;
 }
 export class AccountService implements AccountBackend {
   readonly auth: AccountAuth;
   readonly workspace: WorkspaceRepository;
+  readonly bindingTasks: BindingTaskService;
   private snapshot?: Promise<CatalogSnapshot>;
   private managers = new Map<string, Promise<SourceManager>>();
   private legacyMigration?: Promise<void>;
-  constructor(private readonly db: Database, private readonly dataDirectory: string, _projectRoot: string) {
+  constructor(private readonly db: Database, private readonly dataDirectory: string, _projectRoot: string, private readonly options: { companionLogin?: boolean } = {}) {
     this.auth = new AccountAuth(db);
     this.workspace = new WorkspaceRepository(db);
+    this.bindingTasks = new BindingTaskService(db, username => this.manager(username));
   }
   async catalog(): Promise<CatalogSnapshot> {
     if (!this.snapshot) this.snapshot = loadCatalog(this.db).then(snapshot => {
@@ -113,6 +117,7 @@ export class AccountService implements AccountBackend {
         store: new MysqlSourceStore(this.db, username, this.dataDirectory),
         providers: { rin: rinProvider, munet: munetProvider, otogame: otogameProvider },
         launcher: createBrowserLauncher(),
+        companionLogin: this.options.companionLogin,
       });
       manager = instance.initialize().then(() => instance).catch(error => { this.managers.delete(username); throw error; });
       this.managers.set(username, manager);
@@ -120,6 +125,7 @@ export class AccountService implements AccountBackend {
     return manager;
   }
   async close(): Promise<void> {
+    await this.bindingTasks.close();
     await Promise.allSettled([...this.managers.values()].map(async manager => (await manager).close()));
     this.managers.clear();
   }

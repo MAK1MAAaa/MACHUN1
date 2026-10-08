@@ -1,5 +1,5 @@
 /** Explicit remote administration command. Never run automatically with start/dev. */
-import { readFile, rename, writeFile, chmod, rm } from 'node:fs/promises';
+import { readFile, readdir, rename, writeFile, chmod, rm } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { parseEnv } from 'node:util';
@@ -27,7 +27,8 @@ async function main() {
     }
     appPassword = existing.password;
   }
-  const migration = await readFile(join(directory, 'db/migrations/0001_accounts.sql'), 'utf8');
+  const migrationDirectory = join(directory, 'db/migrations');
+  const migration = (await Promise.all((await readdir(migrationDirectory)).filter(name => /^\d+.*\.sql$/.test(name)).sort().map(name => readFile(join(migrationDirectory, name), 'utf8')))).join('\n');
   const sql = `${migration}\nINSERT IGNORE INTO users (username,pwd) VALUES ('root','${hashPassword('pwd')}');
   CREATE USER ${values.DATABASE_URL ? 'IF NOT EXISTS ' : ''}'${appUser}'@'%' IDENTIFIED BY '${appPassword}';
   GRANT SELECT,INSERT,UPDATE,DELETE ON machun1.* TO '${appUser}'@'%';\n`;

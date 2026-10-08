@@ -9,9 +9,12 @@ import { AccountAuth, hashPassword, hashToken, SESSION_SECONDS } from './auth';
 import { AccountService, MysqlSourceStore } from './accountService';
 import { SourceStore } from './store';
 import { SourceManager } from './manager';
+import { BindingTaskService } from './bindingTasks';
+import type { SavedSource } from './store';
+import { SyncError } from './provider';
 import { WorkspaceRepository } from './workspace';
 import { loadCatalog } from './db/catalog';
-import { sessions, users, scores, workspaces, sourceStates } from './db/schema';
+import { sessions, users, scores, workspaces, sourceStates, bindingTasks } from './db/schema';
 import { catalog, catalogByKey } from '../src/core/catalog';
 import { EMPTY_STATE } from '../src/core/storage';
 import { calculateRating } from '../src/core/rating';
@@ -22,7 +25,6 @@ import type { SyncResult } from '../src/syncTypes';
 import { createAppServer } from './http';
 import type { BrowserProvider } from './provider';
 import * as browserModule from './browser';
-import type { CredentialReader } from './credentials';
 
 const enabled = Boolean(process.env.MACHUN_TEST_ADMIN_URL);
 describe.skipIf(!enabled)('isolated MySQL persistence and accounts', () => {
@@ -237,23 +239,125 @@ describe.skipIf(!enabled)('isolated MySQL persistence and accounts', () => {
     } finally { await service.close(); await new Promise<void>(resolve => server.close(() => resolve())); server.closeAllConnections(); }
   });
 
-  it('only root can use the local automatic login credentials; other users always receive a manual launcher', async () => {
-    const base = join(directory, 'credential-scope');
-    await mkdir(base);
-    await writeFile(join(base, '.env'), 'BCN_EMAIL=synthetic@example.invalid\nBCN_PASSWORD=synthetic-only\nMUNET_USERNAME=synthetic-munet\nMUNET_PASSWORD=synthetic-only\n', { mode: 0o600 });
-    for (const name of ['BCN_EMAIL', 'BCN_PASSWORD', 'MUNET_USERNAME', 'MUNET_PASSWORD']) vi.stubEnv(name, undefined);
-    const readers: CredentialReader[] = [];
-    const launcher = vi.spyOn(browserModule, 'createBrowserLauncher').mockImplementation(reader => {
-      readers.push(reader!);
+  it('all Docker branch users use a manual launcher without reading portal credentials', async () => {
+    const readers: unknown[][] = [];
+    const launcher = vi.spyOn(browserModule, 'createBrowserLauncher').mockImplementation((...args) => {
+      readers.push(args);
       return { async open() { throw new Error('No browser should open during initialization'); } };
     });
-    const service = new AccountService(fixture.db, base, base);
+    const service = new AccountService(fixture.db, directory, directory);
+    try { await service.manager('root'); await service.manager('alice'); expect(readers).toEqual([[], []]); }
+    finally { await service.close(); launcher.mockRestore(); }
+  });
+
+  const portable = { version: 1 as const, source: 'rin' as const, localStorage: { currentAccount: '{"accessToken":"fixture-access","tokenType":"Bearer","refreshToken":"fixture-renew"}' } };
+  const boundIdentity = { id: 'companion-account', label: '测试玩家', cardId: 'test-card' };
+  async function tasks(now: () => number = Date.now) {
+    const login = await auth.login({ username: 'root', password: 'pwd' }, 'task-fixture');
+    let release: (() => void) | undefined;
+    let hold: Promise<void> | undefined;
+    let failure = false;
+    const binder = vi.fn(async (_source: string, _session: unknown, _identity: unknown, persist: (state: SavedSource) => Promise<void>) => {
+      if (hold) await hold;
+      if (failure) throw new SyncError('IDENTITY_CHANGED', '账号或卡片不匹配', 409);
+      await persist({ binding: { identity: boundIdentity, session: portable }, lastAttemptAt: null, lastSuccessAt: null });
+      return sync(1).connection;
+    });
+    const manager = { connections: () => [sync(1).connection], bindPortable: binder } as unknown as SourceManager;
+    const service = new BindingTaskService(fixture.db, async () => manager, now);
+    return { login, service, binder, manager, wait() { hold = new Promise<void>(resolve => { release = resolve; }); }, resume() { release?.(); }, fail() { failure = true; } };
+  }
+  it('binding codes are hashed, task access is isolated, and a submission is accepted only once', async () => {
+    const t = await tasks();
     try {
-      await service.manager('root'); await service.manager('alice');
-      expect(readers).toHaveLength(2);
-      expect(await readers[0]('bcn')).toEqual({ username: 'synthetic@example.invalid', password: 'synthetic-only' });
-      expect(await readers[0]('munet')).toEqual({ username: 'synthetic-munet', password: 'synthetic-only' });
-      expect(await readers[1]('bcn')).toBeNull(); expect(await readers[1]('munet')).toBeNull();
-    } finally { await service.close(); launcher.mockRestore(); vi.unstubAllEnvs(); }
+      const created = await t.service.create('root', 'rin', t.login.token);
+      const [stored] = await fixture.db.select().from(bindingTasks).where(eq(bindingTasks.id, created.id));
+      expect(stored.codeHash).toBe(hashToken(created.code)); expect(JSON.stringify(stored)).not.toContain(created.code);
+      expect((await t.service.companion(created.id, created.code)).loginUrl).toBe('https://portal.naominet.live/');
+      await expect(t.service.companion(created.id, 'wrong')).rejects.toMatchObject({ code: 'INVALID_BINDING_CODE' });
+      await expect(t.service.get('alice', created.id)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      await expect(t.service.cancel('alice', created.id)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      t.wait();
+      await t.service.submit(created.id, created.code, { session: portable, identity: boundIdentity, username: 'alice' });
+      await expect(t.service.submit(created.id, created.code, { session: portable, identity: boundIdentity })).rejects.toMatchObject({ code: 'TASK_USED' });
+      t.resume(); await vi.waitFor(async () => expect((await t.service.get('root', created.id)).status).toBe('complete'));
+      const state = (await fixture.db.select().from(sourceStates).where(eq(sourceStates.username, 'root'))).find(row => row.source === 'rin')?.state;
+      expect(state?.binding?.session).toEqual(portable); expect(t.binder).toHaveBeenCalledTimes(1);
+      expect(JSON.stringify(await t.service.companion(created.id, created.code))).not.toMatch(/fixture-access|fixture-renew|codeHash|sessionHash/);
+    } finally { t.resume(); await t.service.close(); }
+  });
+  it('regeneration, expiration, logout and service restart invalidate outstanding codes', async () => {
+    let clock = Date.now(); const t = await tasks(() => clock);
+    try {
+      const first = await t.service.create('root', 'rin', t.login.token);
+      const second = await t.service.create('root', 'rin', t.login.token);
+      expect((await t.service.get('root', first.id)).status).toBe('cancelled');
+      clock += 10 * 60_000 + 1;
+      expect((await t.service.companion(second.id, second.code)).status).toBe('expired');
+      await expect(t.service.submit(second.id, second.code, { session: portable, identity: boundIdentity })).rejects.toMatchObject({ code: 'TASK_USED' });
+      clock = Date.now();
+      const third = await t.service.create('root', 'rin', t.login.token);
+      await auth.logout(t.login.token);
+      expect((await t.service.get('root', third.id)).status).toBe('expired');
+      const login = await auth.login({ username: 'root', password: 'pwd' }, 'restart-task');
+      const fourth = await t.service.create('root', 'rin', login.token);
+      const restart = new BindingTaskService(fixture.db, async () => t.manager);
+      try { expect((await restart.get('root', fourth.id)).status).toBe('expired'); }
+      finally { await restart.close(); }
+      expect(t.binder).not.toHaveBeenCalled();
+    } finally { await t.service.close(); }
+  });
+  it('cancellation or identity failure never overwrites the previous binding or scores', async () => {
+    const t = await tasks(); const before = await repository.get('root');
+    const store = new MysqlSourceStore(fixture.db, 'root', directory);
+    const old = await store.load('rin');
+    try {
+      t.wait(); const created = await t.service.create('root', 'rin', t.login.token);
+      await t.service.submit(created.id, created.code, { session: portable, identity: boundIdentity });
+      await vi.waitFor(() => expect(t.binder).toHaveBeenCalled());
+      await t.service.cancel('root', created.id); t.resume(); await t.service.close();
+      expect((await t.service.get('root', created.id)).status).toBe('cancelled');
+      expect(await store.load('rin')).toEqual(old); expect(await repository.get('root')).toEqual(before);
+      t.fail(); const next = await t.service.create('root', 'rin', t.login.token);
+      await t.service.submit(next.id, next.code, { session: portable, identity: boundIdentity });
+      await vi.waitFor(async () => expect((await t.service.get('root', next.id)).status).toBe('failed'));
+      expect(await store.load('rin')).toEqual(old);
+    } finally { t.resume(); await t.service.close(); }
+  });
+  it('expiry during browser validation cannot replace the previous database binding', async () => {
+    let clock = Date.now(); const t = await tasks(() => clock);
+    const store = new MysqlSourceStore(fixture.db, 'root', directory); const before = await store.load('rin');
+    try {
+      t.wait(); const created = await t.service.create('root', 'rin', t.login.token);
+      await t.service.submit(created.id, created.code, { session: portable, identity: boundIdentity });
+      await vi.waitFor(() => expect(t.binder).toHaveBeenCalled());
+      clock += 10 * 60_000 + 1;
+      expect((await t.service.get('root', created.id)).status).toBe('expired');
+      t.resume(); await t.service.close();
+      expect(await store.load('rin')).toEqual(before);
+    } finally { t.resume(); await t.service.close(); }
+  });
+  it('HTTP task routes require the owning login or the binding code and logout revokes pending work', async () => {
+    await fixture.db.update(workspaces).set({ sourcesMigrated: true }).where(eq(workspaces.username, 'root'));
+    const service = new AccountService(fixture.db, join(directory, 'tasks-http'), directory, { companionLogin: true });
+    const server = createAppServer({ accounts: service });
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address(); if (!address || typeof address === 'string') throw new Error('port');
+    const origin = `http://127.0.0.1:${address.port}`;
+    const headers = { 'Content-Type': 'application/json', 'X-Machun-Request': '1' };
+    try {
+      const path = '/api/sources/rin/binding-tasks';
+      expect((await fetch(origin + path, { method: 'POST', headers, body: '{}' })).status).toBe(401);
+      const login = await fetch(origin + '/api/auth/login', { method: 'POST', headers, body: '{"username":"root","password":"pwd"}' });
+      const own = { ...headers, Cookie: login.headers.get('set-cookie')!.split(';')[0] };
+      const response = await fetch(origin + path, { method: 'POST', headers: own, body: '{}' }); expect(response.status).toBe(201);
+      const task = await response.json();
+      expect((await fetch(origin + `/api/companion/binding-tasks/${task.id}`)).status).toBe(401);
+      const companion = await fetch(origin + `/api/companion/binding-tasks/${task.id}`, { headers: { Authorization: `Bearer ${task.code}` } });
+      expect(companion.status).toBe(200); expect(await companion.text()).not.toContain(task.code);
+      expect((await fetch(origin + '/api/sources/rin/bind', { method: 'POST', headers: own, body: '{}' })).status).toBe(409);
+      await fetch(origin + '/api/auth/logout', { method: 'POST', headers: own, body: '{}' });
+      expect((await service.bindingTasks.companion(task.id, task.code)).status).toBe('cancelled');
+    } finally { await service.close(); await new Promise<void>(resolve => { server.close(() => resolve()); server.closeAllConnections(); }); }
   });
 });

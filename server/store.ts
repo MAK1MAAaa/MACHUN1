@@ -6,11 +6,14 @@ import type { SourceIdentity } from "../src/syncTypes";
 import { SyncError, type OtogameCheckpoint } from "./provider";
 import type { SingleRating } from "../src/types";
 import { parseLocalState } from "../src/core/storage";
+import type { PortableSession } from "../src/sourceBindingTypes";
+import { validatePortableSession } from "./portableSession";
 
 export interface SavedBinding {
   identity: SourceIdentity;
   profile?: string;
   token?: string;
+  session?: PortableSession;
 }
 
 export interface SavedSource {
@@ -35,8 +38,9 @@ export function validateSavedSource(source: ExternalScoreSource, raw: unknown): 
     const b = value.binding;
     if (!b || typeof b !== "object" || !b.identity || typeof b.identity.id !== "string" ||
       typeof b.identity.label !== "string" || (b.identity.cardId !== undefined && typeof b.identity.cardId !== "string")) throw new Error("invalid");
-    if (source === "lxns" ? typeof b.token !== "string" || !b.token :
-      typeof b.profile !== "string" || !PROFILE_PATTERN.test(b.profile) || !b.profile.startsWith(`${source}-`)) throw new Error("invalid");
+    if (source === "lxns") { if (typeof b.token !== "string" || !b.token) throw new Error("invalid"); }
+    else if (b.session) { b.session = validatePortableSession(source, b.session); }
+    else if (typeof b.profile !== "string" || !PROFILE_PATTERN.test(b.profile) || !b.profile.startsWith(`${source}-`)) throw new Error("invalid");
 }
 for (const date of [value.lastAttemptAt, value.lastSuccessAt]) {
   if (date !== null && (typeof date !== "string" || !Number.isFinite(Date.parse(date)))) throw new Error("invalid");

@@ -13,7 +13,7 @@ export async function accountRequest<T>(path: string, method = 'GET', body?: unk
     });
   } catch (error) {
     if (signal?.aborted) throw error;
-    throw new AccountApiError('NETWORK_ERROR', '无法连接服务；当前页面数据保留，请确认本地服务和 SSH 隧道正在运行。');
+    throw new AccountApiError('NETWORK_ERROR', '无法连接服务；当前页面数据保留，请检查网络及后台服务。');
   }
   let payload;
   try { payload = await response.json(); }

@@ -16,7 +16,8 @@
     "preview": "tsx server/index.ts --preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "docker:package": "node scripts/package-docker.mjs"
+    "docker:package": "node scripts/package-docker.mjs",
+    "login:remote": "tsx scripts/login-remote.ts"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.3",

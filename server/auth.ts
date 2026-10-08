@@ -14,8 +14,8 @@ export function readSessionCookie(cookie = ''): string | null {
   const value = cookie.split(';').map(part => part.trim()).find(part => part.startsWith(`${SESSION_COOKIE}=`))?.slice(SESSION_COOKIE.length + 1);
   return value && /^[a-f0-9]{64}$/.test(value) ? value : null;
 }
-export function sessionCookie(token: string, clear = false): string {
-  return `${SESSION_COOKIE}=${clear ? '' : token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${clear ? 0 : SESSION_SECONDS}`;
+export function sessionCookie(token: string, clear = false, secure = false): string {
+  return `${SESSION_COOKIE}=${clear ? '' : token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${clear ? 0 : SESSION_SECONDS}${secure ? '; Secure' : ''}`;
 }
 export class AccountAuth {
   private readonly failures = new Map<string, { count: number; until: number }>();
