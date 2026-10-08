@@ -6,7 +6,7 @@ export type SongChartDetail = Pick<CatalogChart, "id" | "difficulty" | "constant
 
 // OTOGE DB supplies lower-level charts only for the song detail card.
 // Score calculation and import matching continue to use the 13.0+ catalog.
-const chartsBySong = new Map<string, SongChartDetail[]>();
+let chartsBySong = new Map<string, SongChartDetail[]>();
 const seen = new Set<string>();
 const charts: SongChartDetail[] = [
   ...catalog.map(({ id, difficulty, constant }) => ({ id, difficulty, constant })),
@@ -25,4 +25,19 @@ for (const chart of charts) {
 
 export function getSongCharts(id: string): readonly SongChartDetail[] {
   return chartsBySong.get(id) ?? [];
+}
+
+export function installSongChartDetails(details: SongChartDetail[]): void {
+  const next = new Map<string, SongChartDetail[]>();
+  const seen = new Set<string>();
+  for (const chart of [...catalog, ...details]) {
+    if (!chart.id || !["EXP", "MAS", "ULT"].includes(chart.difficulty) || !Number.isFinite(chart.constant) || chart.constant <= 0) throw new Error("详情谱面无效");
+    const key = `${chart.id}:${chart.difficulty}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const rows = next.get(chart.id) ?? [];
+    rows.push({ id: chart.id, difficulty: chart.difficulty, constant: chart.constant });
+    next.set(chart.id, rows);
+  }
+  chartsBySong = next;
 }

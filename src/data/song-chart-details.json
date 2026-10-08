@@ -660,11 +660,6 @@
     "constant": 12.6
   },
   {
-    "id": "2317",
-    "difficulty": "ULT",
-    "constant": 15
-  },
-  {
     "id": "2320",
     "difficulty": "EXP",
     "constant": 12.8
@@ -1458,5 +1453,20 @@
     "id": "3089",
     "difficulty": "EXP",
     "constant": 11.6
+  },
+  {
+    "id": "3055",
+    "difficulty": "EXP",
+    "constant": 12.5
+  },
+  {
+    "id": "3064",
+    "difficulty": "EXP",
+    "constant": 11.9
+  },
+  {
+    "id": "3062",
+    "difficulty": "EXP",
+    "constant": 11.3
   }
 ]

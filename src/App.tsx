@@ -1,31 +1,22 @@
 import {
   type ChangeEvent,
-  type SetStateAction,
   useEffect,
   useMemo,
-  useReducer,
   useRef,
   useState,
 } from "react";
-import type { CatalogChart, LocalState, ScoreSource, SingleRating } from "./types";
+import type { CatalogChart, ScoreSource, SingleRating } from "./types";
 import { B30_SIZE, chartKey, compareRatings, getB30, getB30Summary, getB30Axis } from "./core/b30";
 import { CATALOG_DATE, CATALOG_VERSION, catalog, catalogByKey } from "./core/catalog";
 import { createB30Export, createB30CandidatesExport, downloadB30Json, downloadB30Png } from "./core/b30Export";
 import { formatScore } from "./core/rating";
-import {
-  EMPTY_STATE,
-  clearLocalState,
-  correctScore,
-  enterManualScore,
-  loadLocalState,
-  saveLocalState,
-} from "./core/storage";
-import { mergeSyncResult } from "./core/sync";
+import type { Account, WorkspaceSnapshot } from "./accountTypes";
+import { useAccountWorkspace } from "./components/useAccountWorkspace";
+import { createFullBackup, downloadFullBackup } from "./core/backup";
 import { SourceSyncControls, useSourceSync } from "./components/SourceSyncControls";
 import { RecordsSection } from "./components/RecordsSection";
 import { ScoreBadges } from "./components/ScoreBadges";
 import {
-  importSourceFile,
   SCORE_SOURCE_LABELS,
   type ExternalScoreSource,
   type SourceImportReport,
@@ -60,7 +51,7 @@ const SOURCE_HELP: Record<ExternalScoreSource, SourceHelpContent> = {
       "也可导出 MuNET CHUNITHM 存档，再点击“选择 MuNET JSON 文件”离线导入。",
     ],
     format: "支持 userMusicDetailList 中的 musicId、level、scoreMax；难度 2 / 3 / 4 对应 EXP / MAS / ULT。若包含 gameId，必须为 SDHD。仅匹配当前 13.0+ 曲库。",
-    caution: "MuNET 同步或文件导入仅在分数严格高于已有国服成绩时覆盖；同分和较低分保留国服成绩及来源。网页登录会话保存在本机后台。解绑会清除会话，但不会删除已合并成绩；文件导入仍只在浏览器解析。",
+    caution: "MuNET 同步或文件导入仅在分数严格高于已有国服成绩时覆盖；同分和较低分保留国服成绩及来源。网页登录会话保存在本机后台。解绑会清除会话，但不会删除已合并成绩；文件导入由后台解析并保存到当前账号。",
     documentationUrl: "https://github.com/MuNET-OSS/chunithm-data-converter",
     documentationLabel: "查看 MuNET 兼容格式参考",
   },
@@ -143,51 +134,16 @@ function sourceReportText(report: SourceImportReport): string {
   return `已写入 ${changed} 条（新增 ${report.importedScores}、更新 ${report.updatedScores}）${corrected}，跳过 ${report.skippedScores + report.unknownCharts + report.invalidEntries} 条`;
 }
 
-function loadInitialState(): { state: LocalState; error: string | null } {
-  try {
-    return { state: loadLocalState(window.localStorage), error: null };
-  } catch (error) {
-    return {
-      state: structuredClone(EMPTY_STATE),
-      error: error instanceof Error ? error.message : "本地数据无法读取",
-    };
-  }
+interface AppProps {
+  account: Account;
+  initial: WorkspaceSnapshot;
+  initialNotice?: string;
 }
 
-interface WorkspaceState {
-  state: LocalState;
-  importNotice: Notice | null;
-}
-
-type WorkspaceAction =
-  | { type: "update"; update: SetStateAction<LocalState> }
-  | { type: "import"; source: ExternalScoreSource; operation: "导入" | "同步"; apply: (current: LocalState) => { state: LocalState; report: SourceImportReport } };
-
-function workspaceReducer(current: WorkspaceState, action: WorkspaceAction): WorkspaceState {
-  if (action.type === "update") {
-    return { ...current, state: typeof action.update === "function" ? action.update(current.state) : action.update };
-  }
-  try {
-    const { state, report } = action.apply(current.state);
-    return {
-      state,
-      importNotice: {
-        kind: report.invalidEntries + report.unknownCharts > 0 ? "warning" : "success",
-        text: `${SCORE_SOURCE_LABELS[action.source]}${action.operation}完成：${sourceReportText(report)}`,
-      },
-    };
-  } catch (error) {
-    return { ...current, importNotice: { kind: "error", text: error instanceof Error ? error.message : "来源成绩合并失败" } };
-  }
-}
-
-function App() {
-  const initial = useMemo(loadInitialState, []);
-  const [workspace, dispatchWorkspace] = useReducer(workspaceReducer, { state: initial.state, importNotice: null });
-  const localState = workspace.state;
-  const setLocalState = (update: SetStateAction<LocalState>) => dispatchWorkspace({ type: "update", update });
-  const [storageError, setStorageError] = useState<string | null>(initial.error);
-  const [notice, setNotice] = useState<Notice | null>(null);
+function App({ account, initial, initialNotice }: AppProps) {
+  const workspace = useAccountWorkspace(initial);
+  const localState = workspace.snapshot.state;
+  const [notice, setNotice] = useState<Notice | null>(initialNotice ? { kind: "warning", text: initialNotice } : null);
   const [editing, setEditing] = useState<{ key: string; title: string; difficulty: string; score: string; isNew: boolean } | null>(null);
   const [editError, setEditError] = useState<string | null>(null);
   const editDialogRef = useRef<HTMLDialogElement>(null);
@@ -199,29 +155,21 @@ function App() {
   const [nationalRepairEnabled, setNationalRepairEnabled] = useState(false);
   const [helpSource, setHelpSource] = useState<ExternalScoreSource | null>(null);
   const sourceFileInputRef = useRef<HTMLInputElement>(null);
-  const sourceSync = useSourceSync((result, mergeOptions) => {
-    dispatchWorkspace({ type: "import", source: result.source, operation: "同步", apply: (current) => mergeSyncResult(current, result, mergeOptions) });
+  const backupInputRef = useRef<HTMLInputElement>(null);
+  const [backupMode, setBackupMode] = useState<"merge" | "replace">("merge");
+  const sourceSync = useSourceSync((result) => {
+    if (!result.workspace) throw new Error("同步未返回已保存的工作区，请更新本地服务后重试。");
+    workspace.apply(result.workspace);
+    setNotice({ kind: result.report.invalidEntries + result.report.unknownCharts > 0 ? "warning" : "success",
+      text: `${SCORE_SOURCE_LABELS[result.source]}同步完成：${sourceReportText(result.report)}` });
   });
   const nationalRepairBusy = Boolean(sourceSync.pending.lxns)
     || sourceSync.connections.lxns.status === "syncing" || sourceSync.connections.lxns.status === "binding";
 
   useEffect(() => {
-    if (workspace.importNotice) setNotice(workspace.importNotice);
-  }, [workspace.importNotice]);
-
-  useEffect(() => {
     if (editing && !editDialogRef.current?.open) editDialogRef.current?.showModal();
     if (!editing) editDialogRef.current?.close();
   }, [editing]);
-
-  useEffect(() => {
-    if (storageError) return;
-    try {
-      saveLocalState(window.localStorage, localState);
-    } catch (error) {
-      setStorageError(error instanceof Error ? error.message : "无法写入浏览器本地存储");
-    }
-  }, [localState, storageError]);
 
   useEffect(() => {
     if (!notice) return;
@@ -264,14 +212,12 @@ function App() {
       difficultyCounts,
     };
   }, [b30, summary.average]);
-  const deleteRecord = (record: SingleRating) => {
+  const deleteRecord = async (record: SingleRating) => {
     if (!window.confirm(`确认删除《${record.title}》${record.difficulty} 的成绩？`)) return;
-    setLocalState((state) => {
-      const scores = { ...state.scores };
-      delete scores[chartKey(record)];
-      return { ...state, scores };
-    });
-    setNotice({ kind: "success", text: "成绩已删除" });
+    try {
+      const result = await workspace.action({ type: "delete", key: chartKey(record) });
+      setNotice({ kind: "success", text: result.notice ?? "成绩已删除" });
+    } catch { /* Workspace banner retains the error and current data. */ }
   };
 
   const exportB30Json = (withCandidates = false) => {
@@ -327,28 +273,32 @@ function App() {
     }
     try {
       const raw = await file.text();
-      dispatchWorkspace({
-        type: "import", source, operation: "导入",
-        apply: (current) => importSourceFile(raw, source, current, catalogByKey, file.name, mergeOptions),
-      });
+      const result = await workspace.action({ type: "import", source, raw, filename: file.name, mergeOptions });
+      setNotice({ kind: result.report && result.report.invalidEntries + result.report.unknownCharts > 0 ? "warning" : "success",
+        text: result.report ? `${SCORE_SOURCE_LABELS[source]}导入完成：${sourceReportText(result.report)}` : result.notice ?? "导入完成" });
     } catch (error) {
       setNotice({ kind: "error", text: error instanceof Error ? error.message : "来源数据导入失败" });
     }
   };
 
-  const resetAllData = () => {
-    if (!window.confirm("确认清空全部本地成绩和个人别名？此操作无法撤销。")) return;
-    clearLocalState(window.localStorage);
-    setLocalState(structuredClone(EMPTY_STATE));
-    setStorageError(null);
-    setNotice({ kind: "success", text: "本地数据已清空" });
+  const resetAllData = async () => {
+    if (!window.confirm("确认清空当前账号的全部成绩和个人别名？此操作无法撤销。")) return;
+    try {
+      const result = await workspace.action({ type: "clear" });
+      setNotice({ kind: "success", text: result.notice ?? "账号数据已清空" });
+    } catch { /* Do not clear data before the database confirms the operation. */ }
   };
 
-  const recoverStorage = () => {
-    clearLocalState(window.localStorage);
-    setLocalState(structuredClone(EMPTY_STATE));
-    setStorageError(null);
-    setNotice({ kind: "success", text: "损坏的本地数据已清除" });
+  const handleBackupImport = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) { setNotice({ kind: "error", text: "备份不能超过 10 MB" }); return; }
+    if (backupMode === "replace" && !window.confirm("确认用备份替换当前账号的全部成绩和个人别名？")) return;
+    try {
+      const result = await workspace.action({ type: "backup", raw: await file.text(), mode: backupMode });
+      setNotice({ kind: "success", text: result.notice ?? "备份导入完成" });
+    } catch (error) { setNotice({ kind: "error", text: error instanceof Error ? error.message : "备份导入失败" }); }
   };
 
   return (
@@ -357,9 +307,9 @@ function App() {
         <div className="brand-block">
           <span className="eyebrow">MACHUN1 RATING WORKSPACE</span>
           <h1>MACHUN<span>1</span></h1>
-          <p>通过本地服务同步各来源成绩，自动计算单曲 Rating。</p>
+          <p>按账号保存和同步各来源成绩，自动计算单曲 Rating。</p>
           <div className="hero-tags" aria-label="工具特性">
-            <span>LOCAL FIRST</span>
+            <span>USER WORKSPACE</span>
             <span>13.0+ CHARTS</span>
             <span>BEST 30 ONLY</span>
           </div>
@@ -371,13 +321,13 @@ function App() {
         </div>
       </header>
 
-      {storageError && (
+      {workspace.error && (
         <div className="status-banner error" role="alert">
           <div>
-            <strong>本地数据读取失败</strong>
-            <span>{storageError}。为避免覆盖原数据，自动保存已暂停。</span>
+            <strong>数据库请求失败</strong>
+            <span>{workspace.error} 当前页面数据保留。</span>
           </div>
-          <button type="button" onClick={recoverStorage}>清除并重新开始</button>
+          <button type="button" onClick={() => { void workspace.reload(); }}>重新读取</button>
         </div>
       )}
 
@@ -396,7 +346,7 @@ function App() {
             <small>{Math.round((summary.count / B30_SIZE) * 100)}% COMPLETE</small>
           </article>
           <article className="summary-card">
-            <span>本地成绩</span>
+            <span>账号成绩</span>
             <strong>{records.length}</strong>
             <small>UNIQUE CHARTS</small>
           </article>
@@ -418,7 +368,7 @@ function App() {
             aria-expanded={localToolsOpen}
             onClick={() => setLocalToolsOpen((open) => !open)}
           >
-            <span><b>01</b><strong>本地数据</strong></span>
+            <span><b>01</b><strong>账号数据</strong></span>
             <span>{localToolsOpen ? "完全折叠" : "展开工具"}<i aria-hidden="true">{localToolsOpen ? "−" : "+"}</i></span>
           </button>
 
@@ -426,12 +376,12 @@ function App() {
             <div className="panel-heading compact">
               <div>
                 <span className="section-index">01</span>
-                <h2>本地数据</h2>
+                <h2>账号数据</h2>
               </div>
             </div>
             <div className="privacy-note">
-              <strong>DEVICE ONLY</strong>
-              <p>成绩保存在当前浏览器，登录会话由本机后台保存。可同步成绩或离线导入文件，生成 B30 图片。</p>
+              <strong>{account.username}</strong>
+              <p>成绩和个人别名保存在 MySQL，来源绑定仅供当前账号使用。完整备份包含成绩、来源和达成标记，不包含登录信息。</p>
             </div>
             <div className="data-divider" />
             <dl className="catalog-meta">
@@ -440,7 +390,13 @@ function App() {
               <div><dt>范围</dt><dd>13.0 — 16.0</dd></div>
               <div><dt>类型</dt><dd>EXP / MAS / ULT</dd></div>
             </dl>
-            <button type="button" className="danger-action" onClick={resetAllData}>清空全部本地数据</button>
+            <div className="backup-tools">
+              <button type="button" onClick={() => { downloadFullBackup(createFullBackup(localState, CATALOG_VERSION)); }}>导出完整备份</button>
+              <label>导入方式 <select aria-label="备份导入方式" value={backupMode} onChange={event => setBackupMode(event.target.value as "merge" | "replace")}><option value="merge">合并最高分</option><option value="replace">替换全部</option></select></label>
+              <button type="button" disabled={workspace.busy} onClick={() => backupInputRef.current?.click()}>导入完整备份</button>
+              <input ref={backupInputRef} type="file" accept=".json,application/json" hidden onChange={event => { void handleBackupImport(event); }} />
+            </div>
+            <button type="button" className="danger-action" disabled={workspace.busy} onClick={() => { void resetAllData(); }}>清空当前账号数据</button>
           </aside>}
         </section>
 
@@ -570,7 +526,7 @@ function App() {
               </div>
               <p>首次保存个人 API Token 到本机后台，以后可直接同步，也可离线导入成绩文件。</p>
               <div className="source-repair-controls">
-                <button type="button" className="source-repair-toggle" aria-pressed={nationalRepairEnabled} disabled={nationalRepairBusy || Boolean(storageError)} onClick={() => setNationalRepairEnabled((enabled) => !enabled)}>
+                <button type="button" className="source-repair-toggle" aria-pressed={nationalRepairEnabled} disabled={nationalRepairBusy} onClick={() => setNationalRepairEnabled((enabled) => !enabled)}>
                   国服覆盖 MuNET
                 </button>
                 <p className="source-sync-note">{nationalRepairEnabled
@@ -731,12 +687,13 @@ function App() {
           records={records}
           scores={localState.scores}
           nicknameOverrides={localState.nicknameOverrides}
-          disabled={Boolean(storageError)}
+          disabled={workspace.busy}
           onEdit={(chart, record) => {
             setEditError(null);
             setEditing({ key: chartKey(chart), title: chart.title, difficulty: chart.difficulty, score: record ? String(record.score) : "", isNew: !record });
           }}
           onDelete={deleteRecord}
+          onAliases={async (id, aliases) => { await workspace.action({ type: "aliases", id, aliases }); }}
         />
       </main>
 
@@ -746,19 +703,13 @@ function App() {
       </footer>
 
       <dialog ref={editDialogRef} className="modal score-edit-dialog" aria-labelledby="score-edit-title" onCancel={() => setEditing(null)}>
-        {editing && <form onSubmit={(event) => {
+        {editing && <form onSubmit={async (event) => {
           event.preventDefault();
+          if (workspace.busy) return;
           try {
-            if (storageError) throw new Error("本地存储异常，请先处理后再修改成绩");
-            const chart = catalogByKey.get(editing.key);
-            if (!chart) throw new Error("谱面已不在当前曲库中");
-            const apply = (current: LocalState) => editing.isNew
-              ? enterManualScore(current, chart, editing.score)
-              : correctScore(current, editing.key, editing.score);
-            apply(localState);
-            setLocalState(apply);
+            const result = await workspace.action({ type: "manual", key: editing.key, score: editing.score });
             setEditing(null);
-            setNotice({ kind: "success", text: "分数已更新，来源标记为神秘游客" });
+            setNotice({ kind: "success", text: result.notice ?? "分数已更新，来源标记为神秘游客" });
           } catch (error) {
             setEditError(error instanceof Error ? error.message : "修改失败");
           }
@@ -775,7 +726,7 @@ function App() {
           {editError && <p className="score-edit-error" role="alert">{editError}</p>}
           <div className="modal-actions">
             <button type="button" onClick={() => setEditing(null)}>取消</button>
-            <button type="submit" className="confirm">保存修改</button>
+            <button type="submit" className="confirm" disabled={workspace.busy}>保存修改</button>
           </div>
         </form>}
       </dialog>
