@@ -12,8 +12,6 @@ import { chromium } from "playwright";
 const root = fileURLToPath(new URL("../", import.meta.url));
 const unique = `machun1-smoke-${Date.now()}`;
 const volume = `${unique}-data`;
-const password = "fixture-container-access-password";
-const authorization = `Basic ${Buffer.from(`machun:${password}`).toString("base64")}`;
 const image = "machun1:manual-login-amd64";
 const directory = await mkdtemp(join(tmpdir(), "machun-docker-smoke-"));
 async function docker(args) {
@@ -34,7 +32,7 @@ async function unusedPort() {
   await new Promise((resolve) => socket.close(resolve));
   return port;
 }
-const port = await unusedPort();
+const port = process.argv.includes("--fixed-port") ? 1650 : await unusedPort();
 const origin = `http://127.0.0.1:${port}`;
 async function healthy() {
   const deadline = Date.now() + 90_000;
@@ -44,25 +42,27 @@ async function healthy() {
   }
   throw new Error(`Container startup failed: ${await docker(["logs", "--tail", "15", unique])}`);
 }
-const api = (path, method = "GET") => fetch(`${origin}${path}`, { method, headers: { Authorization: authorization, Origin: origin, "X-Machun-Request": "1", "Content-Type": "application/json" }, ...(method !== "GET" ? { body: "{}" } : {}), signal: AbortSignal.timeout(90_000) });
+const api = (path, method = "GET") => fetch(`${origin}${path}`, { method, headers: { Origin: origin, "X-Machun-Request": "1", "Content-Type": "application/json" }, ...(method !== "GET" ? { body: "{}" } : {}), signal: AbortSignal.timeout(90_000) });
 let browser;
 try {
   assert.equal(await docker(["image", "inspect", "--format", "{{.Os}}/{{.Architecture}}", image]), "linux/amd64");
-  const options = ["--name", unique, "--platform", "linux/amd64", "--shm-size", "1g", "-p", `127.0.0.1:${port}:4399`, "-e", `MACHUN_PUBLIC_ORIGIN=${origin}`, "-e", `MACHUN_ACCESS_PASSWORD=${password}`, "-v", `${volume}:/data`];
+  const options = ["--name", unique, "--platform", "linux/amd64", "--shm-size", "1g", "-p", `127.0.0.1:${port}:1650`, "-v", `${volume}:/data`];
   await docker(["run", "-d", ...options, image]);
   await healthy();
-  assert.equal((await fetch(`${origin}/api/sources`)).status, 401);
+  assert.equal((await fetch(`${origin}/api/sources`)).status, 200);
+  assert.equal((await fetch(`${origin}/api/sources`, { headers: { Origin: "https://another.example" } })).status, 403);
+  assert.equal(await docker(["exec", unique, "node", "-e", "console.log(process.env.MACHUN_PORT)"]), "1650");
   assert.equal((await api("/api/sources")).status, 200);
   assert.equal((await api("/login-view/vnc.html")).status, 409);
   assert.equal(await docker(["exec", unique, "id", "-u"]), "1000");
   assert.equal(await docker(["exec", unique, "stat", "-c", "%a", "/data"]), "700");
   await docker(["exec", unique, "node", "-e", "const fs=require('fs');for(const p of ['/app/.env','/app/.machun.local','/app/server/credentials.ts','/app/server/portalLogin.ts']){if(fs.existsSync(p))process.exit(1)}"]);
-  console.log("PASS container startup, access password, non-root permissions and exclusion of local credentials/automatic login");
+  console.log("PASS configuration-free startup on container port 1650, same-origin boundary, non-root permissions and exclusion of local credentials/automatic login");
   await docker(["rm", "-f", unique]);
   await docker(["run", "-d", ...options, "--mount", `type=bind,source=${resolve(root, "scripts/docker-session-fixture.ts")},target=/app/scripts/docker-session-fixture.ts,readonly`, image, "node", "node_modules/tsx/dist/cli.mjs", "scripts/docker-session-fixture.ts"]);
   await healthy();
   browser = await chromium.launch({ channel: "chrome", headless: true });
-  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, httpCredentials: { username: "machun", password } });
+  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
   await context.route("**/*", (route) => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
   const page = await context.newPage();
   page.setDefaultTimeout(60_000);
@@ -106,6 +106,17 @@ try {
   await page.mouse.click(bounds.x + coordinates.x * bounds.width / size.width, bounds.y + coordinates.y * bounds.height / size.height);
   await source.locator(".source-connection-status").filter({ hasText: /^已绑定$/ }).waitFor();
   assert.equal(await page.locator(".remote-login-dialog").count(), 0);
+  await source.getByRole("button", { name: "同步成绩", exact: true }).click();
+  await page.waitForFunction(() => Object.values(JSON.parse(localStorage.getItem("chunithm-mate-b30:v2") || '{"scores":{}}').scores).some((record) => record.score === 1_009_000));
+  await page.reload();
+  assert.equal(await page.evaluate(() => Object.keys(JSON.parse(localStorage.getItem("chunithm-mate-b30:v2")).scores).length), 1);
+  const otherContext = await browser.newContext();
+  await otherContext.route("**/*", (route) => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
+  const otherPage = await otherContext.newPage();
+  await otherPage.goto(origin);
+  await otherPage.locator(".b30-preview-toggle").waitFor();
+  assert.equal(await otherPage.evaluate(() => Object.keys(JSON.parse(localStorage.getItem("chunithm-mate-b30:v2") || '{"scores":{}}').scores).length), 0);
+  await otherContext.close();
   let result = await (await api("/api/sources/rin/sync", "POST")).json();
   assert.equal(result.records[0].score, 1_009_000);
   assert.equal(result.records[0].combo, "aj");
@@ -117,7 +128,7 @@ try {
   await api("/api/sources/rin/binding", "DELETE");
   assert.equal(await docker(["exec", unique, "node", "-e", "console.log(require('fs').readdirSync('/data/profiles').length)"]), "0");
   assert.deepEqual(errors, []);
-  console.log(`PASS real noVNC mouse login, automatic return, AJ score sync, restart persistence and profile removal. Screenshots: ${directory}`);
+  console.log(`PASS real noVNC mouse login, automatic return, browser-local scores, AJ score sync, restart persistence and profile removal. Screenshots: ${directory}`);
 } finally {
   await browser?.close();
   await docker(["rm", "-f", unique]).catch(() => undefined);

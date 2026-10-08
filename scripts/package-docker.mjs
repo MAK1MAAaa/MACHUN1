@@ -9,7 +9,7 @@ import { createGzip } from "node:zlib";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const tag = "machun1:manual-login-amd64";
-const destination = resolve(root, "release/machun1-manual-login-amd64.tar.gz");
+const destination = resolve(root, "release/machun1-manual-login-amd64-1650.tar.gz");
 const temporary = `${destination}.partial`;
 function completed(child) {
   return new Promise((resolve, reject) => {
@@ -30,7 +30,7 @@ try {
   await rename(temporary, destination);
   const checksum = createHash("sha256");
   for await (const chunk of createReadStream(destination)) checksum.update(chunk);
-  await writeFile(`${destination}.sha256`, `${checksum.digest("hex")}  machun1-manual-login-amd64.tar.gz\n`);
+  await writeFile(`${destination}.sha256`, `${checksum.digest("hex")}  machun1-manual-login-amd64-1650.tar.gz\n`);
   console.log(`已导出可供 1Panel 导入的 amd64 Docker 镜像：${destination}`);
 } catch (error) {
   await rm(temporary, { force: true });

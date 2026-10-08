@@ -55,9 +55,9 @@ pnpm start
 | `pnpm browser:install` | 安装用于来源登录的 Chromium。 |
 | `pnpm test` | 执行 Vitest 测试。 |
 | `pnpm test:watch` | 以监听模式运行 Vitest。 |
-| `pnpm docker:package` | 构建 linux/amd64 镜像并输出 `release/machun1-manual-login-amd64.tar.gz` 和 SHA-256 校验文件。 |
+| `pnpm docker:package` | 构建 linux/amd64 镜像并输出免配置版本 `release/machun1-manual-login-amd64-1650.tar.gz` 和 SHA-256 校验文件。 |
 
-一次运行一种服务模式即可。本机默认仅监听 `127.0.0.1`，校验 Host、请求来源和 API 标记；Docker 模式额外要求部署访问密码和明确的访问地址，不开放跨站访问。
+一次运行一种服务模式即可。本机默认仅监听 `127.0.0.1`，校验 Host、请求来源和 API 标记；Docker 默认免配置，无页面访问密码，通过当前请求地址检查同源 API 和 WebSocket。
 
 **成绩按浏览器和访问地址分别保存。** `4399` 与 `4400`、`127.0.0.1` 与 `localhost` 的 `localStorage` 不共享。开发和正式模式都使用 `http://127.0.0.1:4399/` 时，可继续读取同一浏览器中的成绩。
 
@@ -92,24 +92,22 @@ pnpm start
 
 ## Docker 与 1Panel 部署
 
-详细操作见 [1Panel 部署说明](docs/1panel.md)。镜像包含 Chromium、虚拟显示和 noVNC，不需要在服务器安装桌面；只有应用端口 4399 对外提供访问，内部 5900/6080 不映射。
+详细操作见 [1Panel 部署说明](docs/1panel.md)。镜像包含 Chromium、虚拟显示和 noVNC，不需要在服务器安装桌面；端口固定映射为 **1650:1650**，内部 5900/6080 不映射。
 
 ```bash
 # 本机生成可导入镜像（需要 Docker）
 pnpm docker:package
 
 # 服务器导入镜像归档
-docker load -i machun1-manual-login-amd64.tar.gz
+docker load -i machun1-manual-login-amd64-1650.tar.gz
 
-# 编辑模板，设置真实访问地址与随机访问密码，然后启动
-cp -n .env.example .env
-chmod 600 .env
+# 直接启动，无需配置环境变量或 .env
 docker compose up -d
 ```
 
-浏览器访问账号为 `machun`，密码为 `MACHUN_ACCESS_PASSWORD`，它仅保护部署页面，与各门户账号无关。`MACHUN_PUBLIC_ORIGIN` 必须与浏览器实际访问的协议、主机和端口完全一致；支持 HTTPS 反向代理，需转发原 Host 和 WebSocket。默认只映射服务器回环端口，由 1Panel 反向代理提供外部入口。
+直接访问 `http://服务器IP:1650`，无需页面账号密码或填写访问域名。可选 HTTPS 反向代理需转发原 Host 和 WebSocket。旧版升级时删除原编排的 `environment` 访问地址／密码项，再重建容器；本机 `pnpm start` 仍使用 4399。
 
-登录状态、Token 和大饼缓存写入 `machun_data` 命名卷的 `/data`；普通重启、更新镜像保留数据，删除卷会清除绑定。成绩仍保存在各浏览器的 `localStorage`，换手机、域名或协议不会自动迁移成绩，可重新同步来源。镜像和导出归档不含个人密码、Token 或现有会话。
+登录状态、Token 和大饼缓存写入 `machun_data` 命名卷的 `/data`；普通重启、更新镜像保留数据，删除卷会清除绑定。成绩和个人别名只保存在各浏览器的 `localStorage`，换手机、域名或协议不会自动迁移成绩，可重新同步来源。同一服务实例共用来源绑定。镜像和导出归档不含个人密码、Token 或现有会话。
 
 ## 文件导入与成绩规则
 
@@ -172,7 +170,7 @@ JSON 仅导出已有记录，含 `song_id`、曲名、难度、分数，以及�
 | --- | --- | --- |
 | 浏览器 `localStorage` 的 `chunithm-mate-b30:v2` | 全部综合成绩、来源、个人别名；旧版 v1 自动迁移。 | “清空全部本地数据”删除当前访问地址的成绩和别名，不解除后台绑定。 |
 | `.machun.local/` | 登录会话、绑定身份、落雪 Token、大饼成绩缓存与同步位置。 | “解绑”删除对应来源会话/Token/缓存，保留网页中已合并成绩。 |
-| `.env` | Docker Compose 的访问地址、端口和部署访问密码，本分支不读取门户密码。 | 不因网页清空或解绑而删除，需自行管理。 |
+| `.env` | 免配置 Docker 不需要此文件；本分支不读取门户密码。 | 已有文件保持不变，不随镜像打包。 |
 
 后台目录权限设为 `0700`，绑定记录为 `0600`，凭据未另行加密。正式模式只公开 `dist/`，开发模式屏蔽凭据及会话文件；后台仅返回规范化成绩和统计，不返回 Cookie、Token 或原始账号存档。这些本地敏感文件已由 `.gitignore` 排除。
 
@@ -197,7 +195,7 @@ server/
   config.ts / access.ts / desktopProxy.ts 部署配置、访问鉴权与登录窗口代理
   providers/                   四个成绩来源的接口适配
 scripts/                       曲库维护和隔离浏览器检查
-.env.example                   无个人凭据的部署配置模板
+.env.example                   可选访问限制说明；默认无需配置
 Dockerfile / compose.yaml      amd64 镜像与容器编排
 docker/entrypoint.sh            虚拟显示、远程登录及服务进程管理
 docs/1panel.md                 1Panel 镜像导入和反向代理说明
@@ -256,7 +254,7 @@ pnpm exec tsx scripts/smoke-mobile.ts
 node scripts/smoke-docker.mjs
 ```
 
-**当前检查状态（2026-10-08）：** `pnpm test` 的 383 项测试、`pnpm build`、隔离网页检查和真实浏览器会话检查通过。本分支删除自动登录测试，并增加部署配置、鉴权、WebSocket、单窗口登录及移动端检查；覆盖桌面 3×10 预览、5×6 / 5×10 PNG、320–1440 像素布局及手动登录后返回。amd64 镜像已在本机 Docker 中通过启动、真实 noVNC 鼠标登录、AJ 同步、重启复用会话和解绑检查，生成的 gzip 镜像归档另经 `docker load` 验证。模拟门户检查不能代替四个来源的真实账号或目标 1Panel 服务器验收。
+**当前检查状态（2026-10-08）：** `pnpm test` 的 387 项测试、`pnpm build`、隔离网页检查和真实浏览器会话检查通过。测试覆盖免配置部署、同源 API/WebSocket、可选鉴权、单窗口登录、桌面 3×10 预览、5×6 / 5×10 PNG 和 320–1440 像素布局。新 amd64 镜像已通过 `1650:1650` 免配置启动、真实 noVNC 鼠标登录后返回、AJ 同步、浏览器本地成绩隔离、重启复用会话和解绑检查；生成的 gzip 镜像归档另经 `docker load` 和 SHA-256 校验验证。模拟门户检查不能代替四个来源的真实账号或目标 1Panel 服务器验收。
 
 ## 常见问题与边界
 

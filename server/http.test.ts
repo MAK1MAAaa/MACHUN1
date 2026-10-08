@@ -3,7 +3,7 @@ import { request as httpRequest, type Server } from "node:http";
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { createAppServer, type HttpManager } from "./http";
+import { createAppServer, type HttpManager, type HttpOptions } from "./http";
 import { SyncError } from "./provider";
 import type { SourceConnection, SyncResult } from "../src/syncTypes";
 
@@ -17,7 +17,7 @@ afterEach(async () => {
   await Promise.all(directories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
 });
 
-async function setup() {
+async function setup(options: Partial<HttpOptions> = {}) {
   const connection: SourceConnection = { source: "rin", status: "ready", bound: true, identity: { id: "1", label: "玩家" }, lastAttemptAt: null, lastSuccessAt: null, error: null };
   const manager: HttpManager = {
     connections: vi.fn(() => [connection]), bind: vi.fn(async () => connection), unbind: vi.fn(async () => connection),
@@ -30,7 +30,7 @@ async function setup() {
   await writeFile(join(dist, "index.html"), "<html>local app</html>");
   await mkdir(join(directory, ".machun.local"));
   await writeFile(join(directory, ".machun.local", "lxns.json"), "secret-vault");
-  const server = createAppServer({ manager, distDirectory: dist, additionalOrigins: ["http://127.0.0.1:4399"] });
+  const server = createAppServer({ manager, distDirectory: dist, additionalOrigins: ["http://127.0.0.1:4399"], ...options });
   servers.push(server);
   await new Promise<void>((resolve, reject) => { server.once("error", reject); server.listen(0, "127.0.0.1", resolve); });
   const address = server.address();
@@ -51,6 +51,35 @@ async function setup() {
 const writeHeaders = { "Content-Type": "application/json", "X-Machun-Request": "1" };
 
 describe("local HTTP boundary", () => {
+  it("accepts IP and reverse-proxy hosts without environment setup while rejecting foreign origins", async () => {
+    const { send, manager } = await setup({ allowRequestHost: true });
+    for (const [host, origin] of [["192.0.2.10:1650", "http://192.0.2.10:1650"], ["chuni.example", "https://chuni.example"], ["[2001:db8::1]:1650", "http://[2001:db8::1]:1650"]]) {
+      const status = await send("/api/sources", { headers: { Host: host, Origin: origin } });
+      expect(status.status).toBe(200);
+      expect(status.headers["www-authenticate"]).toBeUndefined();
+      expect((await send("/api/sources/rin/sync", { method: "POST", headers: { ...writeHeaders, Host: host, Origin: origin }, body: "{}" })).status).toBe(200);
+    }
+    expect(manager.sync).toHaveBeenCalledTimes(3);
+    for (const origin of ["https://another.example", "http://192.0.2.10:1651", "null"]) {
+      expect((await send("/api/sources", { headers: { Host: "192.0.2.10:1650", Origin: origin } })).status).toBe(403);
+    }
+    expect((await send("/api/sources", { headers: { Host: "192.0.2.10:1650", "X-Forwarded-Host": "another.example", Origin: "https://another.example" } })).status).toBe(403);
+  });
+  it("rejects malformed dynamic hosts and cross-site API requests", async () => {
+    const { send } = await setup({ allowRequestHost: true });
+    for (const host of ["user@chuni.example", "chuni.example/path", "chuni.example?query", "chuni.example:bad", "chuni.example,another.example"]) {
+      expect((await send("/api/sources", { headers: { Host: host } })).status).toBe(403);
+    }
+    expect((await send("/api/sources", { headers: { Host: "chuni.example", "Sec-Fetch-Site": "cross-site" } })).status).toBe(403);
+  });
+  it("allows opening the page from a panel link without allowing cross-site API navigation", async () => {
+    const { send } = await setup({ allowRequestHost: true });
+    const headers = { Host: "192.0.2.10:1650", "Sec-Fetch-Site": "cross-site", "Sec-Fetch-Mode": "navigate", "Sec-Fetch-Dest": "document" };
+    expect((await send("/", { headers })).status).toBe(200);
+    expect((await send("/api/sources", { headers })).status).toBe(403);
+    expect((await send("/other/../api/sources", { headers })).status).toBe(403);
+    expect((await send("/other/../login-view/vnc.html", { headers })).status).toBe(403);
+  });
   it("serves the app and safe status metadata", async () => {
     const { send } = await setup();
     expect(await send("/")).toMatchObject({ status: 200, text: "<html>local app</html>" });

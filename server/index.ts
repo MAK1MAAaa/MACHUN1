@@ -28,6 +28,7 @@ try {
     additionalOrigins: development ? ["http://127.0.0.1:4399", "http://localhost:4399"] : [],
     publicOrigin: config.publicOrigin,
     accessPassword: config.accessPassword,
+    allowRequestHost: config.allowRequestHost,
     remoteDesktopPort: config.remoteDesktop ? 6080 : undefined,
   });
   server.on("error", (error: NodeJS.ErrnoException) => {

@@ -21,7 +21,7 @@ async function listen(server: Server) {
   if (!address || typeof address === "string") throw new Error("no port");
   return address.port;
 }
-async function setup() {
+async function setup(noConfiguration = false) {
   let active = false;
   let session = "fixture-1";
   let upstreamHeaders: IncomingHttpHeaders | undefined;
@@ -41,7 +41,7 @@ async function setup() {
   const remoteDesktopPort = await listen(desktop);
   const connection: SourceConnection = { source: "rin", status: "binding", bound: false, identity: null, lastAttemptAt: null, lastSuccessAt: null, error: null };
   const manager: HttpManager = { connections: () => active ? [{ ...connection, loginUrl: `/login-view/vnc.html?session=${session}` }] : [], bind: vi.fn(), unbind: vi.fn(), sync: vi.fn() };
-  const server = createAppServer({ manager, publicOrigin, accessPassword: password, remoteDesktopPort });
+  const server = createAppServer({ manager, ...(noConfiguration ? { allowRequestHost: true } : { publicOrigin, accessPassword: password }), remoteDesktopPort });
   const port = await listen(server);
   const send = (path: string, headers: Record<string, string> = {}) => new Promise<{ status: number; headers: IncomingHttpHeaders; body: string }>((resolve, reject) => {
     const request = httpRequest({ hostname: "127.0.0.1", port, path, headers: { Host: "scores.example", ...headers } }, (response) => {
@@ -63,6 +63,17 @@ async function setup() {
 }
 
 describe("authenticated deployment and private desktop", () => {
+  it("allows the unprotected desktop in the default mode while requiring same-origin WebSockets", async () => {
+    const { send, handshake, setActive } = await setup(true);
+    expect((await send("/api/sources")).status).toBe(200);
+    expect((await send("/login-view/vnc.html")).status).toBe(409);
+    setActive(true);
+    expect((await send("/login-view/vnc.html", { Origin: publicOrigin })).status).toBe(200);
+    expect((await handshake({ Origin: publicOrigin })).response).toContain("101 Switching Protocols");
+    expect((await handshake({ Origin: "https://another.example" })).response).toContain("403");
+    expect((await handshake()).response).toContain("403");
+    setActive(false);
+  });
   it("exposes only health without authentication and enforces the configured Host and Origin", async () => {
     const { send } = await setup();
     expect((await send("/healthz")).status).toBe(200);

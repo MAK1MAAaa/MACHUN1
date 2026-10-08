@@ -11,7 +11,7 @@ ENV NODE_ENV=production \
     DISPLAY=:99 \
     PLAYWRIGHT_BROWSERS_PATH=/opt/playwright \
     MACHUN_LISTEN_HOST=0.0.0.0 \
-    MACHUN_PORT=4399 \
+    MACHUN_PORT=1650 \
     MACHUN_DATA_DIR=/data \
     MACHUN_REMOTE_LOGIN=1
 WORKDIR /app
@@ -27,12 +27,13 @@ RUN node node_modules/playwright/cli.js install --with-deps chromium \
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/server ./server
 COPY --from=build /app/src ./src
+COPY --from=build /app/LICENSE ./LICENSE
 COPY docker/entrypoint.sh /usr/local/bin/machun-entrypoint
 RUN chmod 755 /usr/local/bin/machun-entrypoint
 USER node
 VOLUME ["/data"]
-EXPOSE 4399
+EXPOSE 1650
 HEALTHCHECK --interval=30s --timeout=5s --start-period=45s --retries=3 \
-    CMD node -e "fetch('http://127.0.0.1:'+(process.env.MACHUN_PORT||4399)+'/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+    CMD node -e "fetch('http://127.0.0.1:'+(process.env.MACHUN_PORT||1650)+'/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
 ENTRYPOINT ["/usr/bin/tini", "-g", "--", "/usr/local/bin/machun-entrypoint"]
 CMD ["node", "node_modules/tsx/dist/cli.mjs", "server/index.ts"]

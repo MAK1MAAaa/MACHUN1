@@ -7,11 +7,11 @@ describe("runtime deployment configuration", () => {
     expect(runtimeConfig({}, "/project", ["--dev"]).port).toBe(4398);
     expect(runtimeConfig({}, "/project", ["--preview"]).port).toBe(4400);
   });
-  it("requires an explicit origin and access password before exposing the service", () => {
+  it("starts deployment without an origin or password and keeps optional restrictions", () => {
+    expect(runtimeConfig({ MACHUN_LISTEN_HOST: "0.0.0.0", MACHUN_PORT: "1650", MACHUN_REMOTE_LOGIN: "1", MACHUN_DATA_DIR: "/data" }, "/project")).toMatchObject({ port: 1650, allowRequestHost: true, publicOrigin: undefined, accessPassword: undefined, remoteDesktop: true });
     const input = { MACHUN_LISTEN_HOST: "0.0.0.0", MACHUN_PUBLIC_ORIGIN: "https://scores.example/", MACHUN_ACCESS_PASSWORD: "fixture-deployment-password", MACHUN_DATA_DIR: "/data", MACHUN_REMOTE_LOGIN: "1" };
-    expect(runtimeConfig(input, "/project")).toMatchObject({ publicOrigin: "https://scores.example", remoteDesktop: true, dataDirectory: "/data" });
-    expect(() => runtimeConfig({ ...input, MACHUN_PUBLIC_ORIGIN: "" }, "/project")).toThrow("部署模式");
-    expect(() => runtimeConfig({ ...input, MACHUN_ACCESS_PASSWORD: "short" }, "/project")).toThrow("部署模式");
+    expect(runtimeConfig(input, "/project")).toMatchObject({ publicOrigin: "https://scores.example", allowRequestHost: false, remoteDesktop: true, dataDirectory: "/data" });
+    expect(() => runtimeConfig({ ...input, MACHUN_ACCESS_PASSWORD: "short" }, "/project")).toThrow("MACHUN_ACCESS_PASSWORD");
   });
   it.each(["file:///tmp", "https://user:secret@example.com", "https://example.com/app", "https://example.com/?token=private", "https://example.com/#token", "private-invalid-origin"])("rejects malformed or unsafe origins without echoing them: %s", (origin) => {
     expect(() => runtimeConfig({ MACHUN_PUBLIC_ORIGIN: origin }, "/project")).toThrow("MACHUN_PUBLIC_ORIGIN");

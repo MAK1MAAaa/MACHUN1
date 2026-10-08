@@ -17,6 +17,7 @@ export interface HttpOptions {
   additionalOrigins?: string[];
   publicOrigin?: string;
   accessPassword?: string;
+  allowRequestHost?: boolean;
   remoteDesktopPort?: number;
 }
 
@@ -64,11 +65,30 @@ export function createAppServer(options: HttpOptions) {
     const port = address && typeof address === "object" ? address.port : 0;
     const allowedHosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`]);
     if (options.publicOrigin) allowedHosts.add(new URL(options.publicOrigin).host);
-    if (!allowedHosts.has(request.headers.host ?? "")) throw new SyncError("FORBIDDEN", "不允许的访问地址。", 403);
+    const host = request.headers.host ?? "";
+    let requestAddress: URL | undefined;
+    if (options.allowRequestHost) {
+      try {
+        if (!host || /[\s\\/@?#,]/.test(host)) throw new Error("invalid host");
+        requestAddress = new URL(`http://${host}`);
+        if (!requestAddress.hostname || requestAddress.pathname !== "/") throw new Error("invalid host");
+      } catch { throw new SyncError("FORBIDDEN", "不允许的访问地址。", 403); }
+    } else if (!allowedHosts.has(host)) throw new SyncError("FORBIDDEN", "不允许的访问地址。", 403);
     const allowedOrigins = new Set([`http://127.0.0.1:${port}`, `http://localhost:${port}`, ...(options.additionalOrigins ?? [])]);
     if (options.publicOrigin) allowedOrigins.add(options.publicOrigin);
     const origin = request.headers.origin;
-    if ((origin && !allowedOrigins.has(origin)) || (websocket && !origin) || request.headers["sec-fetch-site"] === "cross-site") {
+    let sameOrigin = origin ? allowedOrigins.has(origin) : true;
+    if (origin && requestAddress) {
+      try {
+        const address = new URL(origin);
+        // Accept HTTP or HTTPS behind a proxy, but never trust a forwarded Host.
+        sameOrigin = ["http:", "https:"].includes(address.protocol) && address.origin === origin
+          && address.host === new URL(`${address.protocol}//${host}`).host;
+      } catch { sameOrigin = false; }
+    }
+    const topLevelNavigation = !websocket && request.method === "GET" && request.headers["sec-fetch-mode"] === "navigate"
+      && request.headers["sec-fetch-dest"] === "document" && !/^\/(?:api|login-view)(?:\/|$)/.test(new URL(request.url ?? "/", "http://127.0.0.1").pathname);
+    if (!sameOrigin || (websocket && !origin) || (request.headers["sec-fetch-site"] === "cross-site" && !topLevelNavigation)) {
       throw new SyncError("FORBIDDEN", "不允许跨站访问服务。", 403);
     }
   }

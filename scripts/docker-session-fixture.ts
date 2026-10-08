@@ -30,7 +30,7 @@ const manager = new SourceManager({
   remoteLogin: true, bindPollMs: 200,
 });
 await manager.initialize();
-const server = createAppServer({ manager, distDirectory: "/app/dist", publicOrigin: config.publicOrigin, accessPassword: config.accessPassword, remoteDesktopPort: 6080 });
+const server = createAppServer({ manager, distDirectory: "/app/dist", publicOrigin: config.publicOrigin, accessPassword: config.accessPassword, allowRequestHost: config.allowRequestHost, remoteDesktopPort: 6080 });
 server.listen(config.port, config.host);
 async function stop() { server.close(); await manager.close(); portal.close(); portal.closeAllConnections(); }
 process.once("SIGTERM", () => { void stop(); });
