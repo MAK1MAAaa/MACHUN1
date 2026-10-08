@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { request as httpRequest } from 'node:http';
 import { execFileSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -12,7 +12,7 @@ import { MysqlSourceStore } from '../server/accountService';
 import { hashToken } from '../server/auth';
 import type { BindingSubmission, BindingTask, CreatedBindingTask } from '../src/sourceBindingTypes';
 import type { BrowserSource, SyncResult } from '../src/syncTypes';
-// Node fetch discards a custom Host. Use HTTP/1 requests to emulate a real reverse proxy.
+// Node fetch discards a custom Host. Use HTTP/1 requests to test IP Host validation.
 async function httpFetch(input: string, options: RequestInit = {}): Promise<Response> {
   const url = new URL(input);
   return new Promise((resolve, reject) => {
@@ -35,14 +35,22 @@ async function httpFetch(input: string, options: RequestInit = {}): Promise<Resp
 const fixture = await prepareTestDatabase();
 const directory = await mkdtemp(join(tmpdir(), 'machun-docker-test-'));
 const name = `machun1-test-app-${randomBytes(6).toString('hex')}`;
-const image = process.env.MACHUN_TEST_IMAGE ?? 'machun1:companion-20261008-amd64';
+const image = process.env.MACHUN_TEST_IMAGE ?? 'machun1:companion-20261009-ip-amd64';
+const network = `${name}-network`;
+const mysqlContainer = process.env.MACHUN_TEST_CONTAINER!;
 let started = false;
+let networkCreated = false;
+let mysqlConnected = false;
 const reports: Record<string, unknown>[] = [];
 try {
-  const parsed = new URL(fixture.url); parsed.hostname = 'host.docker.internal';
-  const env = join(directory, 'app.env');
-  await writeFile(env, `DATABASE_URL=${parsed}\nMACHUN_PUBLIC_ORIGIN=https://chuni.test.invalid\n`, { mode: 0o600 });
-  execFileSync('docker', ['run', '--detach', '--rm', '--platform', 'linux/amd64', '--name', name, '--shm-size', '1g', '--publish', '127.0.0.1::1650', '--env-file', env, image], { stdio: ['ignore', 'pipe', 'inherit'] }); started = true;
+  // Exercise the preset Compose connection against disposable MySQL, with no env file.
+  await fixture.admin.query("CREATE USER IF NOT EXISTS 'machun_app'@'%' IDENTIFIED BY '123456'; ALTER USER 'machun_app'@'%' IDENTIFIED BY '123456'; GRANT SELECT,INSERT,UPDATE,DELETE ON machun1.* TO 'machun_app'@'%';");
+  execFileSync('docker', ['network', 'create', network], { stdio: 'ignore' }); networkCreated = true;
+  execFileSync('docker', ['network', 'connect', '--alias', '1Panel-mysql-3Wrt', network, mysqlContainer], { stdio: 'ignore' }); mysqlConnected = true;
+  execFileSync('docker', ['run', '--detach', '--rm', '--platform', 'linux/amd64', '--name', name, '--network', network, '--shm-size', '1g', '--publish', '127.0.0.1::1650', '--env', 'DATABASE_URL=mysql://machun_app:123456@1Panel-mysql-3Wrt:3306/machun1', image], { stdio: ['ignore', 'pipe', 'inherit'] }); started = true;
+  const imageEnvironment: string[] = JSON.parse(execFileSync('docker', ['image', 'inspect', '--platform', 'linux/amd64', '--format', '{{json .Config.Env}}', image], { encoding: 'utf8' }));
+  assert(!imageEnvironment.some(value => value.startsWith('DATABASE_URL=') || value.includes('123456')));
+  const host = '203.0.113.12:1650';
   const endpoint = () => {
     const binding = JSON.parse(execFileSync('docker', ['inspect', '--format', '{{json .NetworkSettings.Ports}}', name], { encoding: 'utf8' }))['1650/tcp'][0];
     return `http://127.0.0.1:${binding.HostPort}`;
@@ -50,17 +58,19 @@ try {
   let origin = endpoint();
   async function ready() {
     for (let attempt = 0; attempt < 60; attempt++) {
-      try { if ((await httpFetch(origin + '/healthz', { headers: { Host: 'chuni.test.invalid' } })).ok) return; } catch { /* starting */ }
+      try { if ((await httpFetch(origin + '/healthz', { headers: { Host: host } })).ok) return; } catch { /* starting */ }
       await delay(500);
     }
     throw new Error('Docker health endpoint did not become ready');
   }
   await ready();
-  assert.deepEqual(await (await httpFetch(origin + '/healthz', { headers: { Host: 'chuni.test.invalid' } })).json(), { status: 'ok' });
-  assert.equal((await httpFetch(origin + '/api/workspace', { headers: { Host: 'chuni.test.invalid' } })).status, 401);
-  const headers = { Host: 'chuni.test.invalid', Origin: 'https://chuni.test.invalid', 'Content-Type': 'application/json', 'X-Machun-Request': '1' };
+  assert.deepEqual(await (await httpFetch(origin + '/healthz', { headers: { Host: host } })).json(), { status: 'ok' });
+  assert.equal((await httpFetch(origin + '/api/workspace', { headers: { Host: host } })).status, 401);
+  assert.equal((await httpFetch(origin + '/api/auth/session', { headers: { Host: 'attacker.example:1650' } })).status, 403);
+  assert.equal((await httpFetch(origin + '/api/auth/session', { headers: { Host: host, Origin: 'http://203.0.113.13:1650' } })).status, 403);
+  const headers = { Host: host, Origin: `http://${host}`, 'Content-Type': 'application/json', 'X-Machun-Request': '1' };
   const login = await httpFetch(origin + '/api/auth/login', { method: 'POST', headers, body: '{"username":"root","password":"pwd"}' });
-  assert.equal(login.status, 200); assert(login.headers.get('set-cookie')?.includes('Secure'));
+  assert.equal(login.status, 200); assert(login.headers.get('set-cookie')?.includes('HttpOnly')); assert(!login.headers.get('set-cookie')?.includes('Secure'));
   const cookie = login.headers.get('set-cookie')!.split(';')[0];
   async function request<T>(path: string, method = 'GET', input?: unknown, code?: string): Promise<T> {
     const response = await httpFetch(origin + '/api' + path, { method, headers: { ...headers, ...(code ? { Authorization: `Bearer ${code}` } : { Cookie: cookie }) },
@@ -105,11 +115,13 @@ try {
   const processes = execFileSync('docker', ['top', name], { encoding: 'utf8' }); assert(!/x11vnc|websockify|fluxbox|Xvfb/i.test(processes));
   const ports = JSON.parse(execFileSync('docker', ['inspect', '--format', '{{json .Config.ExposedPorts}}', name], { encoding: 'utf8' })); assert.deepEqual(Object.keys(ports), ['1650/tcp']);
   const user = execFileSync('docker', ['exec', name, 'id', '-u'], { encoding: 'utf8' }).trim(); assert.equal(user, '1000');
-  assert.equal((await httpFetch(origin + '/login-view/vnc.html', { headers: { Host: 'chuni.test.invalid' } })).status, 404);
+  assert.equal((await httpFetch(origin + '/login-view/vnc.html', { headers: { Host: host } })).status, 404);
   const inspected = JSON.parse(execFileSync('docker', ['exec', name, 'node', '-e', "const fs=require('fs'); const rows=fs.readFileSync('/proc/net/tcp','utf8').trim().split('\\n').slice(1).filter(l=>l.trim().split(/\\s+/)[3]==='0A').map(l=>parseInt(l.trim().split(/\\s+/)[1].split(':')[1],16)); console.log(JSON.stringify(rows))"], { encoding: 'utf8' })); assert(!inspected.includes(5900)); assert(!inspected.includes(6080));
-  console.log(JSON.stringify({ docker: 'passed', user, ports: Object.keys(ports), codesStoredOnlyHashed: hashToken(task.code) !== task.code, realPortals: reports }));
+  console.log(JSON.stringify({ docker: 'passed', presetComposeConnection: 'passed', imageHasNoDatabasePassword: true, directIpHttp: 'passed', user, ports: Object.keys(ports), codesStoredOnlyHashed: hashToken(task.code) !== task.code, realPortals: reports }));
   if (reports.some(row => row.error)) process.exitCode = 1;
 } finally {
   if (started) try { execFileSync('docker', ['stop', '--time', '5', name], { stdio: 'ignore' }); } catch { /* removed */ }
+  if (mysqlConnected) try { execFileSync('docker', ['network', 'disconnect', network, mysqlContainer], { stdio: 'ignore' }); } catch { /* container removed */ }
+  if (networkCreated) try { execFileSync('docker', ['network', 'rm', network], { stdio: 'ignore' }); } catch { /* removed */ }
   await fixture.pool.end(); await fixture.admin.end(); await rm(directory, { recursive: true, force: true });
 }

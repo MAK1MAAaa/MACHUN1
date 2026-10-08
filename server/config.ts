@@ -16,9 +16,9 @@ export function runtimeConfig(environment: NodeJS.ProcessEnv, projectRoot: strin
     }
     publicOrigin = url.origin;
   }
-  if (host === '0.0.0.0' && !publicOrigin?.startsWith('https://')) throw new Error('部署服务必须配置 HTTPS 的 MACHUN_PUBLIC_ORIGIN。');
   return {
     development, port, host, publicOrigin,
+    publicIpAccess: host === '0.0.0.0' && !publicOrigin,
     dataDirectory: resolve(environment.MACHUN_DATA_DIR ?? resolve(projectRoot, ".machun.local")),
     companionLogin: environment.MACHUN_BINDING_MODE === "companion",
   };

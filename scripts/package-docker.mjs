@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { createGzip } from "node:zlib";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
-const version = process.env.MACHUN_RELEASE ?? "20261008";
+const version = process.env.MACHUN_RELEASE ?? "20261009-ip";
 if (!/^[a-zA-Z0-9.-]+$/.test(version)) throw new Error("发布版本无效");
 const tag = `machun1:companion-${version}-amd64`;
 const filename = `machun1-companion-${version}-amd64-1650.tar.gz`;

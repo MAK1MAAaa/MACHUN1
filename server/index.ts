@@ -19,6 +19,7 @@ try {
   const server = createAppServer({
     accounts,
     publicOrigin: config.publicOrigin,
+    publicIpAccess: config.publicIpAccess,
     distDirectory: development ? undefined : resolve(projectRoot, "dist"),
     additionalOrigins: development ? ["http://127.0.0.1:4399", "http://localhost:4399"] : [],
   });

@@ -1,6 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { readFile, stat } from "node:fs/promises";
 import { extname, resolve, sep } from "node:path";
+import { isIP } from "node:net";
 import { SYNC_SOURCES } from "../src/syncTypes";
 import type { ExternalScoreSource } from "../src/core/sources";
 import type { SourceManager } from "./manager";
@@ -19,6 +20,18 @@ export interface HttpOptions {
   distDirectory?: string;
   additionalOrigins?: string[];
   publicOrigin?: string;
+  publicIpAccess?: boolean;
+}
+
+// Direct IP deployment accepts literal IPs on the application port, never DNS
+// names or forwarded headers. Writes must still come from the same HTTP origin.
+function directIpHost(host: string, port: number): boolean {
+  try {
+    const url = new URL(`http://${host}`);
+    const ip = url.hostname.replace(/^\[|\]$/g, '');
+    return url.host === host && url.port === String(port) && isIP(ip) !== 0
+      && ip !== '0.0.0.0' && ip !== '::';
+  } catch { return false; }
 }
 
 function json(response: ServerResponse, status: number, body: unknown): void {
@@ -65,9 +78,12 @@ export function createAppServer(options: HttpOptions) {
     const port = address && typeof address === "object" ? address.port : 0;
     const allowedHosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`]);
     if (options.publicOrigin) allowedHosts.add(new URL(options.publicOrigin).host);
-    if (!allowedHosts.has(request.headers.host ?? "")) throw new SyncError("FORBIDDEN", "不允许的访问地址。", 403);
+    const host = request.headers.host ?? "";
+    const directIp = options.publicIpAccess && directIpHost(host, port);
+    if (!allowedHosts.has(host) && !directIp) throw new SyncError("FORBIDDEN", "不允许的访问地址。", 403);
     const allowedOrigins = new Set([`http://127.0.0.1:${port}`, `http://localhost:${port}`, ...(options.additionalOrigins ?? [])]);
     if (options.publicOrigin) allowedOrigins.add(options.publicOrigin);
+    if (directIp) allowedOrigins.add(`http://${host}`);
     const origin = request.headers.origin;
     if (origin && !allowedOrigins.has(origin)) throw new SyncError("FORBIDDEN", "不允许跨站访问本地服务。", 403);
     const path = new URL(request.url ?? "/", `http://127.0.0.1:${port}`).pathname;

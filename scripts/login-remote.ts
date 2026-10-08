@@ -1,6 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { isIP } from 'node:net';
 import { setTimeout as delay } from 'node:timers/promises';
 import type { CompanionTask, BindingSubmission } from '../src/sourceBindingTypes';
 import { createBrowserLauncher } from '../server/browser';
@@ -13,10 +14,11 @@ import { otogameProvider } from '../server/providers/otogame';
 
 export function remoteServer(input: string): string {
   let url: URL;
-  try { url = new URL(input); } catch { throw new Error('请提供有效的 HTTPS 服务地址。'); }
+  try { url = new URL(input); } catch { throw new Error('请提供有效的 HTTP(S) 服务地址。'); }
   const local = ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname);
-  if ((url.protocol !== 'https:' && !(url.protocol === 'http:' && local)) || url.username || url.password
-    || url.pathname !== '/' || url.search || url.hash) throw new Error('助手仅支持 HTTPS 根地址；本机测试可使用 loopback HTTP。');
+  const publicIp = isIP(url.hostname.replace(/^\[|\]$/g, '')) !== 0 && url.port === '1650';
+  if ((url.protocol !== 'https:' && !(url.protocol === 'http:' && (local || publicIp))) || url.username || url.password
+    || url.pathname !== '/' || url.search || url.hash) throw new Error('请使用 HTTPS 根地址或 http://公网IP:1650；本机测试可使用 loopback HTTP。');
   return url.origin;
 }
 async function hiddenCode(): Promise<string> {
@@ -40,7 +42,7 @@ async function hiddenCode(): Promise<string> {
 }
 async function main() {
   const args = process.argv.slice(2).filter(arg => arg !== '--');
-  if (args.length !== 4 || args[0] !== '--server' || args[2] !== '--task' || !/^[a-f0-9-]{36}$/.test(args[3])) throw new Error('用法：pnpm login:remote --server https://你的域名 --task 任务ID');
+  if (args.length !== 4 || args[0] !== '--server' || args[2] !== '--task' || !/^[a-f0-9-]{36}$/.test(args[3])) throw new Error('用法：pnpm login:remote --server http://公网IP:1650 --task 任务ID');
   const server = remoteServer(args[1]); const id = args[3]; const code = await hiddenCode();
   if (!/^[A-Za-z0-9_-]{43}$/.test(code)) throw new Error('绑定码格式无效，请重新复制网页中的绑定码。');
   async function request(method = 'GET', body?: BindingSubmission): Promise<CompanionTask> {
@@ -50,7 +52,7 @@ async function main() {
         headers: { Authorization: `Bearer ${code}`, 'X-Machun-Request': '1', ...(body ? { 'Content-Type': 'application/json' } : {}) },
         ...(body ? { body: JSON.stringify(body) } : {}),
       });
-    } catch { throw new Error('无法连接服务，请检查 HTTPS 地址和网络；可重新运行同一命令查询绑定结果。'); }
+    } catch { throw new Error('无法连接服务，请检查服务地址和网络；可重新运行同一命令查询绑定结果。'); }
     let result;
     try { result = await response.json(); } catch { throw new Error('服务响应无效，请确认助手与服务器版本一致。'); }
     if (!response.ok) throw new Error(typeof result.error === 'string' ? result.error : '服务拒绝了绑定请求。');

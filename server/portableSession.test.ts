@@ -29,9 +29,13 @@ describe('minimal portable portal sessions', () => {
   ])('rejects wrong sources, unknown fields and malformed state without echoing secrets', value => {
     expect(() => validatePortableSession('rin', value)).toThrow('登录会话格式无效');
   });
-  it('requires HTTPS and a root URL, with loopback HTTP as the testing exception', () => {
+  it('accepts HTTPS or direct IP HTTP on 1650, while refusing arbitrary domains and URL credentials', () => {
     expect(remoteServer('https://chuni.example:1650/')).toBe('https://chuni.example:1650');
     expect(remoteServer('http://127.0.0.1:1650')).toBe('http://127.0.0.1:1650');
+    expect(remoteServer('http://203.0.113.12:1650')).toBe('http://203.0.113.12:1650');
+    expect(remoteServer('http://[2001:db8::12]:1650')).toBe('http://[2001:db8::12]:1650');
+    expect(remoteServer('http://localhost:4399')).toBe('http://localhost:4399');
+    expect(() => remoteServer('http://203.0.113.12:4399')).toThrow();
     for (const value of ['http://public.example', 'https://user:pwd@example.com', 'https://example.com/path', 'https://example.com?code=secret']) expect(() => remoteServer(value)).toThrow();
   });
 });

@@ -1,14 +1,13 @@
 services:
   machun1:
-    image: machun1:companion-20261008-amd64
+    image: machun1:companion-20261009-ip-amd64
     platform: linux/amd64
     restart: unless-stopped
     shm_size: 1gb
     environment:
-      MACHUN_PUBLIC_ORIGIN: ${MACHUN_PUBLIC_ORIGIN:?填写最终 HTTPS 域名}
-      DATABASE_URL: ${DATABASE_URL:?填写 machun1 专用读写账号连接}
+      DATABASE_URL: mysql://machun_app:123456@1Panel-mysql-3Wrt:3306/machun1
     ports:
-      - "127.0.0.1:1650:1650"
+      - "1650:1650"
     volumes:
       - machun_data:/data
     networks:

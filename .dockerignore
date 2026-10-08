@@ -11,6 +11,7 @@ coverage
 .machun.local
 .env
 .env.*
+compose.yaml
 *.local
 *.key
 *.pem

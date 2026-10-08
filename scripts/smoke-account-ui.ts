@@ -254,6 +254,11 @@ try {
   const commandText = await command.inputValue();
   assert(commandText.includes('pnpm login:remote --server ')); assert(commandText.includes(' --task '));
   const code = await mobileCard.getByLabel('绑定码', { exact: true }).inputValue(); assert.equal(code.length, 43); assert(!commandText.includes(code));
+  await mobile.evaluate(() => { Object.defineProperty(navigator, 'clipboard', { configurable: true, value: undefined }); });
+  await mobileCard.getByRole('button', { name: '复制命令', exact: true }).click();
+  await mobileCard.locator('.companion-binding').getByRole('status').filter({ hasText: /^已复制$/ }).waitFor();
+  await mobileCard.getByRole('button', { name: '复制绑定码', exact: true }).click();
+  await mobileCard.locator('.companion-binding').getByRole('status').filter({ hasText: /^已复制$/ }).waitFor();
   const beforeCancel = await state(mobile);
   for (const width of [320, 390, 768, 1440]) {
     await mobile.setViewportSize({ width, height: 900 });

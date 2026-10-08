@@ -22,7 +22,7 @@ async function main() {
   if (values.DATABASE_URL) {
     const existing = new URL(values.DATABASE_URL);
     if (existing.protocol !== 'mysql:' || existing.username !== appUser || existing.hostname !== '127.0.0.1'
-      || existing.port !== '13306' || existing.pathname !== '/machun1' || !/^[a-f0-9]{64}$/.test(existing.password)) {
+      || existing.port !== '13306' || existing.pathname !== '/machun1' || !/^(?:[a-f0-9]{64}|123456)$/.test(existing.password)) {
       throw new Error('已有 DATABASE_URL 使用其他配置，请手动执行受版本管理的 SQL；本命令不会覆盖该配置。');
     }
     appPassword = existing.password;

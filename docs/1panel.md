@@ -1,84 +1,93 @@
-# 1Panel：MySQL 多用户与本机登录助手
+# 1Panel：公网 IP 免配置版本
 
-当前分支 `codex/manual-login-docker`，镜像 `machun1:companion-20261008-amd64`，架构 linux/amd64。容器以 UID 1000 运行 Node 服务和按需无界面 Chromium，无 VNC、远程桌面代理或固定 Basic Auth。网页登录使用 MySQL 中已有用户，不提供注册。
+分支 `codex/manual-login-docker`，镜像 `machun1:companion-20261009-ip-amd64`，架构 linux/amd64。预设当前腾讯服务器的 MySQL 容器和网络；导入后直接使用 `compose.yaml`，不需要域名、HTTPS 反代或 `.env`。
 
-本轮交付只生成镜像归档，未替换腾讯服务器容器，也未执行正式库新增迁移。现有 408 条成绩在正式 MySQL 中，镜像不包含这些数据或凭据。
+| 项目 | 预设 |
+| --- | --- |
+| 浏览器访问 | `http://服务器公网IP:1650` |
+| 网页账号 / 密码 | `root` / `pwd` |
+| MySQL 专用账号 / 连接密码 | `machun_app` / `123456` |
+| MySQL 地址 / 数据库 | `1Panel-mysql-3Wrt:3306` / `machun1` |
+| Docker 外部网络 | `1panel-network` |
+| 应用容器 / 宿主机端口 | `1650` / `1650` |
 
-## 1. 导入镜像
+`123456` 只用于数据库连接，不是网页密码。用户表仍严格为 `username`、`pwd` 两列；网页登录输入 `pwd`，数据库保存其 UTF-8 SHA-256 小写十六进制哈希。
 
-上传 `release/machun1-companion-20261008-amd64-1650.tar.gz` 与同名 `.sha256`。可以在 1Panel“容器 → 镜像 → 导入”选择归档，也可以执行：
+当前正式库已完成 `0001_accounts` 和获准的 `0002_source_binding_tasks`，原有 408 条成绩及四源绑定保留。本轮生成归档并启动本机测试服务，未替换服务器容器。预设连接使用现有数据库，不另建空库；其他服务器需覆盖数据库地址并由管理连接初始化。
+
+## 导入并创建编排
+
+上传下列文件，在 1Panel“容器 → 镜像 → 导入”选择镜像归档：
+
+```text
+machun1-companion-20261009-ip-amd64-1650.tar.gz
+machun1-companion-20261009-ip-amd64-1650.tar.gz.sha256
+```
+
+也可执行：
 
 ```bash
-sha256sum -c machun1-companion-20261008-amd64-1650.tar.gz.sha256
-docker load -i machun1-companion-20261008-amd64-1650.tar.gz
+sha256sum -c machun1-companion-20261009-ip-amd64-1650.tar.gz.sha256
+docker load -i machun1-companion-20261009-ip-amd64-1650.tar.gz
 ```
 
-若面板版本只接受 tar，先 `gzip -dk`，再导入 tar。旧 `machun1-manual-login-amd64-1650.tar.gz` 保留用于回溯，不覆盖。
+若面板只接受 tar，先 `gzip -dk` 再导入。旧归档保留。
 
-## 2. 部署前显式迁移数据库
+在“容器 → 编排”中新建编排，粘贴项目根目录 `compose.yaml` 即可，无须填写变量。编排会注入预设的数据库连接；镜像本身不包含数据库密码。数据库应用账号仅有 `machun1.*` 的 SELECT / INSERT / UPDATE / DELETE。编排包含你指定的数据库密码，请仅用于自己的服务器。
 
-正式 `machun1` 已有 `0001_accounts` 的表和 CRUD 应用账号。本版本还需要 `db/migrations/0002_source_binding_tasks.sql`。由数据库管理连接执行该 SQL；不要授予应用账号建表权限。迁移幂等，不删除成绩，不修改已有用户密码，`users` 仍只有 `username` / `pwd` 两列。
+编排加入已有 `1panel-network`，通过容器名连接 MySQL。端口映射为 `1650:1650`；服务器安全组和防火墙需允许 TCP 1650。启动后打开 `http://服务器公网IP:1650`，用 `root / pwd` 登录。不再使用旧的 `machun` Basic Auth。
 
-本项目已有 `pnpm db:setup` 会通过 `ssh tencent` 的 MySQL 管理连接顺序执行全部 SQL；这是显式管理操作，应用启动不会自动执行。本轮未运行该命令。其他环境由管理连接按文件名顺序执行迁移。首次新建库需执行 `0001`、`0002`，并显式创建用户及 CRUD 账号；不要将数据库 root 连接放入应用配置。
+`machun_data` 命名卷挂载 `/data`，普通容器更新不会删除卷。共享内存为 `1gb`，建议至少 2 GB 可用内存。容器以 UID 1000 运行，只提供应用和按需无界面 Chromium；没有 VNC 服务，不映射 5900 / 6080。
 
-## 3. 创建容器编排
+`/healthz` 仅返回进程状态，不代表数据库或门户一定可用。服务校验 IP Host、对应端口和同源请求，不接受任意域名或转发头，不提供跨域 API。HTTP 登录 Cookie 为 HttpOnly / SameSite=Lax，有效期七天；HTTP 会明文传输网页登录请求及助手会话。
 
-在 1Panel“容器 → 编排”粘贴根目录 `compose.yaml`。项目使用服务器已确认的外部网络 `1panel-network`；MySQL 容器也必须在该网络内。
+## 电脑绑定、手机同步
 
-在编排目录创建 `.env` 并 `chmod 600 .env`：
-
-```dotenv
-MACHUN_PUBLIC_ORIGIN=https://chuni.example.com
-DATABASE_URL=mysql://machun_app:填写已有专用密码@1Panel-mysql-3Wrt:3306/machun1
-```
-
-`MACHUN_PUBLIC_ORIGIN` 为最终 HTTPS 浏览器地址，不带子路径；非标准端口必须包含。`DATABASE_URL` 使用容器名与容器内 3306，不是本机开发 SSH 隧道的 13306。密码含特殊字符时按 URL 编码。不要提交或分享 `.env`。
-
-若该面板版本不读取目录 `.env`，在编排 `environment` 中填写实际配置。镜像和宿主机入口均为 **1650**，默认只映射 `127.0.0.1:1650:1650`。不要映射 5900 / 6080。`machun_data` 卷挂载 `/data`，保留旧兼容目录；更新镜像不删除卷。共享内存 `1gb`，建议至少 2 GB 可用内存。
-
-## 4. HTTPS 反代
-
-1Panel 网站配置最终域名和有效证书，反代到 `http://127.0.0.1:1650`。保留最终浏览器请求的 Host，例如 `Host: chuni.example.com`，与 `MACHUN_PUBLIC_ORIGIN` 一致。若反代也在容器中，使用同网络服务名 `http://machun1:1650`，仍保留外部 Host。无需 WebSocket 设置。
-
-网页登录 Cookie 为 HttpOnly / SameSite=Lax / Secure，7 天有效。HTTP 服务端口用于反代和健康检查，浏览器实际访问使用 HTTPS。服务校验 Host 和 Origin，不提供跨域 API。`/healthz` 仅返回 `{"status":"ok"}`；它表示应用进程运行，不保证数据库或门户可用。稍等应显示 healthy。
-
-删除旧 `MACHUN_ACCESS_PASSWORD` 和 `MACHUN_REMOTE_LOGIN` 配置。该分支不读取门户账号密码；`main` 保留本机自动填入能力。已有网页账号 `root` 的密码在旧方案中初始化为 `pwd`；本轮不会重置，请在公开使用前通过管理连接设置新的 UTF-8 SHA-256 小写十六进制哈希。
-
-## 5. 电脑绑定、手机同步
-
-电脑安装 Node.js 24 和 pnpm 10.15，检出当前分支与镜像匹配的提交：
+电脑安装 Node.js 24、pnpm 10.15，检出与镜像匹配的分支：
 
 ```bash
 pnpm install
 pnpm browser:install
 ```
 
-无需电脑 MySQL 配置或门户 `.env`。网页登录 → 来源工具 → 绑定账号 / 重新登录 → 生成绑定任务，复制助手命令：
+电脑助手无需 MySQL 或门户密码配置。网页登录后展开来源工具，点击“绑定账号 / 重新登录”，生成任务，复制命令：
 
 ```bash
-pnpm login:remote --server https://chuni.example.com --task <网页任务ID>
+pnpm login:remote --server http://服务器公网IP:1650 --task <网页任务ID>
 ```
 
-在终端隐藏输入提示后粘贴网页绑定码。助手打开独立官方门户窗口，手动登录并完成验证码。Rin / 大饼通过各自门户的 BCN 入口；MuNET 使用用户名密码和滑块。Rin 必须有唯一默认卡，大饼绑定当前主卡；工具不修改门户主卡。
+在终端隐藏输入提示后粘贴绑定码。助手使用临时独立浏览器打开官方门户，由你手动登录并完成验证码；Rin / 大饼使用门户 BCN 入口，MuNET 使用账号密码和滑块。助手只回传取分所需的 Token / localStorage 字段，排除门户密码、BCN Cookie 和完整 Chromium 目录，临时目录结束后清理。服务器核对账号和卡片后完成绑定，落雪继续直接填写个人 Token。
 
-成功后自动回传必要 Token / localStorage 字段，服务器再核对身份。排除门户密码、BCN Cookie、完整浏览器目录；电脑临时目录结束后清理。落雪继续在网页保存个人 Token。
+绑定码只存哈希，10 分钟有效、仅提交一次；取消、重新生成、退出登录、网页会话过期或服务重启使未完成任务作废。响应丢失后重新运行同一命令查询结果，不重复提交。HTTP 页面上的复制按钮有兼容处理，失败时仍可选中文本手动复制。
 
-绑定码 10 分钟有效、仅提交一次，数据库只保存其哈希。取消、重新生成、退出、网页会话失效或服务重启会使未完成任务作废。命令不包含绑定码，助手不跟随重定向、不接受公网 HTTP、不关闭 TLS 证书校验。网络响应丢失可重新运行同一命令查询结果。
+后续同步由服务器完成，电脑无需在线。会话失效且无法续期时重新运行助手。可移植状态按用户和来源存入 MySQL，续期后更新；旧目录缺失时提示重新绑定，已合并成绩仍保留。同账号同卡重绑保留大饼同步位置；换账号 / 卡按原规则清理该来源缓存。验证失败不替换旧绑定。
 
-日常同步由服务器无界面 Chromium 完成，电脑可以离线。会话过期且无法续期时再运行助手。新会话按用户和来源保存在 MySQL；续期更新快照，容器重启无需电脑重新登录。旧目录不在服务器时显示需重新绑定，保留旧绑定信息和已合并成绩。同账号同卡重绑保留大饼历史位置，换账号 / 卡清除该来源缓存。验证失败不会替换旧绑定。
+## 本机测试与停止
 
-## 6. 更新与备份
+当前本机通过 `ssh tencent` 隧道连接同一个正式库，已使用数据库连接密码 `123456`：
 
-更新前备份 MySQL 和 `/data`，记录当前镜像标签。完整成绩备份仅含成绩、个人别名和达成标记，不含门户凭据；数据库备份包含会话和 Token，必须私密存储。导入新镜像、完成所需显式迁移，再更新编排 image 标签并重建容器，不删除命名卷。
+```bash
+pnpm db:tunnel
+# 另一个终端
+MACHUN_PORT=1650 pnpm start
+```
 
-此分支保持桌面网页 B30 3×10（移动端响应式收窄），导出为 5×6 或包含候选20的 5×10。登录、曲库、成绩、别名、来源绑定、Token 与历史位置按用户隔离。
+打开 `http://127.0.0.1:1650`，使用 `root / pwd`。本机绑定仍弹出专用手动登录窗口。测试结束，在网页服务和 SSH 隧道各自终端按 Ctrl+C。
+
+## 更新、备份与可选配置
+
+更新前备份 MySQL 和 `/data`，记录旧镜像标签；导入新镜像并修改编排标签重建容器，不删除卷。成绩备份仅含成绩、个人别名及达成标记，不含门户会话；数据库备份含 Token，需私密保存。
+
+评分、别名、来源、FC/AJ、评级与导出保持原逻辑；网页预览 3×10，PNG 导出 5×6 / 5×10。应用启动不自动建表、不重置已有用户密码。
+
+切换数据库时可覆盖 `DATABASE_URL`。启用 HTTPS 反代时在编排增加 `MACHUN_PUBLIC_ORIGIN=https://你的域名`，保留实际 Host；此时只接受该配置域名，登录 Cookie 自动加 Secure。不要把数据库管理账号交给应用。
 
 ## 故障处理
 
-- 无法启动：检查 HTTPS origin、专用数据库账号、外部网络及容器日志；不要在工单中粘贴 `.env` 或原始浏览器报错。
-- API 403：检查反代是否保留最终 Host，Origin 是否与配置一致，端口是否遗漏。
-- MySQL 不可用：检查数据库网络、CRUD 权限和两份迁移；页面保留现有数据，不静默退回浏览器存储。
-- 登录助手无法连接：先确认 HTTPS 证书有效、完整域名可从电脑访问，任务未过期。不要添加忽略证书选项。
-- 身份不匹配：用绑定的账号与卡重新登录；旧成绩保留。
-- 会话过期 / MuNET 滑块：在电脑重新生成任务完成官方登录，不需要 VNC。
-- 大饼限流：遵循页面等待提示；失败不推进历史位置。先完成一项同步再开启其他高负载操作。
+- IP 无法访问：确认容器运行、TCP 1650 已放行、访问地址带 `http://` 和 `:1650`。
+- API 403：确认 Host 为 IP:1650，Origin 与访问地址一致；使用域名须显式配置 public origin。
+- MySQL 不可用：检查 `1panel-network`、`1Panel-mysql-3Wrt` 和专用连接密码；页面保留现有成绩，不静默退回 localStorage。
+- 本机数据库断开：检查 SSH 隧道是否退出，重新执行 `pnpm db:tunnel` 后重试。
+- 登录失败：网页输入 `root / pwd`，不要输入数据库密码 `123456`。
+- 门户会话过期或身份变化：重新生成助手任务；不会删除已合并成绩。
+- 大饼限流：等待页面提示，失败不推进同步位置。

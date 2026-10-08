@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { accountRequest } from '../core/accountClient';
+import { copyText } from '../core/clipboard';
 import type { CreatedBindingTask, BindingTask } from '../sourceBindingTypes';
 import type { BrowserSource } from '../syncTypes';
 import './CompanionBinding.css';
@@ -42,8 +43,7 @@ export function CompanionBinding({ source, onDone, onClose }: { source: BrowserS
   }, [task?.id, active]);
   const command = task ? `pnpm login:remote --server ${window.location.origin} --task ${task.id}` : '';
   async function copy(value: string) {
-    try { await navigator.clipboard.writeText(value); setNotice('已复制'); }
-    catch { setNotice('复制失败，请选中文本后复制。'); }
+    setNotice(await copyText(value) ? '已复制' : '复制失败，请选中文本后复制。');
   }
   async function cancel() {
     try {
