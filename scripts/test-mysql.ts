@@ -39,6 +39,7 @@ try {
   if (!process.argv.includes('--no-ui')) await command(['pnpm', 'exec', 'tsx', 'scripts/smoke-account-ui.ts'], environment);
   if (process.argv.includes('--docker')) await command(['pnpm', 'exec', 'tsx', 'scripts/smoke-docker.ts'], environment);
   if (process.argv.includes('--deployment')) await command(['pnpm', 'exec', 'tsx', 'scripts/smoke-deployment.ts'], environment);
+  if (process.argv.includes('--hub-deployment')) await command(['pnpm', 'exec', 'tsx', 'scripts/smoke-deployment.ts', '--hub'], environment);
 } catch (error) {
   console.error(error instanceof Error ? error.message : 'MySQL 测试失败。'); process.exitCode = 1;
 } finally {

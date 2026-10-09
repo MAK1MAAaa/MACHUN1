@@ -6,6 +6,8 @@
 
 **当前 Docker 版本为公网 IP 免配置部署**：一体部署包已包含镜像、`compose.yaml` 和启动脚本。在 1Panel 文件管理上传并解压后，运行 `sudo bash start.sh`，即可通过 `http://服务器公网IP:1650` 访问。已预设当前 1Panel 的 `1Panel-mysql-3Wrt`、`1panel-network` 和专用 MySQL 账号 `machun_app / 123456`；网页登录为 `root / pwd`。无需域名、反代或 `.env`，不增加额外网站密码。此预设面向当前服务器，不会创建另一份数据库或清空现有成绩。
 
+Docker Hub 镜像地址为 [`mak1maaaa/machun1`](https://hub.docker.com/r/mak1maaaa/machun1)，提供 `latest` 和固定版本标签 `20261009-amd64`，均为 `linux/amd64`。使用 [`compose.hub.yaml`](compose.hub.yaml) 创建编排会自动注入当前服务器的数据库连接、接入网络并映射 1650 端口，无需手填环境变量、安装 pnpm 或建立 SSH 隧道。也可上传 `release/machun1-hub-deploy-20261009-amd64-1650.tar.gz` 小型部署包，解压后运行 `sudo bash start.sh`，脚本会拉取镜像并启动编排。数据库密码仅在私有部署编排中，公开镜像不含数据库凭据、个人成绩或门户会话。详细步骤见 [1Panel 部署说明](docs/1panel.md)。
+
 ## 功能概览
 
 - **四个成绩来源**：分别绑定、同步、重新登录和解绑，也支持离线文件导入。
@@ -73,6 +75,7 @@ pnpm start
 | `pnpm test:watch` | 以监听模式运行 Vitest。 |
 | `pnpm docker:package` | 构建并导出 amd64 镜像，再生成包含镜像、编排和启动脚本的一体部署包。 |
 | `pnpm docker:bundle` | 使用已有镜像归档生成一体部署包，不重复构建。 |
+| `pnpm docker:hub-bundle` | 生成小型 Hub 部署包，含编排和启动脚本；服务器运行脚本时拉取镜像并自动注入连接。 |
 
 一次运行一种服务模式即可。服务仅监听 `127.0.0.1`，校验 Host、请求来源和本地 API 标记，不开放跨站访问。
 

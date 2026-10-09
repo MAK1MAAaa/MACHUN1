@@ -4,6 +4,7 @@ set -euo pipefail
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")"
 
 image_archive="machun1-companion-@RELEASE@-amd64-1650.tar.gz"
+image_source="@IMAGE_SOURCE@"
 project="machun1"
 
 if ! command -v docker >/dev/null 2>&1; then
@@ -35,8 +36,20 @@ if ! docker network inspect 1panel-network >/dev/null 2>&1; then
 fi
 docker compose -p "$project" -f compose.yaml config --quiet
 
-printf '%s\n' '导入随包镜像……'
-docker load --input "$image_archive"
+case "$image_source" in
+  archive)
+    printf '%s\n' '导入随包镜像……'
+    docker load --input "$image_archive"
+    ;;
+  hub)
+    printf '%s\n' '从 Docker Hub 拉取镜像……'
+    docker compose -p "$project" -f compose.yaml pull
+    ;;
+  *)
+    printf '%s\n' '部署包镜像来源无效，请重新生成部署包。' >&2
+    exit 1
+    ;;
+esac
 
 printf '%s\n' '启动编排并等待健康检查……'
 docker compose -p "$project" -f compose.yaml up -d --no-build --pull never --wait --wait-timeout 120

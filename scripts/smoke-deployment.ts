@@ -14,7 +14,9 @@ const directory = await mkdtemp(join(tmpdir(), 'machun-deployment-smoke-'));
 const project = `machun1-test-deploy-${randomBytes(6).toString('hex')}`;
 const network = `${project}-network`;
 const mysqlContainer = process.env.MACHUN_TEST_CONTAINER!;
-const archive = resolve('release/machun1-deploy-20261009-ip-amd64-1650.tar.gz');
+const hub = process.argv.includes('--hub');
+const bundleName = hub ? 'machun1-hub-deploy-20261009-amd64-1650' : 'machun1-deploy-20261009-ip-amd64-1650';
+const archive = resolve(`release/${bundleName}.tar.gz`);
 let folder: string | undefined;
 let networkCreated = false;
 let connected = false;
@@ -27,7 +29,7 @@ try {
   const checksum = (await readFile(`${archive}.sha256`, 'utf8')).split('  ')[0];
   assert.equal(await digest(archive), checksum);
   execFileSync('tar', ['-xzf', archive, '-C', directory]);
-  const [name] = await readdir(directory); assert.equal(name, 'machun1-deploy-20261009-ip-amd64-1650'); folder = join(directory, name);
+  const [name] = await readdir(directory); assert.equal(name, bundleName); folder = join(directory, name);
   execFileSync('shasum', ['-a', '256', '-c', 'SHA256SUMS'], { cwd: folder, stdio: 'inherit' });
   await fixture.admin.query("CREATE USER IF NOT EXISTS 'machun_app'@'%' IDENTIFIED BY '123456'; ALTER USER 'machun_app'@'%' IDENTIFIED BY '123456'; GRANT SELECT,INSERT,UPDATE,DELETE ON machun1.* TO 'machun_app'@'%';");
   docker(['network', 'create', network]); networkCreated = true;
@@ -48,6 +50,14 @@ try {
     child.once('error', reject); child.once('exit', code => code === 0 ? resolve() : reject(new Error('部署脚本检查未通过。')));
   });
   const container = docker(['compose', '-p', project, '-f', composePath, 'ps', '-q', 'machun1']); assert(container);
+  if (hub) {
+    const image = docker(['inspect', '--format', '{{.Config.Image}}', container]);
+    assert.equal(image, 'mak1maaaa/machun1:latest');
+    const imageEnvironment: string[] = JSON.parse(docker(['image', 'inspect', '--platform', 'linux/amd64', '--format', '{{json .Config.Env}}', image]));
+    assert(!imageEnvironment.some(value => value.startsWith('DATABASE_URL=') || value.includes('123456')));
+    const environment: string[] = JSON.parse(docker(['inspect', '--format', '{{json .Config.Env}}', container]));
+    assert(environment.includes('DATABASE_URL=mysql://machun_app:123456@1Panel-mysql-3Wrt:3306/machun1'));
+  }
   const port = JSON.parse(docker(['inspect', '--format', '{{json .NetworkSettings.Ports}}', container]))['1650/tcp'][0].HostPort;
   const login = await new Promise<{ status: number; body: unknown }>((resolve, reject) => {
     const input = '{"username":"root","password":"pwd"}';
@@ -59,7 +69,7 @@ try {
     request.on('error', reject); request.end(input);
   });
   assert.equal(login.status, 200); assert.deepEqual(login.body, { user: { username: 'root' } });
-  console.log('PASS 一体部署包校验、解压、镜像导入、Compose 启动、健康等待、真实 MySQL 只读检查和 root 登录；使用独立测试项目及本机随机端口。');
+  console.log(`PASS ${hub ? 'Hub 部署包校验、镜像拉取、编排自动注入连接、公开镜像无数据库密码' : '一体部署包校验、解压、镜像导入'}、Compose 启动、健康等待、真实 MySQL 只读检查和 root 登录；使用独立测试项目及本机随机端口。`);
 } finally {
   if (launchAttempted && folder) try { docker(['compose', '-p', project, '-f', join(folder, 'compose.yaml'), 'down', '--volumes']); } catch { /* clean remaining test resources below */ }
   if (connected) try { docker(['network', 'disconnect', network, mysqlContainer]); } catch { /* disconnected */ }

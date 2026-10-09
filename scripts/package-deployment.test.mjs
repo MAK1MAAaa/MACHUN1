@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { createHash } from 'node:crypto';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { packageDeployment } from './package-deployment.mjs';
@@ -20,16 +20,17 @@ async function fixture() {
   await writeFile(join(root, 'release', imageName), image);
   await writeFile(join(root, 'release', `${imageName}.sha256`), `${hash(image)}  ${imageName}\n`);
   await writeFile(join(root, 'compose.yaml'), 'services:\n  machun1:\n    image: machun1:companion-older-amd64\n    ports: ["1650:1650"]\n');
-  for (const file of ['start.sh', 'DEPLOYMENT.md']) await writeFile(join(root, 'docker', file), await readFile(new URL(`../docker/${file}`, import.meta.url)));
+  await writeFile(join(root, 'compose.hub.yaml'), 'services:\n  machun1:\n    image: mak1maaaa/machun1:latest\n    environment:\n      DATABASE_URL: mysql://test_app:test-password@test-mysql:3306/machun1\n    ports: ["1650:1650"]\n');
+  for (const file of ['start.sh', 'DEPLOYMENT.md', 'HUB-DEPLOYMENT.md']) await writeFile(join(root, 'docker', file), await readFile(new URL(`../docker/${file}`, import.meta.url)));
   await writeFile(join(root, '.env'), 'PRIVATE_SECRET=must-not-ship');
   await mkdir(join(root, '.machun.local')); await writeFile(join(root, '.machun.local', 'binding.json'), 'private-portal-state');
   return root;
 }
-async function unpack(root) {
-  const archive = await packageDeployment({ projectRoot: root, version });
+async function unpack(root, imageSource = 'archive') {
+  const archive = await packageDeployment({ projectRoot: root, version, imageSource });
   const output = join(root, 'unpacked'); await mkdir(output);
   execFileSync('tar', ['-xzf', archive, '-C', output]);
-  return { archive, folder: join(output, folderName) };
+  return { archive, folder: join(output, imageSource === 'hub' ? `machun1-hub-deploy-${version}-amd64-1650` : folderName) };
 }
 async function runLauncher(folder, mode = 'ok') {
   const fake = join(folder, 'test-bin'); await mkdir(fake);
@@ -37,6 +38,7 @@ async function runLauncher(folder, mode = 'ok') {
   await writeFile(join(fake, 'docker'), `#!/usr/bin/env bash
 printf '%s\\n' "$*" >> "$CALLS_FILE"
 if [[ "$1 $2" == "network inspect" && "$TEST_MODE" == "missing-network" ]]; then exit 1; fi
+if [[ "$1" == "compose" && "$*" == *" pull" && "$TEST_MODE" == "pull-failure" ]]; then exit 1; fi
 if [[ "$1" == "compose" && "$*" == *"ps -q"* ]]; then printf '%s\\n' 'test-app'; fi
 if [[ "$1" == "exec" ]]; then cat > "$CALLS_FILE.sql"; if [[ "$TEST_MODE" == "mysql-failure" ]]; then exit 1; fi; fi
 exit 0
@@ -100,5 +102,48 @@ describe('self-contained deployment package', () => {
   it('does not report deployment success if the database check fails', async () => {
     const root = await fixture(); const { folder } = await unpack(root); const result = await runLauncher(folder, 'mysql-failure');
     expect(result.status).not.toBe(0); expect(result.stdout).not.toContain('部署完成');
+  });
+});
+
+describe('private Hub deployment package', () => {
+  it('ships only compose, the launcher and instructions with verified checksums and private permissions', async () => {
+    const root = await fixture(); const { archive, folder } = await unpack(root, 'hub');
+    expect((await readdir(folder)).sort()).toEqual(['README.md', 'SHA256SUMS', 'compose.yaml', 'start.sh'].sort());
+    expect(await readFile(join(folder, 'compose.yaml'), 'utf8')).toContain('DATABASE_URL: mysql://test_app:test-password@test-mysql:3306/machun1');
+    expect((await stat(archive)).mode & 0o777).toBe(0o600);
+    expect((await stat(join(folder, 'compose.yaml'))).mode & 0o777).toBe(0o600);
+    for (const line of (await readFile(join(folder, 'SHA256SUMS'), 'utf8')).trim().split('\n')) {
+      const [digest, file] = line.split('  '); expect(hash(await readFile(join(folder, file)))).toBe(digest);
+    }
+    expect(await readFile(join(folder, 'README.md'), 'utf8')).not.toMatch(/@[A-Z_]+@/);
+    expect(await readFile(join(folder, 'start.sh'), 'utf8')).not.toMatch(/@[A-Z_]+@/);
+    const entries = execFileSync('tar', ['-tzf', archive], { encoding: 'utf8' });
+    expect(entries).not.toMatch(/\.env|\.machun|\.DS_Store|\/\._|companion-.*\.tar\.gz/);
+    expect(await readFile(`${archive}.sha256`, 'utf8')).toBe(`${hash(await readFile(archive))}  machun1-hub-deploy-test-amd64-1650.tar.gz\n`);
+  });
+  it('pulls the Hub image before creating a stable project and never loads an archive or deletes volumes', async () => {
+    const root = await fixture(); const { folder } = await unpack(root, 'hub'); const result = await runLauncher(folder);
+    expect(result.status).toBe(0); expect(result.stdout).toContain('部署完成');
+    expect(result.calls).toContain('compose -p machun1 -f compose.yaml pull');
+    expect(result.calls.indexOf('compose -p machun1 -f compose.yaml pull')).toBeLessThan(result.calls.indexOf(' up -d '));
+    expect(result.calls).toContain('compose -p machun1 -f compose.yaml up -d --no-build --pull never --wait --wait-timeout 120');
+    expect(result.calls).not.toMatch(/load --input|down|rm |--remove-orphans|--renew-anon-volumes/);
+    expect(result.sql).toContain('SELECT username'); expect(result.sql).not.toMatch(/ALTER|INSERT|DELETE|DROP/);
+  });
+  it('does not start containers or report success when pulling fails', async () => {
+    const root = await fixture(); const { folder } = await unpack(root, 'hub'); const result = await runLauncher(folder, 'pull-failure');
+    expect(result.status).not.toBe(0); expect(result.calls).not.toContain(' up -d '); expect(result.stdout).not.toContain('部署完成');
+  });
+  it('refuses tampered configuration before pulling or starting containers', async () => {
+    const root = await fixture(); const { folder } = await unpack(root, 'hub'); await writeFile(join(folder, 'compose.yaml'), 'tampered');
+    const result = await runLauncher(folder); expect(result.status).not.toBe(0); expect(result.calls).not.toMatch(/ pull| up /);
+  });
+  it('requires the existing database network before pulling or starting containers', async () => {
+    const root = await fixture(); const { folder } = await unpack(root, 'hub'); const result = await runLauncher(folder, 'missing-network');
+    expect(result.status).not.toBe(0); expect(result.calls).not.toMatch(/ pull| up /);
+  });
+  it('refuses a different public repository rather than publishing private configuration', async () => {
+    const root = await fixture(); await writeFile(join(root, 'compose.hub.yaml'), 'services:\n  machun1:\n    image: other/app:latest\n');
+    await expect(packageDeployment({ projectRoot: root, version, imageSource: 'hub' })).rejects.toThrow('项目镜像配置无效');
   });
 });

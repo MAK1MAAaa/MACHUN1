@@ -15,6 +15,29 @@
 
 当前正式库已完成 `0001_accounts` 和获准的 `0002_source_binding_tasks`，原有 408 条成绩及四源绑定保留。本轮生成归档并启动本机测试服务，未替换服务器容器。预设连接使用现有数据库，不另建空库；其他服务器需覆盖数据库地址并由管理连接初始化。
 
+## 从 Docker Hub 部署
+
+镜像仓库为 [`mak1maaaa/machun1`](https://hub.docker.com/r/mak1maaaa/machun1)，标签为 `latest` 和 `20261009-amd64`，架构为 `linux/amd64`。MySQL 连接由附带编排自动注入，密码保留在自己的服务器上；无需手填环境变量或运行 `pnpm db:setup` / `pnpm db:tunnel`。
+
+最少操作方式：在 1Panel 文件管理上传 `release/machun1-hub-deploy-20261009-amd64-1650.tar.gz`，解压并进入目录，执行：
+
+```bash
+sudo bash start.sh
+```
+
+脚本自动校验文件、拉取 Hub 镜像、注入数据库连接、加入 `1panel-network`、映射 `1650:1650`，等待健康检查并只读核对现有 MySQL、root 用户及两项迁移。完成后访问 `http://服务器公网IP:1650`，使用 `root / pwd`。该小型部署包含编排、启动脚本、说明和校验文件，由 `pnpm docker:hub-bundle` 生成；归档及随包编排权限为 `0600`，仅上传到自己的服务器。
+
+在 1Panel“容器 → 编排”中新建编排，粘贴项目根目录 `compose.hub.yaml`，项目名使用 `machun1`。该文件与离线编排使用相同数据库、命名卷及 1650 端口，镜像改为从 Hub 拉取；更新已有编排时，只需将其 `image` 改为 `mak1maaaa/machun1:latest` 并重新拉取镜像、重建容器。保留原项目名和命名卷，避免创建另一份数据卷。
+
+在终端也可执行：
+
+```bash
+docker compose -p machun1 -f compose.hub.yaml pull
+docker compose -p machun1 -f compose.hub.yaml up -d
+```
+
+需要固定版本时，将编排镜像改为 `mak1maaaa/machun1:20261009-amd64`。已有容器应通过编排重新创建并保留原数据卷；仅重启原先没有数据库配置的容器不会补上连接。只在“镜像”中拉取再单独创建容器，会缺少编排中的数据库设置。拉取镜像需要服务器可访问 Docker Hub；无法访问时继续使用下方一体部署包。
+
 ## 上传一体部署包并启动
 
 使用 `release/machun1-deploy-20261009-ip-amd64-1650.tar.gz`，在 1Panel“文件”上传并解压。进入解压出的目录，在终端运行：
@@ -53,7 +76,7 @@ docker load -i machun1-companion-20261009-ip-amd64-1650.tar.gz
 
 若面板只接受 tar，先 `gzip -dk` 再导入。旧归档保留。
 
-在“容器 → 编排”中新建编排，粘贴项目根目录 `compose.yaml` 即可，无须填写变量。编排会注入预设的数据库连接；镜像本身不包含数据库密码。数据库应用账号仅有 `machun1.*` 的 SELECT / INSERT / UPDATE / DELETE。编排包含你指定的数据库密码，请仅用于自己的服务器。
+在“容器 → 编排”中新建编排，粘贴项目根目录 `compose.yaml` 即可，无须填写变量。编排会注入预设的数据库连接；镜像本身不包含数据库密码。Hub 部署同样由 `compose.hub.yaml` 注入连接。数据库应用账号仅有 `machun1.*` 的 SELECT / INSERT / UPDATE / DELETE。编排包含你指定的数据库密码，请仅用于自己的服务器。
 
 编排加入已有 `1panel-network`，通过容器名连接 MySQL。端口映射为 `1650:1650`；服务器安全组和防火墙需允许 TCP 1650。启动后打开 `http://服务器公网IP:1650`，用 `root / pwd` 登录。不再使用旧的 `machun` Basic Auth。
 
