@@ -4,7 +4,7 @@
 
 采用 React、TypeScript、Vite、Node.js、mysql2 和 Drizzle。本分支使用 MySQL 保存账号数据；本机通过 SSH 隧道连接，Docker 通过 1Panel 网络连接数据库。门户登录采用电脑 Playwright 助手，部署端只运行无界面同步。只有登录页面，没有注册接口，不进行启动同步、定时同步或 QQ Bot。
 
-**当前 Docker 版本为公网 IP 免配置部署**：导入镜像后直接使用项目 `compose.yaml`，通过 `http://服务器公网IP:1650` 访问。已预设当前 1Panel 的 `1Panel-mysql-3Wrt`、`1panel-network` 和专用 MySQL 账号 `machun_app / 123456`；网页登录为 `root / pwd`。无需域名、反代或 `.env`，不增加额外网站密码。此预设面向当前服务器，不会创建另一份数据库或清空现有成绩。
+**当前 Docker 版本为公网 IP 免配置部署**：一体部署包已包含镜像、`compose.yaml` 和启动脚本。在 1Panel 文件管理上传并解压后，运行 `sudo bash start.sh`，即可通过 `http://服务器公网IP:1650` 访问。已预设当前 1Panel 的 `1Panel-mysql-3Wrt`、`1panel-network` 和专用 MySQL 账号 `machun_app / 123456`；网页登录为 `root / pwd`。无需域名、反代或 `.env`，不增加额外网站密码。此预设面向当前服务器，不会创建另一份数据库或清空现有成绩。
 
 ## 功能概览
 
@@ -71,6 +71,8 @@ pnpm start
 | `pnpm test` | 执行不依赖数据库的 Vitest 测试；MySQL 集成测试默认跳过。 |
 | `pnpm test:mysql` | 创建本机独立 MySQL 8.4 容器，运行真实 SQL 集成测试及 Chrome 网页检查，结束后自动清理；不使用项目 `.env` 或腾讯服务器。 |
 | `pnpm test:watch` | 以监听模式运行 Vitest。 |
+| `pnpm docker:package` | 构建并导出 amd64 镜像，再生成包含镜像、编排和启动脚本的一体部署包。 |
+| `pnpm docker:bundle` | 使用已有镜像归档生成一体部署包，不重复构建。 |
 
 一次运行一种服务模式即可。服务仅监听 `127.0.0.1`，校验 Host、请求来源和本地 API 标记，不开放跨站访问。
 
@@ -128,7 +130,7 @@ pnpm login:remote --server http://服务器公网IP:1650 --task <网页任务ID>
 
 可移植会话按用户和来源存入 MySQL，续期后更新；服务器无界面 Chromium 完成后续取分，电脑无需在线。原浏览器目录仍兼容，但服务器没有目录时需用助手重新绑定，已合并成绩不受影响。同账号同卡重新绑定保留大饼缓存，验证失败保留旧绑定。落雪仍填写个人 API Token。
 
-详见 [1Panel 部署说明](docs/1panel.md)。构建命令 `pnpm docker:package` 生成 `release/machun1-companion-20261009-ip-amd64-1650.tar.gz` 和 `.sha256`；旧归档保留。镜像和宿主机均使用 1650，支持直接通过公网 IP 访问；可另行配置 HTTPS origin。HTTP 会明文传输网页密码和助手会话。数据库迁移由管理连接显式执行，应用只使用 CRUD 账号；当前服务器已补齐 `0002`，`root` 密码仍以 SHA-256 存储。
+详见 [1Panel 部署说明](docs/1panel.md)。`pnpm docker:package` 同时生成原始镜像归档及 `release/machun1-deploy-20261009-ip-amd64-1650.tar.gz` 一体部署包，两者都有 `.sha256`。部署包上传到文件管理并解压，运行一次 `start.sh` 完成校验、镜像导入、编排启动和数据库连接检查。已有原始镜像可用 `pnpm docker:bundle` 打包。镜像和宿主机均使用 1650，支持直接通过公网 IP 访问；可另行配置 HTTPS origin。HTTP 会明文传输网页密码和助手会话。数据库迁移由管理连接显式执行，应用只使用 CRUD 账号；当前服务器已补齐 `0002`，`root` 密码仍以 SHA-256 存储。
 
 ## 文件导入与成绩规则
 

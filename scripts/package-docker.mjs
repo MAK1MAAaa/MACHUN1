@@ -6,6 +6,7 @@ import { resolve } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { fileURLToPath } from "node:url";
 import { createGzip } from "node:zlib";
+import { packageDeployment } from './package-deployment.mjs';
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const version = process.env.MACHUN_RELEASE ?? "20261009-ip";
@@ -35,6 +36,7 @@ try {
   for await (const chunk of createReadStream(destination)) checksum.update(chunk);
   await writeFile(`${destination}.sha256`, `${checksum.digest("hex")}  ${filename}\n`);
   console.log(`已导出可供 1Panel 导入的 amd64 Docker 镜像：${destination}`);
+  console.log(`已生成一体部署包：${await packageDeployment({ projectRoot: root, version })}`);
 } catch (error) {
   await rm(temporary, { force: true });
   console.error(error instanceof Error ? error.message : "镜像打包失败");

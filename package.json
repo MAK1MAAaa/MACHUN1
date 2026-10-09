@@ -17,6 +17,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "docker:package": "node scripts/package-docker.mjs",
+    "docker:bundle": "node scripts/package-deployment.mjs",
     "login:remote": "tsx scripts/login-remote.ts"
   },
   "dependencies": {
