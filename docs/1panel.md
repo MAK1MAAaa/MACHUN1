@@ -1,0 +1,136 @@
+# 1Panel：公网 IP 免配置版本
+
+分支 `codex/manual-login-docker`，镜像 `machun1:companion-20261009-ip-amd64`，架构 linux/amd64。一体部署包包含镜像、预设编排、启动脚本和校验文件；上传解压后运行一次脚本即可，不需要域名、HTTPS 反代或 `.env`。
+
+| 项目 | 预设 |
+| --- | --- |
+| 浏览器访问 | `http://服务器公网IP:1650` |
+| 网页账号 / 密码 | `root` / `pwd` |
+| MySQL 专用账号 / 连接密码 | `machun_app` / `123456` |
+| MySQL 地址 / 数据库 | `1Panel-mysql-3Wrt:3306` / `machun1` |
+| Docker 外部网络 | `1panel-network` |
+| 应用容器 / 宿主机端口 | `1650` / `1650` |
+
+`123456` 只用于数据库连接，不是网页密码。用户表仍严格为 `username`、`pwd` 两列；网页登录输入 `pwd`，数据库保存其 UTF-8 SHA-256 小写十六进制哈希。
+
+当前正式库已完成 `0001_accounts` 和获准的 `0002_source_binding_tasks`，原有 408 条成绩及四源绑定保留。本轮生成归档并启动本机测试服务，未替换服务器容器。预设连接使用现有数据库，不另建空库；其他服务器需覆盖数据库地址并由管理连接初始化。
+
+## 从 Docker Hub 部署
+
+镜像仓库为 [`mak1maaaa/machun1`](https://hub.docker.com/r/mak1maaaa/machun1)，标签为 `latest` 和 `20261009-amd64`，架构为 `linux/amd64`。MySQL 连接由附带编排自动注入，密码保留在自己的服务器上；无需手填环境变量或运行 `pnpm db:setup` / `pnpm db:tunnel`。
+
+最少操作方式：在 1Panel 文件管理上传 `release/machun1-hub-deploy-20261009-amd64-1650.tar.gz`，解压并进入目录，执行：
+
+```bash
+sudo bash start.sh
+```
+
+脚本自动校验文件、拉取 Hub 镜像、注入数据库连接、加入 `1panel-network`、映射 `1650:1650`，等待健康检查并只读核对现有 MySQL、root 用户及两项迁移。完成后访问 `http://服务器公网IP:1650`，使用 `root / pwd`。该小型部署包含编排、启动脚本、说明和校验文件，由 `pnpm docker:hub-bundle` 生成；归档及随包编排权限为 `0600`，仅上传到自己的服务器。
+
+在 1Panel“容器 → 编排”中新建编排，粘贴项目根目录 `compose.hub.yaml`，项目名使用 `machun1`。该文件与离线编排使用相同数据库、命名卷及 1650 端口，镜像改为从 Hub 拉取；更新已有编排时，只需将其 `image` 改为 `mak1maaaa/machun1:latest` 并重新拉取镜像、重建容器。保留原项目名和命名卷，避免创建另一份数据卷。
+
+在终端也可执行：
+
+```bash
+docker compose -p machun1 -f compose.hub.yaml pull
+docker compose -p machun1 -f compose.hub.yaml up -d
+```
+
+需要固定版本时，将编排镜像改为 `mak1maaaa/machun1:20261009-amd64`。已有容器应通过编排重新创建并保留原数据卷；仅重启原先没有数据库配置的容器不会补上连接。只在“镜像”中拉取再单独创建容器，会缺少编排中的数据库设置。拉取镜像需要服务器可访问 Docker Hub；无法访问时继续使用下方一体部署包。
+
+## 上传一体部署包并启动
+
+使用 `release/machun1-deploy-20261009-ip-amd64-1650.tar.gz`，在 1Panel“文件”上传并解压。进入解压出的目录，在终端运行：
+
+```bash
+sudo bash start.sh
+```
+
+也可从外层目录直接执行：
+
+```bash
+sudo bash machun1-deploy-20261009-ip-amd64-1650/start.sh
+```
+
+脚本自动校验随包文件，导入随包镜像，启动 Compose 编排并等待健康检查，再只读核对 MySQL 连通性、root 用户和两项迁移。项目名固定为 `machun1`，重复执行用于更新该项目，不删除命名卷。不需要安装 Node.js / pnpm，也不需要单独复制编排。
+
+完成后打开 `http://服务器公网IP:1650`，用 `root / pwd` 登录。若已有旧容器占用 1650，先在面板停止旧容器；脚本不停止其他项目。上传文件或仅导入镜像不会自动执行编排，首次需要运行一次脚本。终端启动的编排可在 Docker 容器列表查看。
+
+部署包的外部 `.sha256` 可用于上传后校验，解压出的 `SHA256SUMS` 会由脚本自动检查。该外层包用于文件管理上传；“镜像 → 导入”单独导入时，使用内部原始镜像文件。
+
+## 单独导入镜像并创建编排
+
+上传下列文件，在 1Panel“容器 → 镜像 → 导入”选择镜像归档：
+
+```text
+machun1-companion-20261009-ip-amd64-1650.tar.gz
+machun1-companion-20261009-ip-amd64-1650.tar.gz.sha256
+```
+
+也可执行：
+
+```bash
+sha256sum -c machun1-companion-20261009-ip-amd64-1650.tar.gz.sha256
+docker load -i machun1-companion-20261009-ip-amd64-1650.tar.gz
+```
+
+若面板只接受 tar，先 `gzip -dk` 再导入。旧归档保留。
+
+在“容器 → 编排”中新建编排，粘贴项目根目录 `compose.yaml` 即可，无须填写变量。编排会注入预设的数据库连接；镜像本身不包含数据库密码。Hub 部署同样由 `compose.hub.yaml` 注入连接。数据库应用账号仅有 `machun1.*` 的 SELECT / INSERT / UPDATE / DELETE。编排包含你指定的数据库密码，请仅用于自己的服务器。
+
+编排加入已有 `1panel-network`，通过容器名连接 MySQL。端口映射为 `1650:1650`；服务器安全组和防火墙需允许 TCP 1650。启动后打开 `http://服务器公网IP:1650`，用 `root / pwd` 登录。不再使用旧的 `machun` Basic Auth。
+
+`machun_data` 命名卷挂载 `/data`，普通容器更新不会删除卷。共享内存为 `1gb`，建议至少 2 GB 可用内存。容器以 UID 1000 运行，只提供应用和按需无界面 Chromium；没有 VNC 服务，不映射 5900 / 6080。
+
+`/healthz` 仅返回进程状态，不代表数据库或门户一定可用。服务校验 IP Host、对应端口和同源请求，不接受任意域名或转发头，不提供跨域 API。HTTP 登录 Cookie 为 HttpOnly / SameSite=Lax，有效期七天；HTTP 会明文传输网页登录请求及助手会话。
+
+## 电脑绑定、手机同步
+
+电脑安装 Node.js 24、pnpm 10.15，检出与镜像匹配的分支：
+
+```bash
+pnpm install
+pnpm browser:install
+```
+
+电脑助手无需 MySQL 或门户密码配置。网页登录后展开来源工具，点击“绑定账号 / 重新登录”，生成任务，复制命令：
+
+```bash
+pnpm login:remote --server http://服务器公网IP:1650 --task <网页任务ID>
+```
+
+在终端隐藏输入提示后粘贴绑定码。助手使用临时独立浏览器打开官方门户，由你手动登录并完成验证码；Rin / 大饼使用门户 BCN 入口，MuNET 使用账号密码和滑块。助手只回传取分所需的 Token / localStorage 字段，排除门户密码、BCN Cookie 和完整 Chromium 目录，临时目录结束后清理。服务器核对账号和卡片后完成绑定，落雪继续直接填写个人 Token。
+
+绑定码只存哈希，10 分钟有效、仅提交一次；取消、重新生成、退出登录、网页会话过期或服务重启使未完成任务作废。响应丢失后重新运行同一命令查询结果，不重复提交。HTTP 页面上的复制按钮有兼容处理，失败时仍可选中文本手动复制。
+
+后续同步由服务器完成，电脑无需在线。会话失效且无法续期时重新运行助手。可移植状态按用户和来源存入 MySQL，续期后更新；旧目录缺失时提示重新绑定，已合并成绩仍保留。同账号同卡重绑保留大饼同步位置；换账号 / 卡按原规则清理该来源缓存。验证失败不替换旧绑定。
+
+## 本机测试与停止
+
+当前本机通过 `ssh tencent` 隧道连接同一个正式库，已使用数据库连接密码 `123456`：
+
+```bash
+pnpm db:tunnel
+# 另一个终端
+MACHUN_PORT=1650 pnpm start
+```
+
+打开 `http://127.0.0.1:1650`，使用 `root / pwd`。本机绑定仍弹出专用手动登录窗口。测试结束，在网页服务和 SSH 隧道各自终端按 Ctrl+C。
+
+## 更新、备份与可选配置
+
+更新前备份 MySQL 和 `/data`，记录旧镜像标签；导入新镜像并修改编排标签重建容器，不删除卷。成绩备份仅含成绩、个人别名及达成标记，不含门户会话；数据库备份含 Token，需私密保存。
+
+评分、别名、来源、FC/AJ、评级与导出保持原逻辑；网页预览 3×10，PNG 导出 5×6 / 5×10。应用启动不自动建表、不重置已有用户密码。
+
+切换数据库时可覆盖 `DATABASE_URL`。启用 HTTPS 反代时在编排增加 `MACHUN_PUBLIC_ORIGIN=https://你的域名`，保留实际 Host；此时只接受该配置域名，登录 Cookie 自动加 Secure。不要把数据库管理账号交给应用。
+
+## 故障处理
+
+- IP 无法访问：确认容器运行、TCP 1650 已放行、访问地址带 `http://` 和 `:1650`。
+- API 403：确认 Host 为 IP:1650，Origin 与访问地址一致；使用域名须显式配置 public origin。
+- MySQL 不可用：检查 `1panel-network`、`1Panel-mysql-3Wrt` 和专用连接密码；页面保留现有成绩，不静默退回 localStorage。
+- 本机数据库断开：检查 SSH 隧道是否退出，重新执行 `pnpm db:tunnel` 后重试。
+- 登录失败：网页输入 `root / pwd`，不要输入数据库密码 `123456`。
+- 门户会话过期或身份变化：重新生成助手任务；不会删除已合并成绩。
+- 大饼限流：等待页面提示，失败不推进同步位置。

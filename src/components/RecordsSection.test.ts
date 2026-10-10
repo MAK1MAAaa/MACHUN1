@@ -120,7 +120,7 @@ describe("records section", () => {
     expect(renderRecords().match(/<col\b/g)).toHaveLength(11);
   });
 
-  it("keeps the complete song title on a keyboard-accessible copy button, independently of score editing", () => {
+  it("keeps the complete song title on an accessible details button independently of score editing", () => {
     const chart = catalog.reduce((longest, current) => current.title.length > longest.title.length ? current : longest);
     const record: SingleRating = {
       id: chart.id, title: chart.title, difficulty: chart.difficulty, constant: chart.constant,
@@ -131,14 +131,15 @@ describe("records section", () => {
       records: [record], scores: { [chartKey(record)]: record }, nicknameOverrides: {},
       disabled: true, onEdit: vi.fn(), onDelete: vi.fn(),
     }));
-    const copyButton = html.match(/<button\b[^>]*class="record-title-copy"[^>]*>[\s\S]*?<\/button>/)?.[0];
+    const detailsButton = html.match(/<button\b[^>]*class="record-title-details"[^>]*>[\s\S]*?<\/button>/)?.[0];
     const escapedTitle = chart.title.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#x27;" })[character]!);
-    expect(copyButton).toContain('type="button"');
-    expect(copyButton).toContain(`title="${escapedTitle}"`);
-    expect(copyButton).toContain(`aria-label="复制歌曲名称：${escapedTitle}"`);
-    expect(copyButton).toContain(`>${escapedTitle}</button>`);
-    expect(copyButton).not.toContain("disabled");
-    expect(html).toContain('class="records-copy-status" role="status"');
+    expect(detailsButton).toContain('type="button"');
+    expect(detailsButton).toContain(`title="${escapedTitle}"`);
+    expect(detailsButton).toContain(`aria-label="查看歌曲详情：${escapedTitle}"`);
+    expect(detailsButton).toContain('aria-haspopup="dialog"');
+    expect(detailsButton).toContain(`>${escapedTitle}</button>`);
+    expect(detailsButton).not.toContain("disabled");
+    expect(html).not.toContain("record-title-copy");
     expect(record).toEqual(original);
   });
 });

@@ -69,3 +69,4 @@
   .records-page-controls button { font-size: 0.7rem; padding: 8px 7px; }
   .records-page-jump { width: 50px; }
 }
+.records-score-cell .score-badges { margin-top: 5px; }

@@ -1,0 +1,19 @@
+services:
+  machun1:
+    image: machun1:companion-20261009-ip-amd64
+    platform: linux/amd64
+    restart: unless-stopped
+    shm_size: 1gb
+    environment:
+      DATABASE_URL: mysql://machun_app:123456@1Panel-mysql-3Wrt:3306/machun1
+    ports:
+      - "1650:1650"
+    volumes:
+      - machun_data:/data
+    networks:
+      - 1panel-network
+volumes:
+  machun_data:
+networks:
+  1panel-network:
+    external: true

@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 import type { SourceIdentity, SyncProgress } from "../../src/syncTypes";
 import { requireIdentity, SyncError } from "../provider";
 import type { BrowserProvider, BrowserSession, OtogameCheckpoint } from "../provider";
+import type { ScoreAchievements } from "../../src/types";
+import { mergeScoreAchievements, readScoreAchievements } from "../../src/core/scoreAchievements";
 
 const ORIGIN = "https://u.otogame.net";
 const STORAGE_KEYS = ["TOKEN", "ID_TOKEN", "REFRESH_TOKEN", "USER_INFO"] as const;
@@ -306,7 +308,7 @@ class OtogameApi {
   }
 }
 
-interface ScoreCandidate {
+interface ScoreCandidate extends ScoreAchievements {
   music: { name: string };
   difficulty: number;
   score: number;
@@ -357,14 +359,17 @@ function normalizeHistoryEntry(value: unknown): HistoryEntry {
     || typeof difficulty !== "number" || !Number.isInteger(difficulty) || difficulty < 0 || difficulty > 5
     || typeof score !== "number" || !Number.isInteger(score) || score < 0 || score > 1_010_000
     || track !== undefined && (typeof track !== "number" || !Number.isInteger(track) || track < 0)) throw invalidResponse();
-  // The public client does not expose a stable history ID. These displayed fields
-  // identify equivalent plays; indistinguishable repeats cannot change a maximum.
+  // Keep the fingerprint compatible with existing timestamp checkpoints. Repeated
+  // rows can still carry stronger achievement metadata, which is merged separately.
   const key = createHash("sha256").update(JSON.stringify([
     timestamp, identifier(music.musicId) ?? null, music.name, difficulty, score, track ?? null,
   ])).digest("hex");
   return {
     timestamp, key,
-    score: difficulty >= 2 && difficulty <= 4 ? { music: { name: music.name }, difficulty, score } : null,
+    score: difficulty >= 2 && difficulty <= 4 ? {
+      music: { name: music.name }, difficulty, score,
+      ...readScoreAchievements(record, score),
+    } : null,
   };
 }
 
@@ -401,8 +406,7 @@ async function collectHistory(api: OtogameApi, checkpoint?: OtogameCheckpoint): 
   if (checkpoint && checkpoint.timestamp !== null && originalBoundary.size === 0) throw invalidResponse();
   const seenOriginalBoundary = new Set<string>();
   const latestBoundary = new Set<string>();
-  const seen = new Set<string>();
-  const scores: ScoreCandidate[] = [];
+  const scoredPlays = new Map<string, ScoreCandidate>();
   let previousTimestamp = Infinity;
   let finished = false;
   let readCount = 0;
@@ -422,10 +426,12 @@ async function collectHistory(api: OtogameApi, checkpoint?: OtogameCheckpoint): 
       }
       if (entry.timestamp === checkpoint?.timestamp && originalBoundary.has(entry.key)) {
         seenOriginalBoundary.add(entry.key);
-      } else if (!seen.has(entry.key) && entry.score) {
-        scores.push(entry.score);
+      } else if (entry.score) {
+        scoredPlays.set(entry.key, {
+          ...entry.score,
+          ...mergeScoreAchievements(scoredPlays.get(entry.key) ?? {}, entry.score),
+        });
       }
-      seen.add(entry.key);
     }
   }
   if (!finished && readCount !== first.total) throw invalidResponse();
@@ -435,7 +441,7 @@ async function collectHistory(api: OtogameApi, checkpoint?: OtogameCheckpoint): 
   // the cursor so new plays shifting page offsets cannot silently skip a row.
   const confirmed = await historyPage(api, 1);
   if (historyPageSignature(confirmed) !== historyPageSignature(first)) throw historyChanged();
-  return { scores, checkpoint: { timestamp: latest, boundaryKeys: [...latestBoundary].sort() } };
+  return { scores: [...scoredPlays.values()], checkpoint: { timestamp: latest, boundaryKeys: [...latestBoundary].sort() } };
 }
 
 export const otogameProvider: BrowserProvider = {

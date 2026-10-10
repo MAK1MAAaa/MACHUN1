@@ -6,6 +6,14 @@ export const SCORE_SOURCES = ["manual", "rin", "otogame", "lxns", "munet"] as co
 
 export type ScoreSource = (typeof SCORE_SOURCES)[number];
 
+export type ComboStatus = "fc" | "aj" | "ajc";
+export type FullChainStatus = "fchain" | "gold" | "platinum";
+
+export interface ScoreAchievements {
+  combo?: ComboStatus;
+  fullChain?: FullChainStatus;
+}
+
 export interface ChartNoteProfile {
   total: number;
   tap: number;
@@ -28,7 +36,7 @@ export interface CatalogChart {
   notes: ChartNoteProfile;
 }
 
-export interface SingleRating {
+export interface SingleRating extends ScoreAchievements {
   id: string;
   title: string;
   difficulty: Difficulty;

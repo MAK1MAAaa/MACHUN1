@@ -72,12 +72,17 @@
 .song-details-difficulty { font-size: 15px; }
 .song-details-constant { font-size: 20px; font-variant-numeric: tabular-nums; }
 .song-details-score { margin-left: auto; font-size: 23px; font-variant-numeric: tabular-nums; }
+.song-details-score .score-badges { justify-content: flex-end; margin-top: 5px; }
 
 .song-details-aliases { margin-top: 22px; padding: 20px; border-radius: 16px; background: #ece6f8; }
 .song-details-aliases h3 { margin: 0 0 14px; font-size: 18px; font-weight: 600; }
 .song-details-aliases ul { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
 .song-details-aliases li { max-width: 100%; padding: 6px 10px; border-radius: 8px; background: #faf8ff; overflow-wrap: anywhere; }
 .song-details-aliases p { margin: 0; color: #7b7186; font-size: 14px; }
+.personal-alias-form { display: grid; gap: 10px; margin-top: 18px; }
+.personal-alias-form label { display: grid; gap: 8px; font-size: 14px; }
+.personal-alias-form textarea { width: 100%; resize: vertical; padding: 10px; border: 1px solid #cabbd8; border-radius: 8px; background: #faf8ff; color: inherit; }
+.personal-alias-form button { justify-self: start; padding: 8px 12px; border: 1px solid #cabbd8; border-radius: 8px; background: #faf8ff; color: inherit; }
 
 @media (max-width: 560px) {
   .song-details-dialog { padding: 22px 18px; border-radius: 18px; }

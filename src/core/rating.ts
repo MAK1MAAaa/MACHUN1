@@ -49,3 +49,20 @@ export function calculateRating(score: number, chartConstant: number): number {
 export function formatScore(score: number): string {
   return new Intl.NumberFormat("zh-CN").format(score);
 }
+
+export function scoreGrade(score: number): string {
+  if (score >= 1_009_000) return "SSS+";
+  if (score >= 1_007_500) return "SSS";
+  if (score >= 1_005_000) return "SS+";
+  if (score >= 1_000_000) return "SS";
+  if (score >= 990_000) return "S+";
+  if (score >= 975_000) return "S";
+  if (score >= 950_000) return "AAA";
+  if (score >= 925_000) return "AA";
+  if (score >= 900_000) return "A";
+  if (score >= 800_000) return "BBB";
+  if (score >= 700_000) return "BB";
+  if (score >= 600_000) return "B";
+  if (score >= 500_000) return "C";
+  return "D";
+}

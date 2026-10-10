@@ -1,14 +1,32 @@
 import { chromium } from "playwright";
 import type { BrowserSession } from "./provider";
 import { SyncError } from "./provider";
-import { attachAutomaticLogin, type CredentialReader } from "./credentials";
+import type { PortableSession } from "../src/sourceBindingTypes";
+import { portableStorageState } from "./portableSession";
 
 export interface BrowserLauncher {
   open(profilePath: string, url: string, visible: boolean): Promise<BrowserSession>;
+  openPortable?(session: PortableSession, url: string): Promise<BrowserSession>;
 }
 
-export function createBrowserLauncher(readCredentials?: CredentialReader): BrowserLauncher {
+export function createBrowserLauncher(): BrowserLauncher {
   return {
+    async openPortable(session, url) {
+      let browser;
+      try { browser = await chromium.launch({ headless: true, timeout: 30_000 }); }
+      catch { throw new SyncError("BROWSER_UNAVAILABLE", "无法启动无界面浏览器，请检查 Chromium 安装。", 503); }
+      try {
+        const context = await browser.newContext({ storageState: portableStorageState(session), viewport: { width: 1150, height: 820 }, acceptDownloads: false });
+        context.on('close', () => { void browser.close().catch(() => undefined); });
+        context.setDefaultTimeout(30_000); context.setDefaultNavigationTimeout(30_000);
+        const page = await context.newPage();
+        await page.goto(url, { waitUntil: 'domcontentloaded' });
+        return { context, page };
+      } catch {
+        await browser.close().catch(() => undefined);
+        throw new SyncError('NETWORK_ERROR', '无法恢复门户会话，请检查网络或重新运行登录助手。', 502);
+      }
+    },
     async open(profilePath, url, visible) {
       let context;
       const options = {
@@ -36,8 +54,6 @@ export function createBrowserLauncher(readCredentials?: CredentialReader): Brows
       const page = context.pages()[0] ?? await context.newPage();
       try {
         await page.goto(url, { waitUntil: "domcontentloaded" });
-        // Entry clicks must not race the initial navigation and abort its goto promise.
-        if (visible && readCredentials) attachAutomaticLogin(context, readCredentials);
         return { context, page };
       } catch {
         await context.close();

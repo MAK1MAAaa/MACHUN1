@@ -38,7 +38,7 @@ function browserSession(url = "https://portal.example/login") {
   };
 }
 
-async function setup() {
+async function setup(companionLogin = false) {
   const directory = await mkdtemp(join(tmpdir(), "machun-manager-"));
   folders.push(directory);
   const provider: BrowserProvider = {
@@ -48,7 +48,7 @@ async function setup() {
   const launcher = {
     open: vi.fn(async () => browserSession().session),
   };
-  const options = { store: new SourceStore(directory), providers: { rin: provider, munet: provider, otogame: provider }, launcher, bindPollMs: 2, bindTimeoutMs: 2000 };
+  const options = { store: new SourceStore(directory), providers: { rin: provider, munet: provider, otogame: provider }, launcher, bindPollMs: 2, bindTimeoutMs: 2000, companionLogin };
   const manager = new SourceManager(options);
   managers.push(manager);
   await manager.initialize();
@@ -61,6 +61,17 @@ async function bound(manager: SourceManager, source: "rin" | "otogame" = "rin") 
 }
 
 describe("local source manager", () => {
+  it("deployment requests companion binding and never opens a visible server browser", async () => {
+    const { manager, launcher } = await setup(true);
+    await expect(manager.bind('rin')).rejects.toMatchObject({ code: 'COMPANION_REQUIRED' });
+    expect(launcher.open).not.toHaveBeenCalled();
+    expect(manager.connections().find(item => item.source === 'rin')?.bindingMode).toBe('companion');
+  });
+  it("does not expose a remote login URL for native browser windows", async () => {
+    const { manager, provider } = await setup();
+    vi.mocked(provider.identify).mockRejectedValue(new SyncError("AUTH_REQUIRED", "等待登录", 401));
+    expect(await manager.bind("rin")).not.toHaveProperty("loginUrl");
+  });
   it("starts without upstream calls and restores a saved profile after restart", async () => {
     const { manager, provider, options, launcher, directory } = await setup();
     expect(provider.identify).not.toHaveBeenCalled();

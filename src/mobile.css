@@ -1,0 +1,32 @@
+.source-sync-actions { flex-wrap: wrap; }
+
+@media (max-width: 1100px) {
+  .b30-grid { min-width: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 660px) {
+  input, select, textarea { font-size: 16px; }
+  button, .source-actions a { touch-action: manipulation; }
+  .panel, .source-section, .b30-section, .records-section { min-width: 0; padding: 16px; }
+  .source-card, .source-sync-controls, .source-identity { min-width: 0; }
+  .source-connection-heading { flex-wrap: wrap; }
+  .source-identity, .source-sync-note, .source-sync-error { overflow-wrap: anywhere; }
+  .source-actions { flex-wrap: wrap; }
+  .source-actions button, .source-actions a { min-height: 44px; }
+  .source-sync-actions button { flex: 1 1 auto; }
+  .source-sync-history { flex-wrap: wrap; }
+  .b30-grid { grid-template-columns: minmax(0, 1fr); }
+  .b30-table-scroll { padding: 10px; }
+  .b30-export-actions { flex-wrap: wrap; }
+  .b30-export-actions button { min-height: 44px; }
+  .records-pagination { flex-wrap: wrap; gap: 10px; }
+  .records-pagination button, .row-actions button, .records-mode button, .records-filter-actions button { min-height: 44px; }
+  .records-filters { min-width: 0; }
+  .records-filter select, .records-page-jump select, .records-browser .record-search input { font-size: 16px; min-height: 44px; }
+  .records-filter input, .records-filter select { min-width: 0; max-width: 100%; }
+  .record-table-wrap, .b30-chart-scroll { overscroll-behavior-x: contain; }
+  .song-details-dialog { max-height: calc(100dvh - 20px); width: calc(100vw - 20px); }
+  .song-details-close { width: 44px; height: 44px; top: 8px; right: 8px; }
+  .song-details-heading { padding-top: 16px; }
+  .song-details-chart { flex-wrap: wrap; }
+  .song-details-score { font-size: 18px; }
+}

@@ -1,7 +1,8 @@
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { chartKey } from "../core/b30";
 import { formatScore } from "../core/rating";
 import { DIFFICULTIES, type CatalogChart, type SingleRating } from "../types";
+import { ScoreBadges } from "./ScoreBadges";
 import "./SongDetailsDialog.css";
 
 export interface SongDetailsDialogProps {
@@ -9,12 +10,17 @@ export interface SongDetailsDialogProps {
   charts: readonly Pick<CatalogChart, "id" | "difficulty" | "constant">[];
   scores: Record<string, SingleRating>;
   aliases: readonly string[];
+  personalAliases?: readonly string[];
+  onSaveAliases?: (aliases: string[]) => Promise<void>;
   onClose: () => void;
 }
 
-export function SongDetailsDialog({ chart, charts, scores, aliases, onClose }: SongDetailsDialogProps) {
+export function SongDetailsDialog({ chart, charts, scores, aliases, personalAliases = [], onSaveAliases, onClose }: SongDetailsDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const titleId = useId();
+  const [aliasText, setAliasText] = useState(personalAliases.join("\n"));
+  const [saving, setSaving] = useState(false);
+  const [aliasNotice, setAliasNotice] = useState<string | null>(null);
   const uniqueAliases = [...new Set(aliases.map((alias) => alias.trim()).filter(Boolean))];
 
   useEffect(() => {
@@ -70,7 +76,9 @@ export function SongDetailsDialog({ chart, charts, scores, aliases, onClose }: S
             <li key={difficulty} className={`song-details-chart song-details-${difficulty.toLowerCase()}`}>
               <span className="song-details-difficulty">{difficulty}</span>
               <span className="song-details-constant" aria-label={`${difficulty} 定数`}>{songChart ? songChart.constant.toFixed(1) : "/"}</span>
-              <span className="song-details-score" aria-label={`${difficulty} 成绩`}>{record ? formatScore(record.score) : ""}</span>
+              <span className="song-details-score" aria-label={`${difficulty} 成绩`}>
+                {record && <>{formatScore(record.score)}<ScoreBadges record={record} /></>}
+              </span>
             </li>
           );
         })}
@@ -81,6 +89,17 @@ export function SongDetailsDialog({ chart, charts, scores, aliases, onClose }: S
         {uniqueAliases.length ? (
           <ul>{uniqueAliases.map((alias) => <li key={alias}>{alias}</li>)}</ul>
         ) : <p>暂无别名</p>}
+        {onSaveAliases && <form className="personal-alias-form" onSubmit={async event => {
+          event.preventDefault(); if (saving) return;
+          setSaving(true); setAliasNotice(null);
+          try { await onSaveAliases(aliasText.split("\n")); setAliasNotice("个人别名已保存。"); }
+          catch (error) { setAliasNotice(error instanceof Error ? error.message : "别名保存失败。"); }
+          finally { setSaving(false); }
+        }}>
+          <label>个人别名（每行一个）<textarea aria-label="个人别名" rows={3} value={aliasText} onChange={event => setAliasText(event.target.value)} /></label>
+          <button type="submit" disabled={saving}>{saving ? "正在保存…" : "保存个人别名"}</button>
+          {aliasNotice && <p role="status">{aliasNotice}</p>}
+        </form>}
       </section>
     </dialog>
   );

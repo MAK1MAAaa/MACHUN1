@@ -1,0 +1,10 @@
+{
+  "date": "2026-10-08",
+  "upstreamCommit": "f84ccd71bb9152a3afa81a93f58c4caeeaa45d77",
+  "official": "https://chunithm.sega.jp/storage/json/music.json",
+  "officialAnnouncements": ["https://info-chunithm.sega.jp/12719/", "https://info-chunithm.sega.jp/12754/"],
+  "upstream": "https://github.com/zvuc/otoge-db",
+  "upstreamSnapshot": "https://raw.githubusercontent.com/zvuc/otoge-db/f84ccd71bb9152a3afa81a93f58c4caeeaa45d77/chunithm/data/music-ex.json",
+  "constantSupplement": "用户提供的 10/8 Mate ep. IV 定数表",
+  "supplementSha256": "119293dd3e361778bf94f2c90dd1f792714a17f7a703bd1b9bfa5ca8a5acddcb"
+}

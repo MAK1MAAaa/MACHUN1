@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createSyncClient } from "../core/syncClient";
+import { CompanionBinding } from './CompanionBinding';
 import type { ExternalScoreSource, SourceMergeOptions } from "../core/sources";
 import { SYNC_SOURCES, type ConnectionStatus, type SourceConnection, type SyncResult } from "../syncTypes";
 
 type PendingOperation = "bind" | "sync" | "unbind";
 type Connections = Record<ExternalScoreSource, SourceConnection>;
-const client = createSyncClient();
 
 function initialConnections(): Connections {
   return Object.fromEntries(SYNC_SOURCES.map((source) => [source, {
@@ -24,6 +24,8 @@ function errorText(error: unknown): string {
 }
 
 export function useSourceSync(onSynced: (result: SyncResult, mergeOptions?: SourceMergeOptions) => void) {
+  const abort = useRef(new AbortController());
+  const client = useRef(createSyncClient(fetch, () => abort.current.signal)).current;
   const [connections, setConnections] = useState(initialConnections);
   const [pending, setPending] = useState<Partial<Record<ExternalScoreSource, PendingOperation>>>({});
   const [serviceError, setServiceError] = useState<string | null>(null);
@@ -61,9 +63,17 @@ export function useSourceSync(onSynced: (result: SyncResult, mergeOptions?: Sour
     } finally {
       if (requestRevision >= appliedListRevision.current) setLoading(false);
     }
-  }, []);
+  }, [client]);
 
-  useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => {
+    if (abort.current.signal.aborted) abort.current = new AbortController();
+    void refresh();
+    return () => {
+      abort.current.abort();
+      for (const source of SYNC_SOURCES) revisions.current[source]++;
+      appliedListRevision.current = ++listRevision.current;
+    };
+  }, [refresh]);
   const hasRunningTask = Object.values(connections).some((item) => item.status === "binding" || item.status === "syncing")
     || Object.keys(pending).length > 0;
   useEffect(() => {
@@ -85,7 +95,7 @@ export function useSourceSync(onSynced: (result: SyncResult, mergeOptions?: Sour
     const selectedMergeOptions = mergeOptions ? { ...mergeOptions } : undefined;
     try {
       if (operation === "sync") {
-        const result = await client.sync(source, full ? { full: true } : undefined);
+        const result = await client.sync(source, full ? { full: true } : undefined, mergeOptions);
         if (revision !== revisions.current[source]) return false;
         syncedCallback.current(result, selectedMergeOptions);
         setConnections((current) => ({ ...current, [source]: result.connection }));
@@ -121,16 +131,18 @@ type SourceSyncController = ReturnType<typeof useSourceSync>;
 export function SourceSyncControls({ source, controller, mergeOptions }: { source: ExternalScoreSource; controller: SourceSyncController; mergeOptions?: SourceMergeOptions }) {
   const [token, setToken] = useState("");
   const [editingToken, setEditingToken] = useState(false);
+  const [companion, setCompanion] = useState(false);
   const connection = controller.connections[source];
   const operation = controller.pending[source];
   const running = connection.status === "binding" || connection.status === "syncing";
-  const busy = Boolean(operation) || running;
+  const busy = Boolean(operation) || running || companion;
   const showToken = source === "lxns" && (!connection.bound || connection.status === "auth_required" || editingToken);
   const canUnbind = connection.bound || running || Boolean(operation) || connection.status !== "unbound";
   const error = controller.errors[source] ?? connection.error;
-  const status = operation === "unbind" ? "正在清除绑定" : operation === "sync" ? "正在同步" : operation === "bind" ? "正在建立绑定" : STATUS_LABEL[connection.status];
+  const status = operation === "unbind" ? "正在清除绑定" : operation === "sync" ? "正在同步" : operation === "bind" ? "正在建立绑定" : (connection.status === "binding" && connection.bindingMode === "companion" ? "服务器正在验证" : STATUS_LABEL[connection.status]);
 
   const bind = async () => {
+    if (source !== 'lxns' && connection.bindingMode === 'companion') { setCompanion(true); return; }
     if (source === "lxns" && !showToken) {
       setEditingToken(true);
       return;
@@ -150,7 +162,8 @@ export function SourceSyncControls({ source, controller, mergeOptions }: { sourc
       <span>个人 API Token</span>
       <input type="password" value={token} onChange={(event) => setToken(event.target.value)} placeholder="首次绑定时填写" autoComplete="off" disabled={busy} />
     </label>}
-    {connection.status === "binding" && <p className="source-sync-note">已配置 .env 时会自动登录；验证码或授权确认请在弹出窗口完成，本页会自动更新。</p>}
+    {connection.status === "binding" && connection.bindingMode !== "companion" && <p className="source-sync-note">请在弹出窗口完成登录、验证码或授权确认，本页会自动更新。</p>}
+    {companion && source !== 'lxns' && <CompanionBinding source={source} onDone={() => { void controller.refresh(); }} onClose={() => setCompanion(false)} />}
     {source === "otogame" && <p className="source-sync-note">首次遍历全部可用游玩历史，之后只读取新记录；仅合并当前 13.0+ 曲库中的谱面。历史位置失效时可全量校准，已有最高分保留。</p>}
     {(operation === "sync" || connection.status === "syncing") && connection.progress && <p className="source-sync-note" role="status">
       已读取 {connection.progress.completedPages} 页。
@@ -178,6 +191,6 @@ export function SourceSyncControls({ source, controller, mergeOptions }: { sourc
       {connection.lastAttemptAt && <span>最近尝试：{new Date(connection.lastAttemptAt).toLocaleString("zh-CN")}</span>}
     </div>
     {error && <p className="source-sync-error" role="alert">{error}</p>}
-    {canUnbind && <p className="source-sync-note">解绑仅清除本机登录会话，已合并成绩保留。</p>}
+    {canUnbind && <p className="source-sync-note">解绑仅清除当前账号的来源会话，已合并成绩保留。</p>}
   </div>;
 }

@@ -33046,5 +33046,178 @@
       "air": 372,
       "flick": 92
     }
+  },
+  {
+    "id": "2317",
+    "title": "きゅうくらりん",
+    "difficulty": "ULT",
+    "constant": 15,
+    "genre": "niconico",
+    "version": "SUN",
+    "nickname": [
+      "心跳不止"
+    ],
+    "coverUrl": "https://otoge-db.net/chunithm/jacket/4288ca332c1db6eb.jpg",
+    "bpm": 220,
+    "notes": {
+      "total": 0,
+      "tap": 0,
+      "hold": 0,
+      "slide": 0,
+      "air": 0,
+      "flick": 0
+    }
+  },
+  {
+    "id": "3058",
+    "title": "LaVI-Bavellabion",
+    "difficulty": "MAS",
+    "constant": 13.9,
+    "genre": "POPS & ANIME",
+    "version": "MATE",
+    "nickname": [],
+    "coverUrl": "https://otoge-db.net/chunithm/jacket/1c4aa68762d08b13.jpg",
+    "bpm": 142,
+    "notes": {
+      "total": 1813,
+      "tap": 756,
+      "hold": 144,
+      "slide": 408,
+      "air": 395,
+      "flick": 110
+    }
+  },
+  {
+    "id": "3057",
+    "title": "Your Reality (Kenji Mizuno Remix)",
+    "difficulty": "MAS",
+    "constant": 14.6,
+    "genre": "POPS & ANIME",
+    "version": "MATE",
+    "nickname": [],
+    "coverUrl": "https://otoge-db.net/chunithm/jacket/140d3c0253db6498.jpg",
+    "bpm": 111,
+    "notes": {
+      "total": 1922,
+      "tap": 789,
+      "hold": 285,
+      "slide": 541,
+      "air": 218,
+      "flick": 89
+    }
+  },
+  {
+    "id": "3059",
+    "title": "奇々解体",
+    "difficulty": "MAS",
+    "constant": 13.4,
+    "genre": "VARIETY",
+    "version": "MATE",
+    "nickname": [],
+    "coverUrl": "https://otoge-db.net/chunithm/jacket/3b7a809d84a6c9b6.jpg",
+    "bpm": 148,
+    "notes": {
+      "total": 1520,
+      "tap": 480,
+      "hold": 211,
+      "slide": 587,
+      "air": 144,
+      "flick": 98
+    }
+  },
+  {
+    "id": "3052",
+    "title": "雑魚",
+    "difficulty": "MAS",
+    "constant": 13.1,
+    "genre": "niconico",
+    "version": "MATE",
+    "nickname": [],
+    "coverUrl": "https://otoge-db.net/chunithm/jacket/fb5e60d62c7d88e7.jpg",
+    "bpm": null,
+    "notes": {
+      "total": 0,
+      "tap": 0,
+      "hold": 0,
+      "slide": 0,
+      "air": 0,
+      "flick": 0
+    }
+  },
+  {
+    "id": "3054",
+    "title": "風呂入るプロファイル",
+    "difficulty": "MAS",
+    "constant": 13,
+    "genre": "niconico",
+    "version": "MATE",
+    "nickname": [],
+    "coverUrl": "https://otoge-db.net/chunithm/jacket/8202b8274c1feed0.jpg",
+    "bpm": null,
+    "notes": {
+      "total": 0,
+      "tap": 0,
+      "hold": 0,
+      "slide": 0,
+      "air": 0,
+      "flick": 0
+    }
+  },
+  {
+    "id": "3055",
+    "title": "SAN値直葬",
+    "difficulty": "MAS",
+    "constant": 15.1,
+    "genre": "niconico",
+    "version": "MATE",
+    "nickname": [],
+    "coverUrl": "https://otoge-db.net/chunithm/jacket/6d4e076edbf2b46e.jpg",
+    "bpm": null,
+    "notes": {
+      "total": 0,
+      "tap": 0,
+      "hold": 0,
+      "slide": 0,
+      "air": 0,
+      "flick": 0
+    }
+  },
+  {
+    "id": "3064",
+    "title": "ハイボルテージガール",
+    "difficulty": "MAS",
+    "constant": 14.1,
+    "genre": "ORIGINAL",
+    "version": "MATE",
+    "nickname": [],
+    "coverUrl": "https://otoge-db.net/chunithm/jacket/6c07589177bbb0f8.jpg",
+    "bpm": null,
+    "notes": {
+      "total": 0,
+      "tap": 0,
+      "hold": 0,
+      "slide": 0,
+      "air": 0,
+      "flick": 0
+    }
+  },
+  {
+    "id": "3062",
+    "title": "コンクエスト・チャレンジ",
+    "difficulty": "MAS",
+    "constant": 14.7,
+    "genre": "ORIGINAL",
+    "version": "MATE",
+    "nickname": [],
+    "coverUrl": "https://otoge-db.net/chunithm/jacket/1ae2db00c32c728b.jpg",
+    "bpm": null,
+    "notes": {
+      "total": 0,
+      "tap": 0,
+      "hold": 0,
+      "slide": 0,
+      "air": 0,
+      "flick": 0
+    }
   }
 ]

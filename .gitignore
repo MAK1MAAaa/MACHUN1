@@ -44,6 +44,7 @@ Desktop.ini
 # Personal exports and temporary files in the project root
 /b30.json
 /b30-candidates20.json
+/machun1-backup.json
 /machun1-b30*.png
 /chusan_*_exported.json
 /chunithm-scores.csv
@@ -53,3 +54,4 @@ Desktop.ini
 /backups/
 /tmp/
 /temp/
+/release/

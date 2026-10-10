@@ -1,5 +1,7 @@
 import type { BrowserSession } from "../provider";
 import { SyncError } from "../provider";
+import type { ScoreAchievements } from "../../src/types";
+import { readScoreAchievements } from "../../src/core/scoreAchievements";
 
 export const REQUEST_TIMEOUT = 15_000;
 
@@ -50,7 +52,7 @@ export async function requestJson(
 }
 
 export function safeMusicDetails(payload: unknown, checkGameId: boolean): {
-  userMusicDetailList: Array<{ musicId: string | number; level: number; scoreMax: number }>;
+  userMusicDetailList: Array<ScoreAchievements & { musicId: string | number; level: number; scoreMax: number }>;
 } {
   if (!isObject(payload) || (checkGameId && payload.gameId !== undefined && payload.gameId !== "SDHD") ||
       !Array.isArray(payload.userMusicDetailList)) {
@@ -62,7 +64,12 @@ export function safeMusicDetails(payload: unknown, checkGameId: boolean): {
         !Number.isInteger(entry.scoreMax) || Number(entry.scoreMax) < 0 || Number(entry.scoreMax) > 1_010_000) {
       throw new SyncError("UPSTREAM_FORMAT", "服务器返回的谱面成绩字段异常。");
     }
-    return { musicId: entry.musicId as string | number, level: entry.level as number, scoreMax: entry.scoreMax as number };
+    return {
+      musicId: entry.musicId as string | number,
+      level: entry.level as number,
+      scoreMax: entry.scoreMax as number,
+      ...readScoreAchievements(entry, entry.scoreMax as number),
+    };
   });
   return { userMusicDetailList };
 }

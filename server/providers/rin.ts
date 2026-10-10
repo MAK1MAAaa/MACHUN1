@@ -34,6 +34,12 @@ async function createClient(session: BrowserSession) {
   async function refresh(): Promise<void> {
     if (refreshed || !account.refreshToken) throw new SyncError("AUTH_REQUIRED", "Rin 登录已过期，请重新网页登录。", 401);
     refreshed = true;
+    const latest = readAccount(await session.page.evaluate(() => localStorage.getItem("currentAccount")));
+    if (latest.refreshToken !== account.refreshToken) {
+      throw new SyncError("IDENTITY_CHANGED", "Rin 登录状态已变化，请重新绑定。", 409);
+    }
+    // The portal can renew the same session while our first request is in flight.
+    if (latest.accessToken !== account.accessToken) { account = latest; return; }
     const result = await requestJson(session, `${PORTAL}/api/auth/refresh`, {
       method: "POST", data: { refreshToken: account.refreshToken }, headers: { Accept: "application/json" },
     });
@@ -46,13 +52,14 @@ async function createClient(session: BrowserSession) {
     const saved = await session.page.evaluate(({ previous, updated }) => {
       try {
         const current = JSON.parse(localStorage.getItem("currentAccount") ?? "null");
-        if (!current || current.accessToken !== previous.accessToken || current.refreshToken !== previous.refreshToken) return false;
+        if (!current || current.refreshToken !== previous.refreshToken) return null;
+        if (current.accessToken !== previous.accessToken) return JSON.stringify(current);
         localStorage.setItem("currentAccount", JSON.stringify(updated));
-        return true;
-      } catch { return false; }
+        return JSON.stringify(updated);
+      } catch { return null; }
     }, { previous: account, updated });
     if (!saved) throw new SyncError("IDENTITY_CHANGED", "Rin 登录状态已变化，请重新绑定。", 409);
-    account = updated;
+    account = readAccount(saved);
   }
 
   async function request(path: string): Promise<unknown> {

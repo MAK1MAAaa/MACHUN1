@@ -3,7 +3,7 @@ import { request as httpRequest, type Server } from "node:http";
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { createAppServer, type HttpManager } from "./http";
+import { createAppServer, type HttpManager, type HttpOptions } from "./http";
 import { SyncError } from "./provider";
 import type { SourceConnection, SyncResult } from "../src/syncTypes";
 
@@ -17,7 +17,7 @@ afterEach(async () => {
   await Promise.all(directories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
 });
 
-async function setup() {
+async function setup(options: Partial<HttpOptions> = {}) {
   const connection: SourceConnection = { source: "rin", status: "ready", bound: true, identity: { id: "1", label: "玩家" }, lastAttemptAt: null, lastSuccessAt: null, error: null };
   const manager: HttpManager = {
     connections: vi.fn(() => [connection]), bind: vi.fn(async () => connection), unbind: vi.fn(async () => connection),
@@ -30,7 +30,7 @@ async function setup() {
   await writeFile(join(dist, "index.html"), "<html>local app</html>");
   await mkdir(join(directory, ".machun.local"));
   await writeFile(join(directory, ".machun.local", "lxns.json"), "secret-vault");
-  const server = createAppServer({ manager, distDirectory: dist, additionalOrigins: ["http://127.0.0.1:4399"] });
+  const server = createAppServer({ manager, distDirectory: dist, additionalOrigins: ["http://127.0.0.1:4399"], ...options });
   servers.push(server);
   await new Promise<void>((resolve, reject) => { server.once("error", reject); server.listen(0, "127.0.0.1", resolve); });
   const address = server.address();
@@ -51,6 +51,40 @@ async function setup() {
 const writeHeaders = { "Content-Type": "application/json", "X-Machun-Request": "1" };
 
 describe("local HTTP boundary", () => {
+  it("allows direct IP access on the actual port and requires a matching origin", async () => {
+    const { send, port } = await setup({ publicIpAccess: true });
+    for (const ip of ['203.0.113.12', '[2001:db8::12]']) {
+      const host = `${ip}:${port}`;
+      expect((await send('/', { headers: { Host: host } })).status).toBe(200);
+      const synced = await send('/api/sources/rin/sync', { method: 'POST', headers: { ...writeHeaders, Host: host, Origin: `http://${host}` }, body: '{}' });
+      expect(synced.status).toBe(200);
+      expect(synced.headers['access-control-allow-origin']).toBeUndefined();
+      expect((await send('/api/sources', { headers: { Host: host, Origin: `http://203.0.113.13:${port}` } })).status).toBe(403);
+      expect((await send('/api/sources', { headers: { Host: host, Origin: `https://${host}` } })).status).toBe(403);
+      expect((await send('/api/sources', { headers: { Host: host, 'Sec-Fetch-Site': 'cross-site' } })).status).toBe(403);
+    }
+    for (const host of [`attacker.example:${port}`, '203.0.113.12:1', `0.0.0.0:${port}`, `2130706433:${port}`, `203.0.113.12:${port}/evil`]) {
+      expect((await send('/api/sources', { headers: { Host: host, 'X-Forwarded-Host': `203.0.113.12:${port}` } })).status).toBe(403);
+    }
+  });
+  it("does not enable IP access in the localhost default", async () => {
+    const { send, port } = await setup();
+    expect((await send('/', { headers: { Host: `203.0.113.12:${port}` } })).status).toBe(403);
+  });
+  it("accepts only the configured HTTPS host and rejects foreign origins and forwarded hosts", async () => {
+    const { send } = await setup({ publicOrigin: 'https://chuni.example' });
+    expect((await send('/api/sources', { headers: { Host: 'chuni.example', Origin: 'https://chuni.example' } })).status).toBe(200);
+    for (const headers of ([{ Host: 'foreign.example' }, { Host: 'chuni.example', Origin: 'http://chuni.example' }, { Host: 'chuni.example', Origin: 'https://foreign.example' }, { Host: 'foreign.example', 'X-Forwarded-Host': 'chuni.example' }] as Record<string, string>[])) {
+      expect((await send('/api/sources', { headers })).status).toBe(403);
+    }
+  });
+  it("allows panel page navigation while refusing cross-site API requests", async () => {
+    const { send } = await setup({ publicOrigin: 'https://chuni.example' });
+    const headers = { Host: 'chuni.example', 'Sec-Fetch-Site': 'cross-site', 'Sec-Fetch-Mode': 'navigate', 'Sec-Fetch-Dest': 'document' };
+    expect((await send('/', { headers })).status).toBe(200);
+    expect((await send('/api/sources', { headers })).status).toBe(403);
+    expect((await send('/login-view/vnc.html', { headers })).status).toBe(404);
+  });
   it("serves the app and safe status metadata", async () => {
     const { send } = await setup();
     expect(await send("/")).toMatchObject({ status: 200, text: "<html>local app</html>" });

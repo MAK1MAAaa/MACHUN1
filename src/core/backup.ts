@@ -7,6 +7,20 @@ import type {
   SingleRating,
 } from "../types";
 import { calculateRating } from "./rating";
+import { readScoreAchievements } from "./scoreAchievements";
+import { upsertHighScore } from "./storage";
+
+export function createFullBackup(state: LocalState, catalogVersion: string) {
+  return { schemaVersion: 2, catalogVersion, exportedAt: new Date().toISOString(),
+    scores: Object.values(state.scores), nicknameOverrides: structuredClone(state.nicknameOverrides) };
+}
+
+export function downloadFullBackup(backup: ReturnType<typeof createFullBackup>): void {
+  const url = URL.createObjectURL(new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" }));
+  const link = document.createElement("a");
+  link.href = url; link.download = "machun1-backup.json"; link.click();
+  URL.revokeObjectURL(url);
+}
 
 function normalizeAliases(aliases: unknown): string[] {
   if (!Array.isArray(aliases)) return [];
@@ -40,7 +54,9 @@ export function importBackup(
   if (backup.schemaVersion !== 1 && backup.schemaVersion !== 2) {
     throw new Error("备份版本不受支持");
   }
-  if (!Array.isArray(backup.scores)) throw new Error("备份缺少成绩列表");
+  const scoreList = Array.isArray(backup.scores) ? backup.scores
+    : backup.scores && typeof backup.scores === "object" ? Object.values(backup.scores) : null;
+  if (!scoreList) throw new Error("备份缺少成绩列表");
 
   const state: LocalState = mode === "replace" ? structuredClone({
     schemaVersion: 2,
@@ -54,7 +70,7 @@ export function importBackup(
     warnings: [],
   };
 
-  for (const value of backup.scores) {
+  for (const value of scoreList) {
     if (!value || typeof value !== "object") {
       report.skippedScores += 1;
       continue;
@@ -90,10 +106,9 @@ export function importBackup(
       rating: calculateRating(score, chart.constant),
       updatedAt: typeof candidate.updatedAt === "string" ? candidate.updatedAt : new Date().toISOString(),
       source: parseSource(candidate.source),
+      ...readScoreAchievements(candidate),
     };
-    const existing = state.scores[key];
-    if (!existing || score > existing.score) {
-      state.scores[key] = record;
+    if (upsertHighScore(state, record) !== "rejected") {
       report.importedScores += 1;
     } else {
       report.skippedScores += 1;
@@ -102,6 +117,7 @@ export function importBackup(
 
   if (backup.nicknameOverrides && typeof backup.nicknameOverrides === "object") {
     for (const [id, aliases] of Object.entries(backup.nicknameOverrides)) {
+      if (["__proto__", "constructor", "prototype"].includes(id)) continue;
       const imported = normalizeAliases(aliases);
       if (imported.length === 0) continue;
       const existing = mode === "replace" ? [] : state.nicknameOverrides[id] ?? [];
@@ -115,6 +131,6 @@ export function importBackup(
 }
 
 function parseSource(value: unknown): ScoreSource {
-  if (value === "rin" || value === "otogame" || value === "lxns") return value;
+  if (value === "rin" || value === "otogame" || value === "lxns" || value === "munet") return value;
   return "manual";
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CatalogChart, LocalState } from "../types";
-import { importBackup } from "./backup";
+import { createFullBackup, importBackup } from "./backup";
 import { EMPTY_STATE } from "./storage";
 
 const chart: CatalogChart = {
@@ -90,5 +90,15 @@ describe("backup import", () => {
 
   it("rejects malformed JSON", () => {
     expect(() => importBackup("nope", structuredClone(EMPTY_STATE), chartMap, "merge")).toThrow("JSON");
+  });
+
+  it("restores an old localStorage object map and exports a full backup with marks and aliases", () => {
+    const raw = JSON.stringify({ schemaVersion: 2, scores: { "100:MAS": { id: "100", difficulty: "MAS", score: 1_005_000, source: "rin", combo: "aj", fullChain: "gold" } }, nicknameOverrides: { "100": ["old alias"] } });
+    const { state } = importBackup(raw, structuredClone(EMPTY_STATE), chartMap, "merge");
+    const backup = createFullBackup(state, "test");
+    expect(backup.scores).toHaveLength(1);
+    expect(backup.scores[0]).toMatchObject({ source: "rin", combo: "aj", fullChain: "gold" });
+    expect(backup.nicknameOverrides).toEqual({ "100": ["old alias"] });
+    expect(importBackup(JSON.stringify(backup), structuredClone(EMPTY_STATE), chartMap, "replace").state).toEqual(state);
   });
 });

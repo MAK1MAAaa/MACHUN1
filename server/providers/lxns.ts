@@ -1,5 +1,6 @@
 import { SyncError, requireIdentity } from "../provider";
 import type { SourceIdentity } from "../../src/syncTypes";
+import { readScoreAchievements } from "../../src/core/scoreAchievements";
 
 const BASE = "https://maimai.lxns.net/api/v0/user/chunithm/player";
 
@@ -53,7 +54,11 @@ export class LxnsProvider {
         || typeof record.score !== "number" || !Number.isInteger(record.score) || record.score < 0 || record.score > 1_010_000) {
         throw new SyncError("INVALID_RESPONSE", "落雪成绩列表字段发生变化，本次未更新成绩。");
       }
-      return { id: record.id, level_index: record.level_index, score: record.score, play_time: record.play_time, upload_time: record.upload_time };
+      return {
+        id: record.id, level_index: record.level_index, score: record.score,
+        play_time: record.play_time, upload_time: record.upload_time,
+        ...readScoreAchievements(record, record.score),
+      };
     });
   }
 }

@@ -1,3 +1,4 @@
+import type { WorkspaceSnapshot } from "./accountTypes";
 import type { SingleRating } from "./types";
 import type { ExternalScoreSource, SourceImportReport } from "./core/sources";
 
@@ -25,9 +26,11 @@ export interface SourceConnection {
   lastSuccessAt: string | null;
   error: string | null;
   progress?: SyncProgress;
+  bindingMode?: 'window' | 'companion';
 }
 
 export interface SyncResult {
+  workspace?: WorkspaceSnapshot;
   source: ExternalScoreSource;
   records: SingleRating[];
   report: SourceImportReport;

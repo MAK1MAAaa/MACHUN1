@@ -1,6 +1,7 @@
 import { SCORE_SOURCES, type CatalogChart, type LocalState, type ScoreSource, type SingleRating } from "../types";
 import { chartKey } from "./b30";
 import { calculateRating } from "./rating";
+import { mergeScoreAchievements, readScoreAchievements } from "./scoreAchievements";
 
 export const STORAGE_KEY = "chunithm-mate-b30:v2";
 export const LEGACY_STORAGE_KEY = "chunithm-mate-b30:v1";
@@ -35,8 +36,15 @@ function normalizeRatingRecord(value: unknown, isLegacy: boolean): SingleRating 
   );
   if (!valid) return null;
   return {
-    ...(record as unknown as Omit<SingleRating, "source">),
+    id: record.id as string,
+    title: record.title as string,
+    difficulty: record.difficulty as SingleRating["difficulty"],
+    constant: record.constant as number,
+    score: record.score as number,
+    rating: record.rating as number,
+    updatedAt: record.updatedAt as string,
     source: isScoreSource(record.source) ? record.source : "manual",
+    ...readScoreAchievements(record),
   };
 }
 
@@ -108,6 +116,7 @@ export function enterManualScore(state: LocalState, chart: CatalogChart, input: 
       [chartKey(chart)]: {
         id: chart.id, title: chart.title, difficulty: chart.difficulty, constant: chart.constant,
         score, rating: calculateRating(score, chart.constant), source: "manual", updatedAt: new Date().toISOString(),
+        ...mergeScoreAchievements(state.scores[chartKey(chart)] ?? {}, {}),
       },
     },
   };
@@ -135,7 +144,12 @@ export function correctScore(state: LocalState, key: string, input: string): Loc
 export function upsertHighScore(state: LocalState, record: SingleRating): UpsertResult {
   const key = chartKey(record);
   const existing = state.scores[key];
-  if (existing && existing.score >= record.score) return "rejected";
-  state.scores[key] = record;
+  const achievements = mergeScoreAchievements(existing ?? {}, record);
+  if (existing && existing.score >= record.score) {
+    if (achievements.combo === existing.combo && achievements.fullChain === existing.fullChain) return "rejected";
+    state.scores[key] = { ...existing, ...achievements };
+    return "updated";
+  }
+  state.scores[key] = { ...record, ...achievements };
   return existing ? "updated" : "created";
 }
