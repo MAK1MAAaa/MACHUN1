@@ -14,7 +14,7 @@ async function hashFile(path) {
 }
 
 /** Whitelist only the public deployment files; never copy the project directory. */
-export async function packageDeployment({ projectRoot = fileURLToPath(new URL('../', import.meta.url)), imageSource = 'archive', version = process.env.MACHUN_RELEASE ?? (imageSource === 'hub' ? '20261009' : '20261009-ip') } = {}) {
+export async function packageDeployment({ projectRoot = fileURLToPath(new URL('../', import.meta.url)), imageSource = 'archive', version = process.env.MACHUN_RELEASE ?? (imageSource === 'hub' ? '20261013' : '20261013-ip') } = {}) {
   if (!/^[a-zA-Z0-9][a-zA-Z0-9.-]{0,63}$/.test(version)) throw new Error('发布版本无效。');
   if (!['archive', 'hub'].includes(imageSource)) throw new Error('镜像来源无效。');
   const release = resolve(projectRoot, 'release');

@@ -9,7 +9,7 @@ import { createGzip } from "node:zlib";
 import { packageDeployment } from './package-deployment.mjs';
 
 const root = fileURLToPath(new URL("../", import.meta.url));
-const version = process.env.MACHUN_RELEASE ?? "20261009-ip";
+const version = process.env.MACHUN_RELEASE ?? "20261013-ip";
 if (!/^[a-zA-Z0-9.-]+$/.test(version)) throw new Error("发布版本无效");
 const tag = `machun1:companion-${version}-amd64`;
 const filename = `machun1-companion-${version}-amd64-1650.tar.gz`;

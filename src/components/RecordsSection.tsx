@@ -33,6 +33,7 @@ export function RecordsSection({ records, scores, nicknameOverrides, onEdit, onD
   const [mode, setMode] = useState<RecordsViewMode>("rating");
   const [filters, setFilters] = useState<RecordsFilters>({ ...EMPTY_RECORDS_FILTERS });
   const [requestedPage, setRequestedPage] = useState(1);
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
   const [selectedChart, setSelectedChart] = useState<CatalogChart | null>(null);
   const selectedSongCharts = useMemo(() => selectedChart ? getSongCharts(selectedChart.id) : [], [selectedChart]);
   const selectedAliases = useMemo(() => selectedChart
@@ -51,6 +52,8 @@ export function RecordsSection({ records, scores, nicknameOverrides, onEdit, onD
     [records, scores, nicknameOverrides, mode, filters],
   );
   const pagination = paginateRecords(rows, requestedPage);
+  const activeFilterCount = [filters.difficulty, filters.level, filters.constant, filters.genre, filters.version, filters.source]
+    .filter(Boolean).length + Number(filters.includeUnplayed);
   useEffect(() => {
     // Deleting the last row on a page should return to the remaining last page.
     setRequestedPage((page) => Math.min(page, pagination.pageCount));
@@ -105,58 +108,67 @@ export function RecordsSection({ records, scores, nicknameOverrides, onEdit, onD
           />
         </label>
         {mode === "catalog" && <>
-          <label className="records-filter">
-            <span>难度</span>
-            <select aria-label="难度" value={filters.difficulty} onChange={(event) => changeFilter("difficulty", event.target.value as RecordsFilters["difficulty"])}>
-              <option value="">全部难度</option>
-              {DIFFICULTIES.map((difficulty) => <option key={difficulty} value={difficulty}>{difficulty}</option>)}
-            </select>
-          </label>
-          <label className="records-filter">
-            <span>等级</span>
-            <select aria-label="等级" value={filters.level} onChange={(event) => changeFilter("level", event.target.value)}>
-              <option value="">全部等级</option>
-              {options.levels.map((level) => <option key={level} value={level}>{level}</option>)}
-            </select>
-          </label>
-          <label className="records-filter">
-            <span>定数</span>
-            <select aria-label="定数" value={filters.constant} onChange={(event) => changeFilter("constant", event.target.value)}>
-              <option value="">全部定数</option>
-              {constantOptions.map((constant) => <option key={constant} value={constant}>{constant}</option>)}
-            </select>
-          </label>
-          <label className="records-filter records-genre-filter">
-            <span>分类</span>
-            <select aria-label="分类" value={filters.genre} onChange={(event) => changeFilter("genre", event.target.value)}>
-              <option value="">全部分类</option>
-              {options.genres.map((genre) => <option key={genre} value={genre}>{genre}</option>)}
-            </select>
-          </label>
-          <label className="records-filter records-version-filter">
-            <span>版本</span>
-            <select aria-label="版本" value={filters.version} onChange={(event) => changeFilter("version", event.target.value)}>
-              <option value="">全部版本</option>
-              {options.versions.map((version) => <option key={version} value={version}>{version}</option>)}
-            </select>
-          </label>
-          <label className="records-filter records-source-filter">
-            <span>来源</span>
-            <select aria-label="成绩来源" value={filters.source} onChange={(event) => changeFilter("source", event.target.value as RecordsFilters["source"])}>
-              <option value="">全部来源</option>
-              {SCORE_SOURCES.map((source) => <option key={source} value={source}>{SCORE_SOURCE_LABELS[source]}</option>)}
-            </select>
-          </label>
-          <div className="records-filter-actions">
-            <button
-              type="button"
-              className="records-unplayed-toggle"
-              aria-pressed={filters.includeUnplayed}
-              disabled={filters.source !== ""}
-              title={filters.source ? "选择全部来源后可显示未游玩谱面" : undefined}
-              onClick={() => changeFilter("includeUnplayed", !filters.includeUnplayed)}
-            >显示未游玩谱面</button>
-            <button type="button" className="records-reset" onClick={() => { setFilters({ ...EMPTY_RECORDS_FILTERS }); setRequestedPage(1); }}>清除筛选</button>
+          <button
+            type="button"
+            className="records-filter-toggle"
+            aria-expanded={filtersExpanded}
+            aria-controls="records-advanced-filters"
+            onClick={() => setFiltersExpanded((current) => !current)}
+          >{filtersExpanded ? "收起筛选" : "展开筛选"}{activeFilterCount > 0 && <span className="records-filter-count">{activeFilterCount}</span>}</button>
+          <div id="records-advanced-filters" className={`records-advanced-filters${filtersExpanded ? " is-expanded" : ""}`}>
+            <label className="records-filter">
+              <span>难度</span>
+              <select aria-label="难度" value={filters.difficulty} onChange={(event) => changeFilter("difficulty", event.target.value as RecordsFilters["difficulty"])}>
+                <option value="">全部难度</option>
+                {DIFFICULTIES.map((difficulty) => <option key={difficulty} value={difficulty}>{difficulty}</option>)}
+              </select>
+            </label>
+            <label className="records-filter">
+              <span>等级</span>
+              <select aria-label="等级" value={filters.level} onChange={(event) => changeFilter("level", event.target.value)}>
+                <option value="">全部等级</option>
+                {options.levels.map((level) => <option key={level} value={level}>{level}</option>)}
+              </select>
+            </label>
+            <label className="records-filter">
+              <span>定数</span>
+              <select aria-label="定数" value={filters.constant} onChange={(event) => changeFilter("constant", event.target.value)}>
+                <option value="">全部定数</option>
+                {constantOptions.map((constant) => <option key={constant} value={constant}>{constant}</option>)}
+              </select>
+            </label>
+            <label className="records-filter records-genre-filter">
+              <span>分类</span>
+              <select aria-label="分类" value={filters.genre} onChange={(event) => changeFilter("genre", event.target.value)}>
+                <option value="">全部分类</option>
+                {options.genres.map((genre) => <option key={genre} value={genre}>{genre}</option>)}
+              </select>
+            </label>
+            <label className="records-filter records-version-filter">
+              <span>版本</span>
+              <select aria-label="版本" value={filters.version} onChange={(event) => changeFilter("version", event.target.value)}>
+                <option value="">全部版本</option>
+                {options.versions.map((version) => <option key={version} value={version}>{version}</option>)}
+              </select>
+            </label>
+            <label className="records-filter records-source-filter">
+              <span>来源</span>
+              <select aria-label="成绩来源" value={filters.source} onChange={(event) => changeFilter("source", event.target.value as RecordsFilters["source"])}>
+                <option value="">全部来源</option>
+                {SCORE_SOURCES.map((source) => <option key={source} value={source}>{SCORE_SOURCE_LABELS[source]}</option>)}
+              </select>
+            </label>
+            <div className="records-filter-actions">
+              <button
+                type="button"
+                className="records-unplayed-toggle"
+                aria-pressed={filters.includeUnplayed}
+                disabled={filters.source !== ""}
+                title={filters.source ? "选择全部来源后可显示未游玩谱面" : undefined}
+                onClick={() => changeFilter("includeUnplayed", !filters.includeUnplayed)}
+              >显示未游玩谱面</button>
+              <button type="button" className="records-reset" onClick={() => { setFilters({ ...EMPTY_RECORDS_FILTERS }); setRequestedPage(1); }}>清除筛选</button>
+            </div>
           </div>
         </>}
       </div>
@@ -186,7 +198,7 @@ export function RecordsSection({ records, scores, nicknameOverrides, onEdit, onD
               <th scope="col">分类</th>
               <th scope="col">版本</th>
               <th scope="col">来源</th>
-              <th scope="col" aria-sort={mode === "catalog" ? (filters.scoreSort === "default" ? "none" : filters.scoreSort) : undefined}>
+              <th scope="col" className="records-score-heading" aria-sort={mode === "catalog" ? (filters.scoreSort === "default" ? "none" : filters.scoreSort) : undefined}>
                 {mode === "catalog" ? (
                   <button
                     type="button"
@@ -204,8 +216,8 @@ export function RecordsSection({ records, scores, nicknameOverrides, onEdit, onD
           <tbody>
             {pagination.rows.map(({ chart, record, rank }) => (
               <tr key={chartKey(chart)}>
-                {mode === "rating" && <td><span className={rank !== null && rank <= 30 ? "in-b30" : ""}>#{rank}</span></td>}
-                <td>
+                {mode === "rating" && <td className="records-rank-cell" data-label="排名"><span className={rank !== null && rank <= 30 ? "in-b30" : ""}>#{rank}</span></td>}
+                <td className="records-song-cell">
                   <div className="record-song-cell">
                     <span className="cover-image record-cover" aria-hidden="true">
                       <img src={chart.coverUrl} alt="" crossOrigin="anonymous" loading="lazy" onError={(event) => { event.currentTarget.style.opacity = "0"; }} />
@@ -223,15 +235,15 @@ export function RecordsSection({ records, scores, nicknameOverrides, onEdit, onD
                     </span>
                   </div>
                 </td>
-                <td><span className={`diff-tag ${chart.difficulty.toLowerCase()}`}>{chart.difficulty}</span></td>
-                <td>{getChartLevel(chart.constant)}</td>
-                <td>{chart.constant.toFixed(1)}</td>
-                <td className="records-metadata-cell">{chart.genre}</td>
-                <td className="records-metadata-cell">{chart.version}</td>
-                <td>{record ? <span className={`score-source ${record.source}`}>{SCORE_SOURCE_LABELS[record.source]}</span> : <span className="records-unplayed">未游玩</span>}</td>
-                <td className="records-score-cell">{record ? <>{formatScore(record.score)}<ScoreBadges record={record} /></> : "—"}</td>
-                <td>{record ? <strong className="rating-cell">{record.rating.toFixed(4)}</strong> : "—"}</td>
-                <td>
+                <td className="records-difficulty-cell" data-label="难度"><span className={`diff-tag ${chart.difficulty.toLowerCase()}`}>{chart.difficulty}</span></td>
+                <td className="records-level-cell" data-label="等级">{getChartLevel(chart.constant)}</td>
+                <td className="records-constant-cell" data-label="定数">{chart.constant.toFixed(1)}</td>
+                <td className="records-metadata-cell records-genre-cell" data-label="分类">{chart.genre}</td>
+                <td className="records-metadata-cell records-version-cell" data-label="版本">{chart.version}</td>
+                <td className="records-source-cell" data-label="来源">{record ? <span className={`score-source ${record.source}`}>{SCORE_SOURCE_LABELS[record.source]}</span> : <span className="records-unplayed">未游玩</span>}</td>
+                <td className="records-score-cell" data-label="分数">{record ? <><span className="records-score-value">{formatScore(record.score)}</span><ScoreBadges record={record} /></> : "—"}</td>
+                <td className="records-rating-cell" data-label="Rating">{record ? <strong className="rating-cell">{record.rating.toFixed(4)}</strong> : "—"}</td>
+                <td className="records-actions-cell">
                   <div className="row-actions">
                     <button type="button" disabled={disabled} onClick={() => onEdit(chart, record)}>{record ? "修改分数" : "录入分数"}</button>
                     {record && <button type="button" className="delete" disabled={disabled} onClick={() => onDelete(record)}>删除</button>}

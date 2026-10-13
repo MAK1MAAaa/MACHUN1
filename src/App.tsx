@@ -8,7 +8,9 @@ import {
 import type { CatalogChart, ScoreSource, SingleRating } from "./types";
 import { B30_SIZE, chartKey, compareRatings, getB30, getB30Summary, getB30Axis } from "./core/b30";
 import { CATALOG_DATE, CATALOG_VERSION, catalog, catalogByKey } from "./core/catalog";
-import { createB30Export, createB30CandidatesExport, downloadB30Json, downloadB30Png } from "./core/b30Export";
+import { createB30Export, createB30CandidatesExport, downloadB30Json, generateB30Png } from "./core/b30Export";
+import { createDownloadResource, type DownloadResource } from "./core/fileDelivery";
+import { ImageExportDialog } from "./components/ImageExportDialog";
 import { formatScore } from "./core/rating";
 import type { Account, WorkspaceSnapshot } from "./accountTypes";
 import { useAccountWorkspace } from "./components/useAccountWorkspace";
@@ -151,6 +153,9 @@ function App({ account, initial, initialNotice }: AppProps) {
   const [localToolsOpen, setLocalToolsOpen] = useState(false);
   const [sourceToolsOpen, setSourceToolsOpen] = useState(false);
   const [exportingImage, setExportingImage] = useState(false);
+  const [imageExport, setImageExport] = useState<{ file: DownloadResource; label: string; missingCovers: number } | null>(null);
+  const imageExportRef = useRef<DownloadResource | null>(null);
+  const imageGeneration = useRef({ version: 0, running: false });
   const [pendingSource, setPendingSource] = useState<{ source: ExternalScoreSource; mergeOptions?: SourceMergeOptions } | null>(null);
   const [nationalRepairEnabled, setNationalRepairEnabled] = useState(false);
   const [helpSource, setHelpSource] = useState<ExternalScoreSource | null>(null);
@@ -170,6 +175,19 @@ function App({ account, initial, initialNotice }: AppProps) {
     if (editing && !editDialogRef.current?.open) editDialogRef.current?.showModal();
     if (!editing) editDialogRef.current?.close();
   }, [editing]);
+
+  useEffect(() => () => {
+    imageGeneration.current.version++;
+    imageGeneration.current.running = false;
+    imageExportRef.current?.dispose();
+    imageExportRef.current = null;
+  }, []);
+
+  const closeImageExport = () => {
+    imageExportRef.current?.dispose();
+    imageExportRef.current = null;
+    setImageExport(null);
+  };
 
   useEffect(() => {
     if (!notice) return;
@@ -231,29 +249,40 @@ function App({ account, initial, initialNotice }: AppProps) {
   };
 
   const exportB30Image = async (withCandidates = false) => {
-    if (exportingImage) return;
+    if (imageGeneration.current.running) return;
+    imageGeneration.current.running = true;
+    const version = ++imageGeneration.current.version;
     setExportingImage(true);
     const imageLabel = withCandidates ? "B30 + 候选20" : "B30";
     setNotice({ kind: "success", text: "正在加载曲绘并生成 B30 图片" });
     try {
-      const result = await downloadB30Png(
+      const result = await generateB30Png(
         withCandidates
           ? createB30CandidatesExport(records, catalogByKey, CATALOG_VERSION)
           : createB30Export(records, catalogByKey, CATALOG_VERSION),
       );
+      if (version !== imageGeneration.current.version) return;
+      const file = createDownloadResource(result.blob, result.filename);
+      imageExportRef.current?.dispose();
+      imageExportRef.current = file;
+      setImageExport({ file, label: imageLabel, missingCovers: result.missingCovers });
       setNotice({
         kind: result.missingCovers > 0 ? "warning" : "success",
         text: result.missingCovers > 0
-          ? `${imageLabel} 图片已导出，${result.missingCovers} 张曲绘加载失败并使用占位图`
-          : `${imageLabel} PNG 图片已导出`,
+          ? `${imageLabel} 图片已生成，${result.missingCovers} 张曲绘使用占位图`
+          : `${imageLabel} 图片已生成，可在预览中保存`,
       });
     } catch (error) {
+      if (version !== imageGeneration.current.version) return;
       setNotice({
         kind: "error",
         text: error instanceof Error ? error.message : "B30 图片导出失败",
       });
     } finally {
-      setExportingImage(false);
+      if (version === imageGeneration.current.version) {
+        imageGeneration.current.running = false;
+        setExportingImage(false);
+      }
     }
   };
 
@@ -701,6 +730,13 @@ function App({ account, initial, initialNotice }: AppProps) {
         <span>UNOFFICIAL FAN TOOL</span>
         <p>曲库与曲绘 URL 参考 OTOGE DB 社区数据。本工具与 SEGA CORPORATION 无关。</p>
       </footer>
+
+      {imageExport && <ImageExportDialog
+        file={imageExport.file}
+        label={imageExport.label}
+        missingCovers={imageExport.missingCovers}
+        onClose={closeImageExport}
+      />}
 
       <dialog ref={editDialogRef} className="modal score-edit-dialog" aria-labelledby="score-edit-title" onCancel={() => setEditing(null)}>
         {editing && <form onSubmit={async (event) => {

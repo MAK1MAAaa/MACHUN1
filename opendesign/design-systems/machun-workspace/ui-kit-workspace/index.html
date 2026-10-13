@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>MACHUN1 工作区组件</title><link rel="stylesheet" href="showcase.css"></head>
+<body><main>
+<header><span class="eyebrow">MACHUN1 WORKSPACE</span><h1>延续浅绿，保持清晰</h1><p>现有组件提取 · 公开曲库信息与虚构示例成绩 · 不连接账号或数据库</p></header>
+<div class="kit-grid">
+<section class="panel" aria-labelledby="fields-title"><div class="panel-heading"><div><span class="section-index">01</span><h2 id="fields-title">字段与操作</h2></div></div>
+<label class="field-group"><span>歌曲名称</span><input value="Melodiniq" aria-label="歌曲名称"></label>
+<label class="field-group"><span>分数（示例）</span><input value="1009321" inputmode="numeric" aria-label="分数（示例）"></label>
+<div class="actions"><button class="primary" type="button" id="example-save">保存成绩</button><button class="secondary" type="button" id="example-reset">重置示例</button><button class="secondary" type="button" disabled>正在同步…</button></div>
+<p class="status" id="example-status" role="status">仅演示控件反馈，不保存数据。</p>
+</section>
+<section class="panel" aria-labelledby="lamps-title"><div class="panel-heading"><div><span class="section-index">02</span><h2 id="lamps-title">评级与达成</h2></div></div>
+<p>文字和颜色共同表达达成状态。</p><div class="badge-samples"><span class="score-badges"><span class="score-badge score-grade-high">SSS+</span><span class="score-badge score-combo-fc">FC</span></span><span class="score-badges"><span class="score-badge score-grade-high">SSS</span><span class="score-badge score-combo-aj">AJ</span></span><span class="score-badges"><span class="score-badge score-grade-high">SSS+</span><span class="score-badge score-combo-ajc">AJC</span></span></div>
+<p style="margin-top:24px">难度标记</p><div class="badge-samples"><span class="diff-tag exp">EXP</span><span class="diff-tag mas">MAS</span><span class="diff-tag ult">ULT</span></div>
+<p class="error" style="margin-top:24px">示例错误：连接失败，请稍后重试。</p>
+</section>
+<section class="panel wide" aria-labelledby="records-title"><div class="panel-heading"><div><span class="section-index">03</span><h2 id="records-title">成绩浏览</h2></div></div>
+<div class="records-mode" role="group" aria-label="示例浏览方式"><button type="button" aria-pressed="true">Rating 排名</button><button type="button" aria-pressed="false">曲库筛选</button></div>
+<div class="record-table-wrap"><table><caption style="text-align:left;padding:10px;color:var(--muted);font-size:12px">示例数据；歌曲和谱面信息来自公开曲库。</caption><thead><tr><th>歌曲</th><th>难度</th><th>定数</th><th>分数</th><th>Rating</th><th>操作</th></tr></thead><tbody>
+<tr><td><strong>Melodiniq</strong><small>ID 2999</small></td><td><span class="diff-tag ult">ULT</span></td><td class="numeric">16.0</td><td class="numeric">1,009,321<span class="score-badges"><span class="score-badge score-grade-high">SSS+</span><span class="score-badge score-combo-fc">FC</span></span></td><td class="numeric">18.1500</td><td><button type="button" class="secondary example-edit">修改分数</button></td></tr>
+<tr><td><strong>Crossmythos Rhapsodia</strong><small>ID 2802</small></td><td><span class="diff-tag mas">MAS</span></td><td class="numeric">15.7</td><td class="numeric">1,008,500<span class="score-badges"><span class="score-badge score-grade-high">SSS+</span><span class="score-badge score-combo-aj">AJ</span></span></td><td class="numeric">17.8000</td><td><button type="button" class="secondary example-edit">修改分数</button></td></tr>
+</tbody></table></div>
+</section></div><footer>系统字体 · 44 px 触摸目标 · 1 px 分隔线 · 不依赖外部资源</footer>
+</main><script>
+const status = document.getElementById('example-status');
+document.getElementById('example-save').addEventListener('click', () => { status.textContent = '示例反馈：保存完成（仅展示，不写入数据）。'; });
+document.getElementById('example-reset').addEventListener('click', () => { document.querySelector('[aria-label="歌曲名称"]').value = 'Melodiniq'; document.querySelector('[aria-label="分数（示例）"]').value = '1009321'; status.textContent = '已重置示例。'; });
+document.querySelectorAll('.records-mode button').forEach(button => button.addEventListener('click', () => { document.querySelectorAll('.records-mode button').forEach(other => other.setAttribute('aria-pressed', String(other === button))); }));
+document.querySelectorAll('.example-edit').forEach(button => button.addEventListener('click', () => { document.querySelector('[aria-label="歌曲名称"]').value = button.closest('tr').querySelector('strong').textContent; document.querySelector('[aria-label="分数（示例）"]').focus(); status.textContent = '已选择示例歌曲，可在上方编辑。'; }));
+</script></body></html>

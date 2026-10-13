@@ -3,16 +3,20 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { catalog } from "../core/catalog";
 import { chartKey } from "../core/b30";
+import type { RecordsFilters } from "../core/recordsView";
 import type { SingleRating } from "../types";
 import { RecordsSection } from "./RecordsSection";
 
-const renderState = vi.hoisted(() => ({ mode: "rating" as "rating" | "catalog" }));
+const renderState = vi.hoisted(() => ({ mode: "rating" as "rating" | "catalog", filters: {} as Partial<RecordsFilters>, filtersExpanded: false }));
 
 vi.mock("react", async (importOriginal) => {
   const react = await importOriginal<typeof import("react")>();
   return {
     ...react,
-    useState: (initialState: unknown) => react.useState(initialState === "rating" ? renderState.mode : initialState),
+    useState: (initialState: unknown) => react.useState(initialState === "rating" ? renderState.mode
+      : initialState === false ? renderState.filtersExpanded
+      : initialState && typeof initialState === "object" && "includeUnplayed" in initialState ? { ...initialState, ...renderState.filters }
+      : initialState),
   };
 });
 
@@ -28,7 +32,7 @@ function headers(html: string): string[] {
 }
 
 describe("records section", () => {
-  beforeEach(() => { renderState.mode = "rating"; });
+  beforeEach(() => { renderState.mode = "rating"; renderState.filters = {}; renderState.filtersExpanded = false; });
   it("starts with rating ranking, displays only ten rows, and keeps mutation buttons disabled on storage failure", () => {
     const records: SingleRating[] = catalog.slice(0, 12).map((chart, index) => ({
       id: chart.id, title: chart.title, difficulty: chart.difficulty, constant: chart.constant,
@@ -76,13 +80,13 @@ describe("records section", () => {
     expect(columns[2]).toContain(">难度<");
     expect(columns[3]).toContain(">等级<");
     expect(columns[4]).toContain(">定数<");
-    expect(html).toContain(`>${chart.difficulty}</span></td><td>13+</td><td>13.5</td>`);
+    expect(html).toContain(`>${chart.difficulty}</span></td><td class="records-level-cell" data-label="等级">13+</td><td class="records-constant-cell" data-label="定数">13.5</td>`);
     expect(columns[5]).toContain(">分类<");
     expect(columns[6]).toContain(">版本<");
     expect(html.slice(0, html.indexOf("<table"))).toContain('aria-label="搜索"');
     expect(columns.join("")).not.toContain('type="search"');
-    expect(html).toContain(`class="records-metadata-cell">${chart.genre}</td>`);
-    expect(html).toContain(`class="records-metadata-cell">${chart.version}</td>`);
+    expect(html).toContain(`class="records-metadata-cell records-genre-cell" data-label="分类">${chart.genre}</td>`);
+    expect(html).toContain(`class="records-metadata-cell records-version-cell" data-label="版本">${chart.version}</td>`);
   });
 
   it("places catalog filters above the shared table with independent level and constant options", () => {
@@ -118,6 +122,44 @@ describe("records section", () => {
     expect(renderRecords().match(/<col\b/g)).toHaveLength(10);
     renderState.mode = "rating";
     expect(renderRecords().match(/<col\b/g)).toHaveLength(11);
+  });
+
+  it("reuses one set of row controls and preserves all information for the mobile card layout", () => {
+    const chart = catalog[0];
+    const html = renderRecords([{
+      id: chart.id, title: chart.title, difficulty: chart.difficulty, constant: chart.constant,
+      score: 1_009_000, rating: 16.9, source: "rin", combo: "aj", fullChain: "platinum", updatedAt: "2026-10-13T00:00:00Z",
+    }]);
+    expect(html.match(/class="record-title-details"/g)).toHaveLength(1);
+    expect(html.match(/>修改分数<\/button>/g)).toHaveLength(1);
+    expect(html.match(/>删除<\/button>/g)).toHaveLength(1);
+    for (const label of ["排名", "难度", "等级", "定数", "分类", "版本", "来源", "分数", "Rating"]) {
+      expect(html).toContain(`data-label="${label}"`);
+    }
+    expect(html).toContain('class="records-score-value">1,009,000</span>');
+    expect(html).toContain('class="rating-cell">16.9000</strong>');
+    expect(html).toContain('title="评级 SSS+"');
+    expect(html).toContain('score-combo-aj');
+    expect(html).toContain('score-chain-platinum');
+    expect(html).toContain('score-source rin');
+    expect(html).toContain(">#1<");
+  });
+
+  it("keeps search available while the mobile advanced filters have one accessible expansion control", () => {
+    renderState.mode = "catalog";
+    renderState.filters = { level: "13", difficulty: "MAS", source: "munet" };
+    const html = renderRecords();
+    expect(html.match(/aria-controls="records-advanced-filters"/g)).toHaveLength(1);
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).toContain('展开筛选<span class="records-filter-count">3</span>');
+    expect(html).toContain('id="records-advanced-filters" class="records-advanced-filters"');
+    expect(html.indexOf('aria-label="搜索"')).toBeLessThan(html.indexOf('id="records-advanced-filters"'));
+    expect(html.match(/aria-label="按分数排序"/g)).toHaveLength(1);
+    renderState.filtersExpanded = true;
+    const expanded = renderRecords();
+    expect(expanded).toContain('aria-expanded="true"');
+    expect(expanded).toContain('class="records-advanced-filters is-expanded"');
+    expect(expanded).toContain('收起筛选<span class="records-filter-count">3</span>');
   });
 
   it("keeps the complete song title on an accessible details button independently of score editing", () => {

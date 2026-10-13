@@ -109,6 +109,33 @@ async function edit(page: Page, value: number) {
   await dialog.waitFor({ state: 'hidden' });
   await score(page, value, 'manual'); await section.getByRole('searchbox').fill('');
 }
+async function exportPng(page: Page, name: string) {
+  let downloads = 0;
+  const countDownload = () => { downloads++; };
+  page.on('download', countDownload);
+  try {
+    await page.getByRole('button', { name, exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: name.includes('候选20') ? 'B30 + 候选20 图片预览' : 'B30 图片预览', exact: true });
+    await dialog.waitFor();
+    const image = dialog.locator('img');
+    await image.evaluate((element: HTMLImageElement) => element.complete && element.naturalWidth
+      ? undefined : new Promise<void>((resolve, reject) => { element.onload = () => resolve(); element.onerror = () => reject(new Error('export preview failed')); }));
+    assert.equal(await image.evaluate((element: HTMLImageElement) => element.naturalWidth), 2360);
+    assert.equal(downloads, 0, 'generating the preview must not start an asynchronous download');
+    const downloadPromise = page.waitForEvent('download');
+    await dialog.getByRole('button', { name: '保存 PNG', exact: true }).click();
+    const download = await downloadPromise; const file = await download.path(); assert(file);
+    const png = await readFile(file); assert.equal(png.readUInt32BE(16), 2360);
+    assert.equal(png.readUInt32BE(20), name.includes('候选20') ? 1792 : 1120);
+    assert.equal(downloads, 1);
+    assert(await dialog.isVisible(), 'preview remains available for a retry or long-press saving');
+    assert((await dialog.getByRole('status').innerText()).includes('已发起保存'));
+    assert.equal(await dialog.getByRole('link', { name: '打开原图', exact: true }).getAttribute('target'), '_blank');
+    await download.saveAs(join(output, `${page.viewportSize()?.width}-${download.suggestedFilename()}`));
+    await dialog.getByRole('button', { name: '关闭图片预览', exact: true }).click();
+    await dialog.waitFor({ state: 'hidden' });
+  } finally { page.off('download', countDownload); }
+}
 try {
   await fixture.db.insert(users).values({ username: 'ui-second', pwd: hashPassword('second-pwd') }).onDuplicateKeyUpdate({ set: { pwd: hashPassword('second-pwd') } });
   for (const username of ['root', 'ui-second']) await service.workspace.action(username, { type: 'clear' });
@@ -195,12 +222,7 @@ try {
   await score(page, 1_006_000, 'rin');
   mark('full backup import restores all records, personal aliases, source and AJ/full-chain marks');
   for (const name of ['导出 B30 图片', '导出 B30 + 候选20 图片']) {
-    const downloadPromise = page.waitForEvent('download');
-    await page.getByRole('button', { name, exact: true }).click();
-    const download = await downloadPromise; const file = await download.path(); assert(file);
-    const png = await readFile(file); assert.equal(png.readUInt32BE(16), 2360);
-    assert.equal(png.readUInt32BE(20), name.includes('候选20') ? 1792 : 1120);
-    await download.saveAs(join(output, download.suggestedFilename()));
+    await exportPng(page, name);
   }
   mark('full JSON backup and both 5-column PNG exports retain source, FC/AJ and grades');
   paused = true; execFileSync('docker', ['pause', container], { stdio: 'ignore' });
@@ -236,13 +258,34 @@ try {
   await page.locator('.source-tools-toggle').click();
   assert.equal(await page.locator('.source-connection-status').filter({ hasText: /^未绑定$/ }).count(), 4);
   mark('logout revokes the session; the next user sees no root scores, aliases or bindings, even after a delayed sync');
-  const secondContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const secondContext = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
   await secondContext.route('https://otoge-db.net/**', route => route.fulfill({ status: 200, contentType: 'image/png', body: cover }));
   const mobile = await secondContext.newPage(); mobile.setDefaultTimeout(15_000);
   await mobile.goto(origin); await login(mobile, 'root', 'pwd');
   assert.equal(Object.keys((await state(mobile)).scores).length, 50);
   assert.equal((await state(mobile)).nicknameOverrides['3055'][0], '个人测试别名');
   assert.equal(await mobile.evaluate(key => localStorage.getItem(key), STORAGE_KEY), null);
+  await mobile.locator('.b30-preview-toggle').click();
+  for (const width of [320, 390, 768]) {
+    await mobile.setViewportSize({ width, height: 844 });
+    assert.equal(await mobile.locator('.b30-grid').evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length), 3);
+    assert.equal(await mobile.locator('.b30-card').count(), 30);
+    assert(await mobile.locator('.record-table').evaluate(element => element.scrollWidth <= element.clientWidth));
+    assert.equal(await mobile.locator('.record-table tbody tr').first().evaluate(element => getComputedStyle(element).display), 'grid');
+  }
+  await mobile.setViewportSize({ width: 390, height: 844 });
+  await mobile.locator('.b30-preview-toggle').click();
+  const mobileRecords = mobile.locator('.records-browser');
+  await mobileRecords.getByRole('button', { name: '曲库筛选', exact: true }).click();
+  assert.equal(await mobileRecords.getByLabel('等级', { exact: true }).isVisible(), false);
+  await mobileRecords.getByRole('button', { name: '展开筛选', exact: true }).click();
+  await mobileRecords.getByLabel('等级', { exact: true }).selectOption('13');
+  assert.deepEqual(await mobileRecords.getByLabel('定数', { exact: true }).locator('option').allTextContents(), ['全部定数', '13.0', '13.1', '13.2', '13.3', '13.4']);
+  await mobileRecords.getByRole('button', { name: '清除筛选', exact: true }).click();
+  await mobileRecords.getByRole('button', { name: '收起筛选', exact: true }).click();
+  await mobileRecords.getByRole('button', { name: 'Rating 排名', exact: true }).click();
+  for (const name of ['导出 B30 图片', '导出 B30 + 候选20 图片']) await exportPng(mobile, name);
+  mark('touch viewport keeps 3×10 B30, readable score cards and collapsed filters; both PNGs save after an explicit tap without reporting unconfirmed success');
   await mobile.locator('.source-tools-toggle').click();
   const mobileManager = managers.get('root')!;
   for (const connection of mobileManager.state.values()) if (connection.source !== 'lxns') connection.bindingMode = 'companion';

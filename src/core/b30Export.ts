@@ -3,6 +3,7 @@ import { B30_SIZE, chartKey, compareRatings, getB30 } from "./b30";
 import { SCORE_SOURCE_LABELS } from "./sources";
 import { scoreGrade } from "./rating";
 import { CHAIN_LABELS, COMBO_LABELS, mergeScoreAchievements } from "./scoreAchievements";
+import { downloadBlob } from "./fileDelivery";
 
 export interface B30ExportSlot extends ScoreAchievements {
   rank: number;
@@ -64,20 +65,6 @@ export function createB30Export(
     },
     b30,
   };
-}
-
-function triggerDownload(blob: Blob, filename: string): void {
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = filename;
-  document.body.append(anchor);
-  try {
-    anchor.click();
-  } finally {
-    anchor.remove();
-    window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
-  }
 }
 
 export interface B30CandidatesExport extends B30ExportV3 {
@@ -160,7 +147,7 @@ export function createOtoB30Export(scores: Iterable<SingleRating>, withCandidate
 
 export function downloadB30Json(scores: Iterable<SingleRating>, withCandidates = false): void {
   const blob = new Blob([JSON.stringify(createOtoB30Export(scores, withCandidates), null, 2)], { type: "application/json" });
-  triggerDownload(blob, withCandidates ? "b30-candidates20.json" : "b30.json");
+  downloadBlob(blob, withCandidates ? "b30-candidates20.json" : "b30.json");
 }
 
 const DIFFICULTY_COLORS: Record<Difficulty, string> = {
@@ -419,8 +406,23 @@ function drawEmptyCard(
   context.fillText("EMPTY SLOT", x + width / 2, y + height / 2 + 5);
 }
 
-export async function downloadB30Png(data: B30ExportV3 | B30CandidatesExport): Promise<{ missingCovers: number }> {
-  await document.fonts?.ready;
+export interface GeneratedB30Png {
+  blob: Blob;
+  filename: string;
+  missingCovers: number;
+}
+
+async function waitForExportFonts(): Promise<void> {
+  if (!document.fonts) return;
+  await new Promise<void>((resolve) => {
+    const timeout = window.setTimeout(resolve, 3_000);
+    const finish = () => { window.clearTimeout(timeout); resolve(); };
+    document.fonts.ready.then(finish, finish);
+  });
+}
+
+export async function generateB30Png(data: B30ExportV3 | B30CandidatesExport): Promise<GeneratedB30Png> {
+  await waitForExportFonts();
   const canvas = document.createElement("canvas");
   const withCandidates = "candidates" in data;
   const slots = withCandidates ? [...data.b30, ...data.candidates] : data.b30;
@@ -463,15 +465,29 @@ export async function downloadB30Png(data: B30ExportV3 | B30CandidatesExport): P
     else drawEmptyCard(context, index + 1, x, y, cardWidth, cardHeight);
   });
 
-  const blob = await new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob((result) => {
-      if (result) resolve(result);
-      else reject(new Error("B30 图片生成失败"));
-    }, "image/png");
-  });
-  triggerDownload(blob, `machun1-b30${withCandidates ? "-candidates20" : ""}-${data.exportedAt.slice(0, 10)}.png`);
+  try {
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      const timeout = window.setTimeout(() => reject(new Error("B30 图片生成超时，请重试。")), 30_000);
+      try {
+        canvas.toBlob((result) => {
+          window.clearTimeout(timeout);
+          if (result) resolve(result);
+          else reject(new Error("B30 图片生成失败"));
+        }, "image/png");
+      } catch (error) {
+        window.clearTimeout(timeout);
+        reject(error);
+      }
+    });
 
-  return {
-    missingCovers: [...covers.values()].filter((image) => image === null).length,
-  };
+    return {
+      blob,
+      filename: `machun1-b30${withCandidates ? "-candidates20" : ""}-${data.exportedAt.slice(0, 10)}.png`,
+      missingCovers: [...covers.values()].filter((image) => image === null).length,
+    };
+  } finally {
+    // Release the large backing buffer after encoding, including failed exports.
+    canvas.width = 0;
+    canvas.height = 0;
+  }
 }

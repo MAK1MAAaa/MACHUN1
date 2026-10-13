@@ -1,0 +1,25 @@
+.image-export-dialog { width: min(1040px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); padding: 0; border: 1px solid var(--line); border-radius: 18px; color: var(--text, #30483b); background: #fff; box-shadow: 0 24px 90px rgb(34 57 40 / 22%); }
+.image-export-dialog::backdrop { background: rgb(35 50 38 / 48%); backdrop-filter: blur(5px); }
+.image-export-content { padding: 22px; }
+.image-export-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+.image-export-heading h2 { font-size: 1.35rem; margin: 6px 0 0; }
+.image-export-close { flex: 0 0 44px; width: 44px; height: 44px; font-size: 1.6rem; color: var(--muted); background: var(--surface-2); border: 1px solid var(--line-soft); border-radius: 10px; }
+.image-export-note { font-size: .85rem; line-height: 1.6; color: var(--muted); }
+.image-export-preview { padding: 8px; border: 1px solid var(--line-soft); background: var(--surface-2); border-radius: 10px; }
+.image-export-preview img { display: block; width: 100%; height: auto; -webkit-touch-callout: default; user-select: auto; }
+.image-export-footer { position: sticky; bottom: -22px; padding: 18px 0 4px; background: #fff; }
+.image-export-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.image-export-actions button, .image-export-actions a { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 18px; border-radius: 9px; border: 1px solid var(--line); color: var(--text, #30483b); background: var(--surface-2); font-size: .85rem; font-weight: 700; text-decoration: none; }
+.image-export-actions .primary { background: var(--cyan); border-color: var(--cyan); color: #fff; }
+.image-export-actions button:hover, .image-export-actions a:hover { filter: brightness(.96); }
+.image-export-actions button:disabled { opacity: .6; cursor: wait; }
+.image-export-footer small { display: block; margin-top: 10px; color: var(--muted); font-size: .7rem; overflow-wrap: anywhere; }
+.image-export-feedback, .image-export-error { margin: 10px 0 0; line-height: 1.5; font-size: .8rem; }
+.image-export-error { color: var(--danger); }
+@media (max-width: 660px) {
+  .image-export-dialog { width: calc(100vw - 16px); max-height: calc(100dvh - 16px); border-radius: 14px; }
+  .image-export-content { padding: 14px; }
+  .image-export-heading h2 { font-size: 1.1rem; }
+  .image-export-footer { bottom: -14px; }
+  .image-export-actions > * { flex: 1 1 auto; }
+}

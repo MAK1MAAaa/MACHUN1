@@ -1,6 +1,6 @@
 # 1Panel：公网 IP 免配置版本
 
-分支 `codex/manual-login-docker`，镜像 `machun1:companion-20261009-ip-amd64`，架构 linux/amd64。一体部署包包含镜像、预设编排、启动脚本和校验文件；上传解压后运行一次脚本即可，不需要域名、HTTPS 反代或 `.env`。
+分支 `codex/manual-login-docker`，镜像 `machun1:companion-20261013-ip-amd64`，架构 linux/amd64。一体部署包包含镜像、预设编排、启动脚本和校验文件；上传解压后运行一次脚本即可，不需要域名、HTTPS 反代或 `.env`。
 
 | 项目 | 预设 |
 | --- | --- |
@@ -17,9 +17,9 @@
 
 ## 从 Docker Hub 部署
 
-镜像仓库为 [`mak1maaaa/machun1`](https://hub.docker.com/r/mak1maaaa/machun1)，标签为 `latest` 和 `20261009-amd64`，架构为 `linux/amd64`。MySQL 连接由附带编排自动注入，密码保留在自己的服务器上；无需手填环境变量或运行 `pnpm db:setup` / `pnpm db:tunnel`。
+镜像仓库为 [`mak1maaaa/machun1`](https://hub.docker.com/r/mak1maaaa/machun1)，标签为 `latest` 和 `20261013-amd64`，架构为 `linux/amd64`。MySQL 连接由附带编排自动注入，密码保留在自己的服务器上；无需手填环境变量或运行 `pnpm db:setup` / `pnpm db:tunnel`。
 
-最少操作方式：在 1Panel 文件管理上传 `release/machun1-hub-deploy-20261009-amd64-1650.tar.gz`，解压并进入目录，执行：
+最少操作方式：在 1Panel 文件管理上传 `release/machun1-hub-deploy-20261013-amd64-1650.tar.gz`，解压并进入目录，执行：
 
 ```bash
 sudo bash start.sh
@@ -36,11 +36,11 @@ docker compose -p machun1 -f compose.hub.yaml pull
 docker compose -p machun1 -f compose.hub.yaml up -d
 ```
 
-需要固定版本时，将编排镜像改为 `mak1maaaa/machun1:20261009-amd64`。已有容器应通过编排重新创建并保留原数据卷；仅重启原先没有数据库配置的容器不会补上连接。只在“镜像”中拉取再单独创建容器，会缺少编排中的数据库设置。拉取镜像需要服务器可访问 Docker Hub；无法访问时继续使用下方一体部署包。
+需要固定版本时，将编排镜像改为 `mak1maaaa/machun1:20261013-amd64`。已有容器应通过编排重新创建并保留原数据卷；仅重启原先没有数据库配置的容器不会补上连接。只在“镜像”中拉取再单独创建容器，会缺少编排中的数据库设置。拉取镜像需要服务器可访问 Docker Hub；无法访问时继续使用下方一体部署包。
 
 ## 上传一体部署包并启动
 
-使用 `release/machun1-deploy-20261009-ip-amd64-1650.tar.gz`，在 1Panel“文件”上传并解压。进入解压出的目录，在终端运行：
+使用 `release/machun1-deploy-20261013-ip-amd64-1650.tar.gz`，在 1Panel“文件”上传并解压。进入解压出的目录，在终端运行：
 
 ```bash
 sudo bash start.sh
@@ -49,7 +49,7 @@ sudo bash start.sh
 也可从外层目录直接执行：
 
 ```bash
-sudo bash machun1-deploy-20261009-ip-amd64-1650/start.sh
+sudo bash machun1-deploy-20261013-ip-amd64-1650/start.sh
 ```
 
 脚本自动校验随包文件，导入随包镜像，启动 Compose 编排并等待健康检查，再只读核对 MySQL 连通性、root 用户和两项迁移。项目名固定为 `machun1`，重复执行用于更新该项目，不删除命名卷。不需要安装 Node.js / pnpm，也不需要单独复制编排。
@@ -63,15 +63,15 @@ sudo bash machun1-deploy-20261009-ip-amd64-1650/start.sh
 上传下列文件，在 1Panel“容器 → 镜像 → 导入”选择镜像归档：
 
 ```text
-machun1-companion-20261009-ip-amd64-1650.tar.gz
-machun1-companion-20261009-ip-amd64-1650.tar.gz.sha256
+machun1-companion-20261013-ip-amd64-1650.tar.gz
+machun1-companion-20261013-ip-amd64-1650.tar.gz.sha256
 ```
 
 也可执行：
 
 ```bash
-sha256sum -c machun1-companion-20261009-ip-amd64-1650.tar.gz.sha256
-docker load -i machun1-companion-20261009-ip-amd64-1650.tar.gz
+sha256sum -c machun1-companion-20261013-ip-amd64-1650.tar.gz.sha256
+docker load -i machun1-companion-20261013-ip-amd64-1650.tar.gz
 ```
 
 若面板只接受 tar，先 `gzip -dk` 再导入。旧归档保留。

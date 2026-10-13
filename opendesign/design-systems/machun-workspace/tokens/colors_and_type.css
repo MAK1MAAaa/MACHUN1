@@ -1,0 +1,77 @@
+:root {
+  /* Raw tokens extracted from the active light theme. */
+  --fg-1: #2e403b;
+  --fg-2: #30483b;
+  --fg-3: #607568;
+  --bg-1: #f1f5ef;
+  --bg-2: rgba(255, 255, 255, 0.72);
+  --bg-3: #e6eee5;
+  --bg-input: rgba(255, 255, 255, 0.85);
+  --accent-1: #47725d;
+  --accent-2: #98ad91;
+  --accent-tint: rgba(143, 174, 145, 0.13);
+  --stroke-1: #c2d1c3;
+  --stroke-2: #dae3d8;
+  --error-1: #b83f51;
+  --exp-1: #cc3e50;
+  --mas-1: #8261b8;
+  --ult-1: #050506;
+  --font-ui: Inter, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-numeric: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --weight-normal: 400;
+  --weight-strong: 700;
+  --weight-emphasis: 800;
+  --size-caption: .75rem;
+  --size-small: .875rem;
+  --size-body: 1rem;
+  --size-heading: 1.35rem;
+  --size-title: 2rem;
+  --size-metric: clamp(2rem, 3.5vw, 3.7rem);
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 18px;
+  --space-6: 24px;
+  --space-7: 28px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --shadow-panel: 0 8px 30px rgba(65, 91, 66, .06);
+  --shadow-hover: 0 12px 32px rgba(65, 91, 66, .10);
+  --duration-ui: 160ms;
+  --touch-min: 44px;
+
+  /* Semantic aliases. */
+  --text-primary: var(--fg-1);
+  --text-control: var(--fg-2);
+  --text-secondary: var(--fg-3);
+  --page-background: var(--bg-1);
+  --surface-primary: var(--bg-2);
+  --surface-secondary: var(--bg-3);
+  --surface-field: var(--bg-input);
+  --action-primary: var(--accent-1);
+  --action-soft: var(--accent-tint);
+  --border-default: var(--stroke-1);
+  --border-subtle: var(--stroke-2);
+  --text-error: var(--error-1);
+  --h1: var(--size-title);
+  --h2: var(--size-heading);
+  --body: var(--size-body);
+  --caption: var(--size-caption);
+  --numeric: var(--font-numeric);
+
+  /* Existing app names retained for the recreated kit. */
+  --bg: var(--page-background);
+  --surface: var(--surface-primary);
+  --surface-2: var(--surface-secondary);
+  --line: var(--border-default);
+  --line-soft: var(--border-subtle);
+  --muted: var(--text-secondary);
+  --cyan: var(--action-primary);
+  --cyan-soft: var(--action-soft);
+  --expert: var(--exp-1);
+  --purple: var(--mas-1);
+  --ultima: var(--ult-1);
+  --danger: var(--text-error);
+}
