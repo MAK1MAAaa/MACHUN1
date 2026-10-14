@@ -5,6 +5,23 @@ import type { CatalogChart, Difficulty, ScoreSource, SingleRating } from "../typ
 
 export const RECORDS_PAGE_SIZE = 10;
 
+// Catalog version names follow Japanese release chronology, including major revisions.
+const GAME_VERSION_ORDER = [
+  "CHUNITHM", "PLUS", "AIR", "AIR PLUS", "STAR", "STAR PLUS",
+  "AMAZON", "AMAZON PLUS", "CRYSTAL", "CRYSTAL PLUS", "PARADISE", "PARADISE LOST",
+  "NEW", "NEW PLUS", "SUN", "SUN PLUS", "LUMINOUS", "LUMINOUS PLUS",
+  "VERSE", "X-VERSE", "X-VERSE-X", "MATE",
+] as const;
+const gameVersionRanks = new Map<string, number>(GAME_VERSION_ORDER.map((version, index) => [version, index]));
+
+function compareGameVersions(left: string, right: string): number {
+  const leftRank = gameVersionRanks.get(left.normalize("NFKC").trim().toUpperCase()) ?? GAME_VERSION_ORDER.length;
+  const rightRank = gameVersionRanks.get(right.normalize("NFKC").trim().toUpperCase()) ?? GAME_VERSION_ORDER.length;
+  return leftRank - rightRank
+    || left.localeCompare(right, "en")
+    || (left < right ? -1 : left > right ? 1 : 0);
+}
+
 export type RecordsViewMode = "rating" | "catalog";
 export type RecordsScoreSort = "default" | "descending" | "ascending";
 
@@ -55,7 +72,7 @@ export function getRecordsFilterOptions(charts: readonly CatalogChart[]): {
       Number.parseInt(left) - Number.parseInt(right) || Number(left.endsWith("+")) - Number(right.endsWith("+"))),
     constants: [...new Set(charts.map((chart) => chart.constant.toFixed(1)))].sort((left, right) => Number(left) - Number(right)),
     genres: [...new Set(charts.map((chart) => chart.genre))].sort((left, right) => left.localeCompare(right, "en")),
-    versions: [...new Set(charts.map((chart) => chart.version))].sort((left, right) => left.localeCompare(right, "en")),
+    versions: [...new Set(charts.map((chart) => chart.version))].sort(compareGameVersions),
   };
 }
 

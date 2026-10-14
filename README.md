@@ -38,12 +38,12 @@
 
 ### Docker / 1Panel
 
-适合部署到服务器后，通过 `http://服务器公网IP:1650` 使用。镜像为 `linux/amd64`，支持 `latest` 和固定标签 `20261013-amd64`。
+适合部署到服务器后，通过 `http://服务器公网IP:1650` 使用。镜像为 `linux/amd64`，支持 `latest` 和固定标签 `20261014-amd64`。
 
 | 方式 | 操作 |
 | --- | --- |
 | 从 Docker Hub 拉取 | 在 1Panel「容器 → 编排」使用 [compose.hub.yaml](compose.hub.yaml)，项目名设为 `machun1`。 |
-| 上传部署包 | 上传并解压本地生成的 `release/machun1-hub-deploy-20261013-amd64-1650.tar.gz`，进入目录运行 `sudo bash start.sh`。 |
+| 上传部署包 | 上传并解压本地生成的 `release/machun1-hub-deploy-20261014-amd64-1650.tar.gz`，进入目录运行 `sudo bash start.sh`。 |
 | 离线部署 | 使用 `pnpm docker:package` 生成的一体部署包；启动脚本导入随包镜像后启动编排。 |
 
 也可以在服务器终端执行：

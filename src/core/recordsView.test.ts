@@ -174,6 +174,30 @@ describe("record browsing", () => {
     expect(options.versions).toEqual(["AIR PLUS", "NEW"]);
   });
 
+  it("orders version options by Japanese game release rather than alphabetically", () => {
+    const versions = [
+      "CHUNITHM", "PLUS", "AIR", "AIR PLUS", "STAR", "STAR PLUS",
+      "AMAZON", "AMAZON PLUS", "CRYSTAL", "CRYSTAL PLUS", "PARADISE", "PARADISE LOST",
+      "NEW", "NEW PLUS", "SUN", "SUN PLUS", "LUMINOUS", "LUMINOUS PLUS",
+      "VERSE", "X-VERSE", "X-VERSE-X", "MATE",
+    ];
+    const charts = [...versions].reverse().map((version, index) => chart(String(index), { version }));
+    expect(getRecordsFilterOptions(charts).versions).toEqual(versions);
+    expect(getRecordsFilterOptions([...charts.slice(8), ...charts.slice(0, 8)]).versions).toEqual(versions);
+    expect(charts.map((item) => item.version)).toEqual([...versions].reverse());
+  });
+
+  it("places unknown versions last deterministically and preserves exact filtering values", () => {
+    const charts = ["Zulu Future", "MATE", "Alpha Future", "New", "AIR", "Alpha Future"]
+      .map((version, index) => chart(String(index), { version }));
+    const expected = ["AIR", "New", "MATE", "Alpha Future", "Zulu Future"];
+    expect(getRecordsFilterOptions(charts).versions).toEqual(expected);
+    expect(getRecordsFilterOptions([...charts].reverse()).versions).toEqual(expected);
+    expect(rows(charts, [], "catalog", { version: "New", includeUnplayed: true }).map((row) => row.chart.id)).toEqual(["3"]);
+    expect(rows(charts, [], "catalog", { version: "NEW", includeUnplayed: true })).toEqual([]);
+    expect(getRecordsFilterOptions([]).versions).toEqual([]);
+  });
+
   it("clamps out-of-range pages and keeps an empty result at page one", () => {
     const charts = Array.from({ length: 21 }, (_, index) => chart(String(index)));
     const result = rows(charts, [], "catalog", { includeUnplayed: true });

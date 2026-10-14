@@ -66,6 +66,7 @@ export function SongDetailsDialog({ chart, charts, scores, aliases, personalAlia
       <dl className="song-details-metadata">
         <div><dt>类别</dt><dd>{chart.genre || "—"}</dd></div>
         <div><dt>添加版本</dt><dd>{chart.version || "—"}</dd></div>
+        <div><dt>BPM</dt><dd>{chart.bpm ?? "—"}</dd></div>
       </dl>
 
       <ul className="song-details-charts" aria-label="谱面定数与成绩">

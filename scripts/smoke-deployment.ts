@@ -15,7 +15,7 @@ const project = `machun1-test-deploy-${randomBytes(6).toString('hex')}`;
 const network = `${project}-network`;
 const mysqlContainer = process.env.MACHUN_TEST_CONTAINER!;
 const hub = process.argv.includes('--hub');
-const version = process.env.MACHUN_RELEASE ?? (hub ? '20261013' : '20261013-ip');
+const version = process.env.MACHUN_RELEASE ?? (hub ? '20261014' : '20261014-ip');
 assert(/^[a-zA-Z0-9][a-zA-Z0-9.-]{0,63}$/.test(version), '发布版本无效。');
 const bundleName = `machun1-${hub ? 'hub-' : ''}deploy-${version}-amd64-1650`;
 const archive = resolve(`release/${bundleName}.tar.gz`);
