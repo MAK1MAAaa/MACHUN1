@@ -110,12 +110,16 @@ async function edit(page: Page, value: number) {
   await score(page, value, 'manual'); await section.getByRole('searchbox').fill('');
 }
 async function exportPng(page: Page, name: string) {
+  const isAj = name === '导出 AJ B30 图片';
+  const withCandidates = name.includes('候选20');
+  const imageLabel = isAj ? 'AJ B30' : withCandidates ? 'B30 + 候选20' : 'B30';
+  const filePrefix = isAj ? 'aj-b30' : `b30${withCandidates ? '-candidates20' : ''}`;
   let downloads = 0;
   const countDownload = () => { downloads++; };
   page.on('download', countDownload);
   try {
     await page.getByRole('button', { name, exact: true }).click();
-    const dialog = page.getByRole('dialog', { name: name.includes('候选20') ? 'B30 + 候选20 图片预览' : 'B30 图片预览', exact: true });
+    const dialog = page.getByRole('dialog', { name: `${imageLabel} 图片预览`, exact: true });
     await dialog.waitFor();
     const image = dialog.locator('img');
     await image.evaluate((element: HTMLImageElement) => element.complete && element.naturalWidth
@@ -125,8 +129,9 @@ async function exportPng(page: Page, name: string) {
     const downloadPromise = page.waitForEvent('download');
     await dialog.getByRole('button', { name: '保存 PNG', exact: true }).click();
     const download = await downloadPromise; const file = await download.path(); assert(file);
+    assert.match(download.suggestedFilename(), new RegExp(`^machun1-${filePrefix}-\\d{4}-\\d{2}-\\d{2}\\.png$`));
     const png = await readFile(file); assert.equal(png.readUInt32BE(16), 2360);
-    assert.equal(png.readUInt32BE(20), name.includes('候选20') ? 1792 : 1120);
+    assert.equal(png.readUInt32BE(20), withCandidates ? 1792 : 1120);
     assert.equal(downloads, 1);
     assert(await dialog.isVisible(), 'preview remains available for a retry or long-press saving');
     assert((await dialog.getByRole('status').innerText()).includes('已发起保存'));
@@ -158,6 +163,16 @@ try {
   assert.equal(await page.evaluate(key => localStorage.getItem(key), STORAGE_KEY), JSON.stringify(seed));
   assert.equal(await page.locator('.record-table tbody tr').count(), 10);
   mark('root login migrates 50 legacy scores and one alias while keeping the old browser copy');
+  let emptyAjDownloads = 0;
+  const countEmptyAjDownload = () => { emptyAjDownloads++; };
+  page.on('download', countEmptyAjDownload);
+  try {
+    await page.getByRole('button', { name: '导出 AJ B30 图片', exact: true }).click();
+    await page.getByText('暂无 AJ 或 AJC 成绩，无法生成 AJ B30 图片。', { exact: true }).waitFor();
+    assert.equal(await page.getByRole('dialog').count(), 0);
+    assert.equal(emptyAjDownloads, 0);
+  } finally { page.off('download', countEmptyAjDownload); }
+  mark('FC-only scores cannot generate an AJ B30 preview or download');
   const toggle = page.locator('.b30-preview-toggle');
   assert.equal(await toggle.getAttribute('aria-expanded'), 'false');
   await toggle.click();
@@ -221,10 +236,10 @@ try {
   await chooser.setFiles({ name: 'full-backup.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(saved)) });
   await score(page, 1_006_000, 'rin');
   mark('full backup import restores all records, personal aliases, source and AJ/full-chain marks');
-  for (const name of ['导出 B30 图片', '导出 B30 + 候选20 图片']) {
+  for (const name of ['导出 B30 图片', '导出 B30 + 候选20 图片', '导出 AJ B30 图片']) {
     await exportPng(page, name);
   }
-  mark('full JSON backup and both 5-column PNG exports retain source, FC/AJ and grades');
+  mark('full JSON backup, both regular PNGs and the AJ B30 PNG export retain source, FC/AJ and grades');
   paused = true; execFileSync('docker', ['pause', container], { stdio: 'ignore' });
   // Pausing holds TCP connections; destroy them so MySQL fails promptly instead of hanging.
   await fixture.pool.end();
@@ -284,8 +299,8 @@ try {
   await mobileRecords.getByRole('button', { name: '清除筛选', exact: true }).click();
   await mobileRecords.getByRole('button', { name: '收起筛选', exact: true }).click();
   await mobileRecords.getByRole('button', { name: 'Rating 排名', exact: true }).click();
-  for (const name of ['导出 B30 图片', '导出 B30 + 候选20 图片']) await exportPng(mobile, name);
-  mark('touch viewport keeps 3×10 B30, readable score cards and collapsed filters; both PNGs save after an explicit tap without reporting unconfirmed success');
+  for (const name of ['导出 B30 图片', '导出 B30 + 候选20 图片', '导出 AJ B30 图片']) await exportPng(mobile, name);
+  mark('touch viewport keeps 3×10 B30, readable score cards and collapsed filters; regular and AJ B30 PNGs save after an explicit tap without reporting unconfirmed success');
   await mobile.locator('.source-tools-toggle').click();
   const mobileManager = managers.get('root')!;
   for (const connection of mobileManager.state.values()) if (connection.source !== 'lxns') connection.bindingMode = 'companion';

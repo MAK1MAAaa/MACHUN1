@@ -8,7 +8,7 @@ import {
 import type { CatalogChart, ScoreSource, SingleRating } from "./types";
 import { B30_SIZE, chartKey, compareRatings, getB30, getB30Summary, getB30Axis } from "./core/b30";
 import { CATALOG_DATE, CATALOG_VERSION, catalog, catalogByKey } from "./core/catalog";
-import { createB30Export, createB30CandidatesExport, downloadB30Json, generateB30Png } from "./core/b30Export";
+import { createB30Export, createB30CandidatesExport, createAjB30Export, downloadB30Json, generateB30Png } from "./core/b30Export";
 import { createDownloadResource, type DownloadResource } from "./core/fileDelivery";
 import { ImageExportDialog } from "./components/ImageExportDialog";
 import { formatScore } from "./core/rating";
@@ -248,19 +248,24 @@ function App({ account, initial, initialNotice }: AppProps) {
     }
   };
 
-  const exportB30Image = async (withCandidates = false) => {
+  const exportB30Image = async (mode: "b30" | "candidates" | "aj" = "b30") => {
     if (imageGeneration.current.running) return;
     imageGeneration.current.running = true;
     const version = ++imageGeneration.current.version;
     setExportingImage(true);
-    const imageLabel = withCandidates ? "B30 + 候选20" : "B30";
-    setNotice({ kind: "success", text: "正在加载曲绘并生成 B30 图片" });
+    const imageLabel = mode === "aj" ? "AJ B30" : mode === "candidates" ? "B30 + 候选20" : "B30";
+    setNotice({ kind: "success", text: `正在加载曲绘并生成 ${imageLabel} 图片` });
     try {
-      const result = await generateB30Png(
-        withCandidates
+      const data = mode === "aj"
+        ? createAjB30Export(records, catalogByKey, CATALOG_VERSION)
+        : mode === "candidates"
           ? createB30CandidatesExport(records, catalogByKey, CATALOG_VERSION)
-          : createB30Export(records, catalogByKey, CATALOG_VERSION),
-      );
+          : createB30Export(records, catalogByKey, CATALOG_VERSION);
+      if (mode === "aj" && data.summary.filled === 0) {
+        setNotice({ kind: "warning", text: "暂无 AJ 或 AJC 成绩，无法生成 AJ B30 图片。" });
+        return;
+      }
+      const result = await generateB30Png(data);
       if (version !== imageGeneration.current.version) return;
       const file = createDownloadResource(result.blob, result.filename);
       imageExportRef.current?.dispose();
@@ -276,7 +281,7 @@ function App({ account, initial, initialNotice }: AppProps) {
       if (version !== imageGeneration.current.version) return;
       setNotice({
         kind: "error",
-        text: error instanceof Error ? error.message : "B30 图片导出失败",
+        text: error instanceof Error ? error.message : `${imageLabel} 图片导出失败`,
       });
     } finally {
       if (version === imageGeneration.current.version) {
@@ -593,8 +598,12 @@ function App({ account, initial, initialNotice }: AppProps) {
                 <button type="button" className="primary" onClick={() => exportB30Image()} disabled={exportingImage}>
                   {exportingImage ? "正在生成图片" : "导出 B30 图片"}
                 </button>
-                <button type="button" onClick={() => exportB30Image(true)} disabled={exportingImage}>
+                <button type="button" onClick={() => exportB30Image("candidates")} disabled={exportingImage}>
                   导出 B30 + 候选20 图片
+                </button>
+                <button type="button" onClick={() => exportB30Image("aj")} disabled={exportingImage}
+                  title="仅统计 AJ / AJC 谱面，按单曲 Rating 取前 30">
+                  导出 AJ B30 图片
                 </button>
               </div>
             </div>

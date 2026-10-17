@@ -29,6 +29,10 @@ export interface B30ExportV3 {
   b30: Array<B30ExportSlot | null>;
 }
 
+export interface AjB30Export extends Omit<B30ExportV3, "type"> {
+  type: "machun1-aj-b30";
+}
+
 export function createB30Export(
   scores: Iterable<SingleRating>,
   charts: Map<string, CatalogChart>,
@@ -65,6 +69,16 @@ export function createB30Export(
     },
     b30,
   };
+}
+
+export function createAjB30Export(
+  scores: Iterable<SingleRating>,
+  charts: Map<string, CatalogChart>,
+  catalogVersion: string,
+  exportedAt = new Date().toISOString(),
+): AjB30Export {
+  const ajScores = Array.from(scores).filter((record) => record.combo === "aj" || record.combo === "ajc");
+  return { ...createB30Export(ajScores, charts, catalogVersion, exportedAt), type: "machun1-aj-b30" };
 }
 
 export interface B30CandidatesExport extends B30ExportV3 {
@@ -421,10 +435,11 @@ async function waitForExportFonts(): Promise<void> {
   });
 }
 
-export async function generateB30Png(data: B30ExportV3 | B30CandidatesExport): Promise<GeneratedB30Png> {
+export async function generateB30Png(data: B30ExportV3 | B30CandidatesExport | AjB30Export): Promise<GeneratedB30Png> {
   await waitForExportFonts();
   const canvas = document.createElement("canvas");
   const withCandidates = "candidates" in data;
+  const isAj = data.type === "machun1-aj-b30";
   const slots = withCandidates ? [...data.b30, ...data.candidates] : data.b30;
   const columns = 5;
   const rows = Math.ceil(slots.length / columns);
@@ -451,7 +466,7 @@ export async function generateB30Png(data: B30ExportV3 | B30CandidatesExport): P
   context.textAlign = "left";
   context.fillStyle = "#202a3c";
   context.font = '900 48px Inter, "PingFang SC", sans-serif';
-  context.fillText("B30", margin, 85);
+  context.fillText(isAj ? "AJ B30" : "B30", margin, 85);
   context.textAlign = "right";
   context.font = '900 52px ui-monospace, "SFMono-Regular", monospace';
   context.fillText(data.summary.average.toFixed(4), width - margin, 85);
@@ -482,7 +497,7 @@ export async function generateB30Png(data: B30ExportV3 | B30CandidatesExport): P
 
     return {
       blob,
-      filename: `machun1-b30${withCandidates ? "-candidates20" : ""}-${data.exportedAt.slice(0, 10)}.png`,
+      filename: `machun1-${isAj ? "aj-" : ""}b30${withCandidates ? "-candidates20" : ""}-${data.exportedAt.slice(0, 10)}.png`,
       missingCovers: [...covers.values()].filter((image) => image === null).length,
     };
   } finally {

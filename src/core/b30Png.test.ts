@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SingleRating } from "../types";
-import { createB30CandidatesExport, createB30Export, generateB30Png } from "./b30Export";
+import { createAjB30Export, createB30CandidatesExport, createB30Export, generateB30Png } from "./b30Export";
 
 describe("B30 PNG generation", () => {
   const drawnText: string[] = [];
@@ -72,6 +72,29 @@ describe("B30 PNG generation", () => {
     expect(canvas.toBlob).toHaveBeenCalledWith(expect.any(Function), "image/png");
     expect(createElement.mock.calls).toEqual([["canvas"]]);
     expect(drawnText).toEqual(expect.arrayContaining(["FC", "AJ", "SSS+", "金 FCHAIN", "定数 14.0 · Rin服", "16.1500"]));
+    expect(drawnText).toContain("B30");
+    expect(drawnText).not.toContain("AJ B30");
+    expect(canvas.width).toBe(0);
+    expect(canvas.height).toBe(0);
+  });
+
+  it("generates an AJ-only 5×6 PNG with a distinct title and filename", async () => {
+    const data = createAjB30Export(
+      [makeRecord("1", "fc"), makeRecord("2", "aj"), makeRecord("3", "ajc"), makeRecord("4", undefined)],
+      new Map(),
+      "test",
+      "2026-10-17T00:00:00Z",
+    );
+    const result = await generateB30Png(data);
+    expect(result).toEqual({ blob: generatedBlob, filename: "machun1-aj-b30-2026-10-17.png", missingCovers: 0 });
+    expect(encodedSizes).toEqual([{ width: 2360, height: 1120 }]);
+    expect(drawnText).toEqual(expect.arrayContaining(["AJ B30", "AJ", "AJC", "SSS+", "金 FCHAIN", "定数 14.0 · Rin服", "Song 2", "Song 3"]));
+    expect(drawnText).not.toContain("B30");
+    expect(drawnText).not.toContain("FC");
+    expect(drawnText).not.toContain("Song 1");
+    expect(drawnText).not.toContain("Song 4");
+    expect(drawnText.filter((text) => text === "EMPTY SLOT")).toHaveLength(28);
+    expect(createElement.mock.calls).toEqual([["canvas"]]);
     expect(canvas.width).toBe(0);
     expect(canvas.height).toBe(0);
   });
