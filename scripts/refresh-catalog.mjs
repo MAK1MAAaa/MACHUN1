@@ -1,7 +1,9 @@
 import { readFile, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { songMetadata, songVersionOverride } from './catalog-metadata.mjs';
+import { buildChartReleaseDates, CHART_RELEASE_OVERRIDES, releaseDateProvenance } from './build-chart-release-dates.mjs';
 
 export const OCTOBER_SUPPLEMENTS = [
   { id: '3052', title: '雑魚', difficulty: 'MAS', constant: 13.1 },
@@ -18,7 +20,7 @@ const zeroNotes = { total: 0, tap: 0, hold: 0, slide: 0, air: 0, flick: 0 };
 const number = value => Number.isFinite(Number(value)) && Number(value) > 0 ? Number(value) : null;
 // Upstream date_updated also changes when details are corrected; it is not a chart release date.
 // https://info-chunithm.sega.jp/12772/
-const chartReleaseDates = new Map([['2175:ULT', '20261022']]);
+const chartReleaseDates = new Map(CHART_RELEASE_OVERRIDES.map(({ id, difficulty, date }) => [`${id}:${difficulty}`, date]));
 const dateText = value => String(value ?? '').replaceAll('-', '');
 const noteCount = value => value !== '' && value !== null && value !== undefined && Number.isInteger(Number(value)) && Number(value) >= 0 ? Number(value) : null;
 
@@ -87,9 +89,19 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
   if (!upstreamPath || !officialPath || !/^\d{4}-\d{2}-\d{2}$/.test(cutoff)) throw new Error('用法：node scripts/refresh-catalog.mjs <music-ex.json> <official-music.json> [YYYY-MM-DD]');
   const load = async path => JSON.parse(await readFile(path, 'utf8'));
   const existing = await load('src/data/catalog.json');
-  const result = refreshCatalog(existing, await load('src/data/song-chart-details.json'), await load(upstreamPath), await load(officialPath), cutoff);
+  const upstreamInput = await readFile(upstreamPath);
+  const upstream = JSON.parse(upstreamInput.toString('utf8'));
+  const result = refreshCatalog(existing, await load('src/data/song-chart-details.json'), upstream, await load(officialPath), cutoff);
+  let previousDates = {};
+  try { previousDates = await load('src/data/chart-release-dates.json'); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+  const { dates, stats } = buildChartReleaseDates(result.charts, upstream, previousDates, cutoff);
+  const provenance = await load('src/data/catalog-sources.json');
+  provenance.chartReleaseDates = { ...provenance.chartReleaseDates, ...Object.fromEntries(CHART_RELEASE_OVERRIDES.map(({ id, difficulty, date, source }) => [`${id}:${difficulty}`, { date, source }])) };
+  provenance.releaseDateMetadata = releaseDateProvenance(stats, createHash('sha256').update(upstreamInput).digest('hex'));
   await writeFile('src/data/catalog.json', JSON.stringify(result.charts, null, 2) + '\n');
   await writeFile('src/data/song-chart-details.json', JSON.stringify(result.details, null, 2) + '\n');
+  await writeFile('src/data/chart-release-dates.json', JSON.stringify(dates, null, 2) + '\n');
+  await writeFile('src/data/catalog-sources.json', JSON.stringify(provenance, null, 2) + '\n');
   const modulePath = 'src/core/catalog.ts';
   await writeFile(modulePath, (await readFile(modulePath, 'utf8')).replace(/export (const|let) CATALOG_DATE = "[\d-]+";/, `export $1 CATALOG_DATE = "${cutoff}";`));
   console.log(JSON.stringify({ cutoff, addedCharts: result.charts.length - existing.length, charts: result.charts.length, songs: new Set(result.charts.map(chart => chart.id)).size }));

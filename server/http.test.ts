@@ -28,6 +28,8 @@ async function setup(options: Partial<HttpOptions> = {}) {
   const dist = join(directory, "dist");
   await mkdir(dist);
   await writeFile(join(dist, "index.html"), "<html>local app</html>");
+  await mkdir(join(dist, "assets"));
+  await writeFile(join(dist, "assets", "mate-logo.webp"), "webp-test-asset");
   await mkdir(join(directory, ".machun.local"));
   await writeFile(join(directory, ".machun.local", "lxns.json"), "secret-vault");
   const server = createAppServer({ manager, distDirectory: dist, additionalOrigins: ["http://127.0.0.1:4399"], ...options });
@@ -92,6 +94,9 @@ describe("local HTTP boundary", () => {
     expect(status.status).toBe(200);
     expect(status.headers["cache-control"]).toBe("no-store");
     expect(status.headers["access-control-allow-origin"]).toBeUndefined();
+    const logo = await send("/assets/mate-logo.webp");
+    expect(logo).toMatchObject({ status: 200, text: "webp-test-asset" });
+    expect(logo.headers["content-type"]).toBe("image/webp");
   });
 
   it("rejects forged hosts, cross-site origins and simple form requests", async () => {

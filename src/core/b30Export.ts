@@ -4,6 +4,7 @@ import { SCORE_SOURCE_LABELS } from "./sources";
 import { scoreGrade } from "./rating";
 import { CHAIN_LABELS, CLEAR_LABELS, COMBO_DESCRIPTIONS, mergeScoreAchievements } from "./scoreAchievements";
 import { downloadBlob } from "./fileDelivery";
+import { drawMateLogo, loadMateLogo } from "./exportBrand";
 
 export interface B30ExportSlot extends ScoreAchievements {
   rank: number;
@@ -490,26 +491,32 @@ export async function generateB30Png(data: B30ExportV3 | B30CandidatesExport | A
 
   const context = canvas.getContext("2d");
   if (!context) throw new Error("当前浏览器不支持 Canvas 图片导出");
-  const covers = await loadCoverImages(
-    slots.flatMap((slot) => (slot?.coverUrl ? [slot.coverUrl] : [])),
-  );
+  const [covers, logo] = await Promise.all([
+    loadCoverImages(slots.flatMap((slot) => (slot?.coverUrl ? [slot.coverUrl] : []))),
+    loadMateLogo(),
+  ]);
 
   context.fillStyle = "#f5f6f8";
   context.fillRect(0, 0, width, height);
   context.textAlign = "left";
   context.fillStyle = "#202a3c";
-  const titleX = Math.round(width * 0.34);
-  context.font = '800 44px Inter, "Noto Sans SC", "PingFang SC", sans-serif';
-  context.fillText(exportNickname(context, options.nickname, titleX - margin - 64), margin, 85);
-  context.font = '900 48px Inter, "PingFang SC", sans-serif';
+  const logoWidth = drawMateLogo(context, logo, margin, 20, 84);
+  const nicknameX = margin + logoWidth + 28;
   const title = isAj ? "AJ B30" : withCandidates ? "B30 + C20" : "B30";
-  context.fillText(title, titleX, 85);
-  const ratingX = titleX + context.measureText(`${title}  `).width;
+  const average = data.summary.average.toFixed(4);
+  context.font = '900 48px Inter, "PingFang SC", sans-serif';
+  const titleAndGapWidth = context.measureText(`${title}  `).width;
   context.font = '900 52px ui-monospace, "SFMono-Regular", monospace';
-  context.fillText(`Rating: ${data.summary.average.toFixed(4)}`, ratingX, 85);
-  context.font = '500 15px Inter, "PingFang SC", sans-serif';
-  context.fillStyle = "#758378";
-  context.fillText(`MACHUN1 · ${data.exportedAt.slice(0, 10)}`, margin, 112);
+  const averageWidth = context.measureText(average).width;
+  context.font = '800 44px Inter, "Noto Sans SC", "PingFang SC", sans-serif';
+  const nickname = exportNickname(context, options.nickname, width - margin - nicknameX - 32 - titleAndGapWidth - averageWidth);
+  context.fillText(nickname, nicknameX, 85);
+  const titleX = nicknameX + context.measureText(nickname).width + 32;
+  context.font = '900 48px Inter, "PingFang SC", sans-serif';
+  context.fillText(title, titleX, 85);
+  const ratingX = titleX + titleAndGapWidth;
+  context.font = '900 52px ui-monospace, "SFMono-Regular", monospace';
+  context.fillText(average, ratingX, 85);
 
   if (withCandidates) {
     const separatorY = headerHeight + (B30_SIZE / columns) * (cardHeight + rowGap) - rowGap + (rowGap + candidateGap) / 2;

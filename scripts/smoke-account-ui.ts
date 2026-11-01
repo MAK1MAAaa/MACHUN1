@@ -188,6 +188,88 @@ async function exportPng(page: Page, name: string) {
     await dialog.waitFor({ state: 'hidden' });
   } finally { page.off('download', countDownload); }
 }
+
+async function exportConstantTable(page: Page, withScores: boolean) {
+  const section = page.locator('.constant-table-section');
+  const showScores = section.getByRole('button', { name: '显示成绩', exact: true });
+  if ((await showScores.getAttribute('aria-pressed') === 'true') !== withScores) await showScores.click();
+  await section.getByRole('button', { name: '导出定数表 PNG', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: '定数表 图片预览', exact: true });
+  await dialog.waitFor();
+  const image = dialog.locator('img');
+  await image.evaluate((element: HTMLImageElement) => element.complete && element.naturalWidth ? undefined
+    : new Promise<void>((resolve, reject) => { element.onload = () => resolve(); element.onerror = () => reject(new Error('constant table preview failed')); }));
+  const downloadEvent = page.waitForEvent('download');
+  await dialog.getByRole('button', { name: '保存 PNG', exact: true }).click();
+  const download = await downloadEvent; const file = await download.path(); assert(file);
+  assert.match(download.suggestedFilename(), withScores ? /^machun1-constant-table-scores-\d{4}-\d{2}-\d{2}\.png$/ : /^machun1-constant-table-\d{4}-\d{2}-\d{2}\.png$/);
+  const png = await readFile(file);
+  assert(png.readUInt32BE(16) > 0 && png.readUInt32BE(16) <= 2000);
+  assert(png.readUInt32BE(20) > 164 && png.readUInt32BE(20) <= 16000);
+  await download.saveAs(join(output, `${page.viewportSize()?.width}-${download.suggestedFilename()}`));
+  await dialog.getByRole('button', { name: '关闭图片预览', exact: true }).click();
+  await dialog.waitFor({ state: 'hidden' });
+}
+
+async function verifyConstantTable(page: Page) {
+  const section = page.locator('.constant-table-section');
+  const choices = section.getByRole('group', { name: '定数表定数', exact: true });
+  const generate = section.getByRole('button', { name: '生成定数表', exact: true });
+  const exportButton = section.getByRole('button', { name: '导出定数表 PNG', exact: true });
+  assert.equal(await section.locator('.constant-table-score-panel').count(), 0);
+  assert.equal(await section.locator('.constant-table-grid').first().evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length), 10);
+  await choices.getByRole('button', { name: '清空定数', exact: true }).click();
+  assert(await generate.isDisabled());
+  await choices.getByRole('button', { name: '13.0', exact: true }).click();
+  await choices.getByRole('button', { name: '13.4', exact: true }).click();
+  assert.equal(await choices.locator('button[aria-pressed="true"]').count(), 5);
+  await choices.getByRole('button', { name: '13.5', exact: true }).click();
+  assert.equal(await choices.locator('button[aria-pressed="true"]').count(), 5);
+  assert((await section.getByRole('alert').innerText()).includes('连续 5 档'));
+  await choices.getByRole('button', { name: '13.2', exact: true }).click();
+  assert((await section.getByRole('alert').innerText()).includes('区间两端'));
+  assert(await exportButton.isDisabled(), 'changed filters must not export an old result');
+  await generate.click();
+  assert.deepEqual(await section.locator('.constant-table-group').evaluateAll(elements => elements.map(element => element.getAttribute('data-constant'))), ['13.4', '13.3', '13.2', '13.1', '13.0']);
+  const groups = await section.locator('.constant-table-group').evaluateAll(elements => elements.map(element => [...element.querySelectorAll('li[data-chart-key]')].map(entry => ({
+    difficulty: entry.getAttribute('data-difficulty')!, date: entry.getAttribute('data-release-date')!,
+  }))));
+  const difficultyOrder: Record<string, number> = { ULT: 0, MAS: 1, EXP: 2 };
+  for (const entries of groups) for (let index = 1; index < entries.length; index++) {
+    const previous = entries[index - 1], current = entries[index];
+    assert(difficultyOrder[previous.difficulty] <= difficultyOrder[current.difficulty]);
+    if (previous.difficulty === current.difficulty) assert((previous.date || '9999').localeCompare(current.date || '9999') <= 0);
+  }
+  const target = catalog.find(chart => chart.difficulty === 'MAS' && chart.constant >= 13.5 && chart.constant <= 13.9)!;
+  assert(target);
+  await section.getByLabel('定数表等级', { exact: true }).selectOption('13+');
+  assert.deepEqual(await choices.locator('button[aria-pressed]').allTextContents(), ['13.5', '13.6', '13.7', '13.8', '13.9']);
+  await choices.getByRole('button', { name: '13.9', exact: true }).click();
+  await section.getByLabel('定数表难度', { exact: true }).selectOption('MAS');
+  await section.getByLabel('定数表分类', { exact: true }).selectOption(target.genre);
+  await section.getByLabel('定数表版本', { exact: true }).selectOption(target.version);
+  await generate.click();
+  const filteredKeys = await section.locator('li[data-chart-key]').evaluateAll(elements => elements.map(element => element.getAttribute('data-chart-key')));
+  assert(filteredKeys.includes(`${target.id}:${target.difficulty}`));
+  for (const key of filteredKeys) {
+    const data = catalog.find(chart => `${chart.id}:${chart.difficulty}` === key)!;
+    assert(data.difficulty === 'MAS' && data.constant >= 13.5 && data.constant <= 13.9 && data.genre === target.genre && data.version === target.version);
+  }
+  for (const label of ['定数表等级', '定数表难度', '定数表分类', '定数表版本']) await section.getByLabel(label, { exact: true }).selectOption('');
+  await choices.getByRole('button', { name: '清空定数', exact: true }).click();
+  await choices.getByRole('button', { name: first.constant.toFixed(1), exact: true }).click();
+  await generate.click();
+  await exportConstantTable(page, false);
+  await section.getByRole('button', { name: '显示成绩', exact: true }).click();
+  assert.equal(await section.locator('.constant-table-grid').first().evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length), 5);
+  const card = section.locator(`li[data-chart-key="${key}"]`);
+  const current = (await state(page)).scores[key];
+  assert.equal((await card.locator('.constant-table-score').innerText()).replaceAll(',', ''), String(current.score));
+  assert.equal(await card.locator('.constant-table-lamp').innerText(), current.combo?.toUpperCase() ?? 'CLEAR');
+  const box = await card.boundingBox(); assert(box && Math.abs(box.width - box.height * 2) < 2);
+  await exportConstantTable(page, true);
+  mark('constant tables enforce continuous five-step ranges, combine all filters, sort release dates, render 10/5 columns and save both PNG modes');
+}
 try {
   await fixture.db.insert(users).values({ username: 'ui-second', pwd: hashPassword('second-pwd') }).onDuplicateKeyUpdate({ set: { pwd: hashPassword('second-pwd') } });
   for (const username of ['root', 'ui-second']) await service.workspace.action(username, { type: 'clear' });
@@ -305,6 +387,7 @@ try {
     await exportPng(page, name);
   }
   mark('full JSON backup, both regular PNGs and the AJ B30 PNG export retain source, FC/AJ and grades');
+  await verifyConstantTable(page);
   paused = true; execFileSync('docker', ['pause', container], { stdio: 'ignore' });
   // Pausing holds TCP connections; destroy them so MySQL fails promptly instead of hanging.
   await fixture.pool.end();
@@ -359,6 +442,16 @@ try {
   await mobile.locator('.b30-preview-toggle').click();
   assert.equal(await mobile.getByLabel('导出昵称', { exact: true }).inputValue(), exportNickname);
   mark('a second user cannot read the nickname, while the same account on a fresh mobile context restores it from MySQL');
+  const mobileConstants = mobile.locator('.constant-table-section');
+  for (const width of [320, 390, 768]) {
+    await mobile.setViewportSize({ width, height: 844 });
+    assert(await mobileConstants.evaluate(element => element.scrollWidth <= element.clientWidth));
+  }
+  await mobile.setViewportSize({ width: 390, height: 844 });
+  await exportConstantTable(mobile, false);
+  await exportConstantTable(mobile, true);
+  assert.equal(await mobileConstants.locator('.constant-table-grid').first().evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length), 1);
+  mark('touch constant tables avoid horizontal overflow and both cover and score PNGs save after an explicit tap');
   const mobileRecords = mobile.locator('.records-browser');
   await mobileRecords.getByRole('button', { name: '曲库筛选', exact: true }).click();
   assert.equal(await mobileRecords.getByLabel('等级', { exact: true }).isVisible(), false);

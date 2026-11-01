@@ -23,6 +23,10 @@
     "2175:ULT": {
       "date": "2026-10-22",
       "source": "https://info-chunithm.sega.jp/12772/"
+    },
+    "2317:ULT": {
+      "date": "2026-09-25",
+      "source": "https://info-chunithm.sega.jp/12719/"
     }
   },
   "constantSupplementPolicy": "优先使用固定上游快照中的已确认定数；用户定数表仅在上游缺失时补充。未知 BPM 以 null、未知物量以 0 保留。",
@@ -56,5 +60,15 @@
       }
     ],
     "remainingDifferences": 0
+  },
+  "releaseDateMetadata": {
+    "charts": 1522,
+    "dated": 1522,
+    "chartDates": 2,
+    "songDates": 1520,
+    "preservedDates": 0,
+    "unknownDates": 0,
+    "upstreamSha256": "414dac0f55a82ac97198a1075ab2a381dd773bdb6f9ac232a71c8dca68c6ccde",
+    "policy": "明确的谱面上线日期优先；未提供时按歌曲首次上线日期排序。上游 date_updated 仅表示元数据更新，不作为上线日期。缺失来源时保留有效旧日期，其余未知以 null 保留。"
   }
 }

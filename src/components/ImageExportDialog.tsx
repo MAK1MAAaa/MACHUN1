@@ -1,14 +1,16 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { canSharePreparedFile, downloadPreparedFile, sharePreparedFile, type DownloadResource } from "../core/fileDelivery";
 import "./ImageExportDialog.css";
 
-export function ImageExportDialog({ file, label, missingCovers, onClose }: {
+export function ImageExportDialog({ file, label, missingCovers, previewAlt, onClose }: {
   file: DownloadResource;
   label: string;
   missingCovers: number;
+  previewAlt?: string;
   onClose(): void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sharing, setSharing] = useState(false);
@@ -41,17 +43,17 @@ export function ImageExportDialog({ file, label, missingCovers, onClose }: {
     } finally { setSharing(false); }
   }
 
-  return <dialog ref={dialog} className="image-export-dialog" aria-labelledby="image-export-title"
+  return <dialog ref={dialog} className="image-export-dialog" aria-labelledby={titleId}
     onCancel={event => { event.preventDefault(); onClose(); }}
     onClick={event => { if (event.target === event.currentTarget) onClose(); }}>
     <div className="image-export-content">
       <header className="image-export-heading">
-        <div><span className="eyebrow">IMAGE EXPORT</span><h2 id="image-export-title">{label} 图片预览</h2></div>
+        <div><span className="eyebrow">IMAGE EXPORT</span><h2 id={titleId}>{label} 图片预览</h2></div>
         <button type="button" className="image-export-close" aria-label="关闭图片预览" onClick={onClose}>×</button>
       </header>
       <p className="image-export-note">图片已生成。手机可长按图片保存，也可以使用下方保存按钮。</p>
       {missingCovers > 0 && <p className="image-export-note">{missingCovers} 张曲绘加载失败，已使用占位图。</p>}
-      <div className="image-export-preview"><img src={file.url} alt={`${label} 分表，包含分数、Rating、评级和达成标记`} /></div>
+      <div className="image-export-preview"><img src={file.url} alt={previewAlt ?? `${label} 分表，包含分数、Rating、评级和达成标记`} /></div>
       <div className="image-export-footer">
         <div className="image-export-actions">
           <button type="button" className="primary" onClick={save}>保存 PNG</button>

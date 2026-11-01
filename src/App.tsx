@@ -18,6 +18,7 @@ import { SourceSyncControls, useSourceSync } from "./components/SourceSyncContro
 import { RecordsSection } from "./components/RecordsSection";
 import { ScoreBadges } from "./components/ScoreBadges";
 import { B30ScoreCard } from "./components/B30ScoreCard";
+import { ConstantTableSection } from "./components/ConstantTableSection";
 import {
   SCORE_SOURCE_LABELS,
   type ExternalScoreSource,
@@ -717,6 +718,7 @@ function App({ account, initial, initialNotice }: AppProps) {
           onDelete={deleteRecord}
           onAliases={async (id, aliases) => { await workspace.action({ type: "aliases", id, aliases }); }}
         />
+        <ConstantTableSection scores={localState.scores} nickname={savedExportNickname || account.username} />
       </main>
 
       <footer>

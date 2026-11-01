@@ -6,6 +6,7 @@ describe("B30 PNG generation", () => {
   const drawnText: string[] = [];
   const drawnPositions: Array<{ text: string; x: number; y: number }> = [];
   const drawnLines: Array<{ fromX: number; fromY: number; toX: number; toY: number }> = [];
+  const drawnImages: Array<{ image: unknown; x: number; y: number; width: number; height: number }> = [];
   let lineStart = { x: 0, y: 0 };
   const encodedSizes: Array<{ width: number; height: number }> = [];
   const generatedBlob = new Blob(["png"], { type: "image/png" });
@@ -13,6 +14,7 @@ describe("B30 PNG generation", () => {
     get(_target, property) {
       if (property === "measureText") return (text: string) => ({ width: text.length * 6 });
       if (property === "fillText") return (text: string, x: number, y: number) => { drawnText.push(text); drawnPositions.push({ text, x, y }); };
+      if (property === "drawImage") return (image: unknown, x: number, y: number, width: number, height: number) => { drawnImages.push({ image, x, y, width, height }); };
       if (property === "moveTo") return (x: number, y: number) => { lineStart = { x, y }; };
       if (property === "lineTo") return (x: number, y: number) => { drawnLines.push({ fromX: lineStart.x, fromY: lineStart.y, toX: x, toY: y }); lineStart = { x, y }; };
       if (property === "createLinearGradient") return () => ({ addColorStop() { /* Canvas test double */ } });
@@ -36,6 +38,7 @@ describe("B30 PNG generation", () => {
     drawnText.length = 0;
     drawnPositions.length = 0;
     drawnLines.length = 0;
+    drawnImages.length = 0;
     encodedSizes.length = 0;
     canvas.width = 0;
     canvas.height = 0;
@@ -49,6 +52,13 @@ describe("B30 PNG generation", () => {
       clearTimeout: (id: ReturnType<typeof setTimeout>) => clearTimeout(id),
     });
     vi.stubGlobal("document", { createElement, fonts: { ready: Promise.resolve() } });
+    vi.stubGlobal("Image", class {
+      naturalWidth = 459;
+      naturalHeight = 199;
+      onload?: () => void;
+      onerror?: () => void;
+      set src(url: string) { if (url) queueMicrotask(() => this.onload?.()); }
+    });
   });
 
   afterEach(() => {
@@ -127,7 +137,7 @@ describe("B30 PNG generation", () => {
     expect(segments[1].toX).toBe(2320);
   });
 
-  it.each(["b30", "aj", "candidates"] as const)("places nickname left of the %s title and its Rating exactly two spaces after the title", async mode => {
+  it.each(["b30", "aj", "candidates"] as const)("places the official logo, nickname, %s title and plain average together without a date caption", async mode => {
     const records = [makeRecord("1", "aj")];
     const data = mode === "aj" ? createAjB30Export(records, new Map(), "test")
       : mode === "candidates" ? createB30CandidatesExport(records, new Map(), "test")
@@ -136,13 +146,16 @@ describe("B30 PNG generation", () => {
     const title = mode === "aj" ? "AJ B30" : mode === "candidates" ? "B30 + C20" : "B30";
     const namePosition = drawnPositions.find(({ text }) => text === "我的昵称")!;
     const titlePosition = drawnPositions.find(({ text }) => text === title)!;
-    const ratingPosition = drawnPositions.find(({ text, y }) => text.startsWith("Rating:") && y === titlePosition.y)!;
-    expect(namePosition.x).toBe(40);
+    const ratingPosition = drawnPositions.find(({ text, y }) => text === data.summary.average.toFixed(4) && y === titlePosition.y)!;
+    const logo = drawnImages.find(image => image.x === 40 && image.y === 20)!;
+    expect(logo.height).toBe(84);
+    expect(namePosition.x).toBeCloseTo(40 + 84 * 459 / 199 + 28);
     expect(namePosition.x + "我的昵称".length * 6).toBeLessThan(titlePosition.x);
-    expect(titlePosition.x).toBe(Math.round(2360 * 0.34));
+    expect(titlePosition.x).toBe(namePosition.x + "我的昵称".length * 6 + 32);
     expect(ratingPosition.x).toBe(titlePosition.x + `${title}  `.length * 6);
     expect(ratingPosition.y).toBe(namePosition.y);
-    expect(drawnText.some(text => text.startsWith("MACHUN1 · "))).toBe(true);
+    expect(drawnText.some(text => text.startsWith("MACHUN1 · "))).toBe(false);
+    expect(drawnPositions.some(({ text, y }) => y === 85 && text.startsWith('Rating:'))).toBe(false);
   });
 
   it("normalizes multiline nicknames, ellipsizes long names without breaking emoji, and falls back on whitespace", async () => {
@@ -151,10 +164,14 @@ describe("B30 PNG generation", () => {
     expect(drawnText).toContain("示例 昵称");
     drawnPositions.length = 0;
     await generateB30Png(data, { nickname: "😀".repeat(200) });
-    const name = drawnPositions.find(position => position.x === 40 && position.y === 85)!.text;
+    const namePosition = drawnPositions.find(position => position.y === 85)!;
+    const name = namePosition.text;
     expect(name.endsWith("…")).toBe(true);
-    expect(name.length * 6).toBeLessThanOrEqual(Math.round(2360 * 0.34) - 40 - 64);
     expect(Array.from(name.slice(0, -1)).every(character => character === "😀")).toBe(true);
+    const titlePosition = drawnPositions.find(({ text }) => text === 'B30')!;
+    const averagePosition = drawnPositions.find(({ text }) => text === data.summary.average.toFixed(4))!;
+    expect(namePosition.x + name.length * 6 + 32).toBe(titlePosition.x);
+    expect(averagePosition.x + data.summary.average.toFixed(4).length * 6).toBeLessThanOrEqual(2320);
     await generateB30Png(data, { nickname: " \n " });
     expect(drawnText).toContain("神秘游客");
   });
@@ -197,6 +214,18 @@ describe("B30 PNG generation", () => {
     const result = await generateB30Png(data);
     expect(result.missingCovers).toBe(1);
     expect(drawnText).toContain("NO COVER");
+    expect(drawnText).toContain("CHUNITHM");
+    expect(drawnText).toContain("MATE");
+  });
+
+  it('falls back from a stalled logo without counting it as a missing cover', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('Image', class { set src(_url: string) { /* Stall without a decoder event. */ } });
+    const pending = generateB30Png(createB30Export([], new Map(), 'test'));
+    await vi.advanceTimersByTimeAsync(3_000);
+    expect((await pending).missingCovers).toBe(0);
+    expect(drawnText).toContain('MATE');
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it("fails clearly if the browser cannot encode PNG, and releases the canvas buffer", async () => {
