@@ -39,7 +39,7 @@ export class WorkspaceRepository {
       state.scores[chartKey(chart)] = {
         id: chart.id, title: chart.title, difficulty: chart.difficulty, constant: chart.constant,
         score: row.score, rating: calculateRating(row.score, chart.constant), source: row.source, updatedAt: row.updatedAt,
-        ...(row.combo ? { combo: row.combo } : {}), ...(row.fullChain ? { fullChain: row.fullChain } : {}),
+        ...(row.combo ? { combo: row.combo } : {}), ...(row.fullChain ? { fullChain: row.fullChain } : {}), ...(row.clear ? { clear: row.clear } : {}),
       };
     }
     for (const row of await tx.select().from(personalAliases).where(eq(personalAliases.username, username))) state.nicknameOverrides[row.songId] = row.aliases;
@@ -51,7 +51,7 @@ export class WorkspaceRepository {
     }
     for (const [key, record] of Object.entries(after.scores)) {
       if (JSON.stringify(record) === JSON.stringify(before.scores[key])) continue;
-      const row = { username, songId: record.id, difficulty: record.difficulty, score: record.score, source: record.source, combo: record.combo ?? null, fullChain: record.fullChain ?? null, updatedAt: record.updatedAt };
+      const row = { username, songId: record.id, difficulty: record.difficulty, score: record.score, source: record.source, combo: record.combo ?? null, fullChain: record.fullChain ?? null, clear: record.clear ?? null, updatedAt: record.updatedAt };
       await tx.insert(scores).values(row).onDuplicateKeyUpdate({ set: row });
     }
     for (const id of Object.keys(before.nicknameOverrides)) {

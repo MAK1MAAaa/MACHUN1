@@ -1468,5 +1468,455 @@
     "id": "3062",
     "difficulty": "EXP",
     "constant": 11.3
+  },
+  {
+    "id": "2242",
+    "difficulty": "EXP",
+    "constant": 11
+  },
+  {
+    "id": "2175",
+    "difficulty": "MAS",
+    "constant": 12.6
+  },
+  {
+    "id": "2435",
+    "difficulty": "EXP",
+    "constant": 11
+  },
+  {
+    "id": "281",
+    "difficulty": "EXP",
+    "constant": 11.2
+  },
+  {
+    "id": "223",
+    "difficulty": "EXP",
+    "constant": 11
+  },
+  {
+    "id": "222",
+    "difficulty": "EXP",
+    "constant": 11.5
+  },
+  {
+    "id": "2084",
+    "difficulty": "EXP",
+    "constant": 11.4
+  },
+  {
+    "id": "1025",
+    "difficulty": "EXP",
+    "constant": 11.5
+  },
+  {
+    "id": "1008",
+    "difficulty": "EXP",
+    "constant": 11
+  },
+  {
+    "id": "980",
+    "difficulty": "EXP",
+    "constant": 11
+  },
+  {
+    "id": "799",
+    "difficulty": "EXP",
+    "constant": 11.3
+  },
+  {
+    "id": "504",
+    "difficulty": "EXP",
+    "constant": 11.5
+  },
+  {
+    "id": "322",
+    "difficulty": "EXP",
+    "constant": 11.5
+  },
+  {
+    "id": "232",
+    "difficulty": "EXP",
+    "constant": 11.3
+  },
+  {
+    "id": "2044",
+    "difficulty": "EXP",
+    "constant": 11.5
+  },
+  {
+    "id": "1041",
+    "difficulty": "EXP",
+    "constant": 11.1
+  },
+  {
+    "id": "409",
+    "difficulty": "EXP",
+    "constant": 11.5
+  },
+  {
+    "id": "997",
+    "difficulty": "EXP",
+    "constant": 11.2
+  },
+  {
+    "id": "2422",
+    "difficulty": "EXP",
+    "constant": 11.5
+  },
+  {
+    "id": "807",
+    "difficulty": "EXP",
+    "constant": 11.6
+  },
+  {
+    "id": "911",
+    "difficulty": "EXP",
+    "constant": 11
+  },
+  {
+    "id": "2297",
+    "difficulty": "EXP",
+    "constant": 11.2
+  },
+  {
+    "id": "2298",
+    "difficulty": "EXP",
+    "constant": 11.7
+  },
+  {
+    "id": "2045",
+    "difficulty": "EXP",
+    "constant": 11.9
+  },
+  {
+    "id": "471",
+    "difficulty": "EXP",
+    "constant": 11.7
+  },
+  {
+    "id": "671",
+    "difficulty": "EXP",
+    "constant": 11.4
+  },
+  {
+    "id": "670",
+    "difficulty": "EXP",
+    "constant": 11.7
+  },
+  {
+    "id": "197",
+    "difficulty": "EXP",
+    "constant": 11.8
+  },
+  {
+    "id": "196",
+    "difficulty": "EXP",
+    "constant": 11.5
+  },
+  {
+    "id": "328",
+    "difficulty": "EXP",
+    "constant": 11.6
+  },
+  {
+    "id": "389",
+    "difficulty": "EXP",
+    "constant": 11.1
+  },
+  {
+    "id": "625",
+    "difficulty": "EXP",
+    "constant": 11.8
+  },
+  {
+    "id": "752",
+    "difficulty": "EXP",
+    "constant": 11
+  },
+  {
+    "id": "773",
+    "difficulty": "EXP",
+    "constant": 11.6
+  },
+  {
+    "id": "806",
+    "difficulty": "EXP",
+    "constant": 11.4
+  },
+  {
+    "id": "832",
+    "difficulty": "EXP",
+    "constant": 11.2
+  },
+  {
+    "id": "429",
+    "difficulty": "EXP",
+    "constant": 11.4
+  },
+  {
+    "id": "891",
+    "difficulty": "EXP",
+    "constant": 11
+  },
+  {
+    "id": "2138",
+    "difficulty": "EXP",
+    "constant": 11.8
+  },
+  {
+    "id": "397",
+    "difficulty": "EXP",
+    "constant": 11
+  },
+  {
+    "id": "333",
+    "difficulty": "EXP",
+    "constant": 11.3
+  },
+  {
+    "id": "2206",
+    "difficulty": "EXP",
+    "constant": 11.5
+  },
+  {
+    "id": "2134",
+    "difficulty": "EXP",
+    "constant": 11
+  },
+  {
+    "id": "2221",
+    "difficulty": "EXP",
+    "constant": 11
+  },
+  {
+    "id": "2370",
+    "difficulty": "EXP",
+    "constant": 11
+  },
+  {
+    "id": "202",
+    "difficulty": "EXP",
+    "constant": 11.3
+  },
+  {
+    "id": "103",
+    "difficulty": "EXP",
+    "constant": 11.8
+  },
+  {
+    "id": "259",
+    "difficulty": "EXP",
+    "constant": 11.4
+  },
+  {
+    "id": "466",
+    "difficulty": "EXP",
+    "constant": 11.9
+  },
+  {
+    "id": "616",
+    "difficulty": "EXP",
+    "constant": 11.3
+  },
+  {
+    "id": "775",
+    "difficulty": "EXP",
+    "constant": 11
+  },
+  {
+    "id": "785",
+    "difficulty": "EXP",
+    "constant": 11.2
+  },
+  {
+    "id": "850",
+    "difficulty": "EXP",
+    "constant": 11
+  },
+  {
+    "id": "854",
+    "difficulty": "EXP",
+    "constant": 11.4
+  },
+  {
+    "id": "879",
+    "difficulty": "EXP",
+    "constant": 11.3
+  },
+  {
+    "id": "917",
+    "difficulty": "EXP",
+    "constant": 11
+  },
+  {
+    "id": "937",
+    "difficulty": "EXP",
+    "constant": 11.3
+  },
+  {
+    "id": "1015",
+    "difficulty": "EXP",
+    "constant": 11.3
+  },
+  {
+    "id": "1029",
+    "difficulty": "EXP",
+    "constant": 11.6
+  },
+  {
+    "id": "2064",
+    "difficulty": "EXP",
+    "constant": 11.1
+  },
+  {
+    "id": "2058",
+    "difficulty": "EXP",
+    "constant": 11
+  },
+  {
+    "id": "2052",
+    "difficulty": "EXP",
+    "constant": 11.6
+  },
+  {
+    "id": "2091",
+    "difficulty": "EXP",
+    "constant": 11
+  },
+  {
+    "id": "2209",
+    "difficulty": "EXP",
+    "constant": 11.8
+  },
+  {
+    "id": "2278",
+    "difficulty": "EXP",
+    "constant": 11.5
+  },
+  {
+    "id": "2337",
+    "difficulty": "EXP",
+    "constant": 11.5
+  },
+  {
+    "id": "2439",
+    "difficulty": "EXP",
+    "constant": 11.4
+  },
+  {
+    "id": "2458",
+    "difficulty": "EXP",
+    "constant": 11.1
+  },
+  {
+    "id": "2460",
+    "difficulty": "EXP",
+    "constant": 11.7
+  },
+  {
+    "id": "2571",
+    "difficulty": "EXP",
+    "constant": 11.1
+  },
+  {
+    "id": "2534",
+    "difficulty": "EXP",
+    "constant": 11.3
+  },
+  {
+    "id": "2515",
+    "difficulty": "EXP",
+    "constant": 11.1
+  },
+  {
+    "id": "2536",
+    "difficulty": "EXP",
+    "constant": 11.9
+  },
+  {
+    "id": "2523",
+    "difficulty": "EXP",
+    "constant": 11.2
+  },
+  {
+    "id": "2562",
+    "difficulty": "EXP",
+    "constant": 11.2
+  },
+  {
+    "id": "2614",
+    "difficulty": "EXP",
+    "constant": 11.8
+  },
+  {
+    "id": "2674",
+    "difficulty": "EXP",
+    "constant": 11
+  },
+  {
+    "id": "2638",
+    "difficulty": "EXP",
+    "constant": 11.4
+  },
+  {
+    "id": "2644",
+    "difficulty": "EXP",
+    "constant": 11
+  },
+  {
+    "id": "2705",
+    "difficulty": "EXP",
+    "constant": 11.9
+  },
+  {
+    "id": "2695",
+    "difficulty": "EXP",
+    "constant": 11.3
+  },
+  {
+    "id": "2829",
+    "difficulty": "EXP",
+    "constant": 11.7
+  },
+  {
+    "id": "2859",
+    "difficulty": "EXP",
+    "constant": 11.7
+  },
+  {
+    "id": "3057",
+    "difficulty": "EXP",
+    "constant": 10.2
+  },
+  {
+    "id": "3067",
+    "difficulty": "EXP",
+    "constant": 10
+  },
+  {
+    "id": "3068",
+    "difficulty": "EXP",
+    "constant": 10.8
+  },
+  {
+    "id": "3071",
+    "difficulty": "EXP",
+    "constant": 12.5
+  },
+  {
+    "id": "3065",
+    "difficulty": "EXP",
+    "constant": 10.2
+  },
+  {
+    "id": "3072",
+    "difficulty": "EXP",
+    "constant": 10.7
+  },
+  {
+    "id": "3075",
+    "difficulty": "EXP",
+    "constant": 11.3
   }
 ]

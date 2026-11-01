@@ -8,10 +8,13 @@ export type ScoreSource = (typeof SCORE_SOURCES)[number];
 
 export type ComboStatus = "fc" | "aj" | "ajc";
 export type FullChainStatus = "fchain" | "gold" | "platinum";
+export const CLEAR_STATUSES = ["failed", "clear", "hard", "brave", "absolute", "catastrophy"] as const;
+export type ClearStatus = (typeof CLEAR_STATUSES)[number];
 
 export interface ScoreAchievements {
   combo?: ComboStatus;
   fullChain?: FullChainStatus;
+  clear?: ClearStatus;
 }
 
 export interface ChartNoteProfile {

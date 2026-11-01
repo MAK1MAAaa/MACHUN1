@@ -4,12 +4,13 @@ import { createAjB30Export, createB30CandidatesExport, createB30Export, generate
 
 describe("B30 PNG generation", () => {
   const drawnText: string[] = [];
+  const drawnPositions: Array<{ text: string; x: number; y: number }> = [];
   const encodedSizes: Array<{ width: number; height: number }> = [];
   const generatedBlob = new Blob(["png"], { type: "image/png" });
   const context = new Proxy({}, {
     get(_target, property) {
       if (property === "measureText") return (text: string) => ({ width: text.length * 6 });
-      if (property === "fillText") return (text: string) => { drawnText.push(text); };
+      if (property === "fillText") return (text: string, x: number, y: number) => { drawnText.push(text); drawnPositions.push({ text, x, y }); };
       if (property === "createLinearGradient") return () => ({ addColorStop() { /* Canvas test double */ } });
       return () => undefined;
     },
@@ -29,6 +30,7 @@ describe("B30 PNG generation", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     drawnText.length = 0;
+    drawnPositions.length = 0;
     encodedSizes.length = 0;
     canvas.width = 0;
     canvas.height = 0;
@@ -68,10 +70,10 @@ describe("B30 PNG generation", () => {
     const data = createB30Export([makeRecord("1", "fc"), makeRecord("2", "aj")], new Map(), "test", "2026-10-13T00:00:00Z");
     const result = await generateB30Png(data);
     expect(result).toEqual({ blob: generatedBlob, filename: "machun1-b30-2026-10-13.png", missingCovers: 0 });
-    expect(encodedSizes).toEqual([{ width: 2360, height: 1120 }]);
+    expect(encodedSizes).toEqual([{ width: 2360, height: 1360 }]);
     expect(canvas.toBlob).toHaveBeenCalledWith(expect.any(Function), "image/png");
     expect(createElement.mock.calls).toEqual([["canvas"]]);
-    expect(drawnText).toEqual(expect.arrayContaining(["FC", "AJ", "SSS+", "金 FCHAIN", "定数 14.0 · Rin服", "16.1500"]));
+    expect(drawnText).toEqual(expect.arrayContaining(["FULL COMBO", "ALL JUSTICE", "SSS+", "金 FCHAIN", "MASTER 14.0", "Rin服", "Rating: 16.1500"]));
     expect(drawnText).toContain("B30");
     expect(drawnText).not.toContain("AJ B30");
     expect(canvas.width).toBe(0);
@@ -87,8 +89,8 @@ describe("B30 PNG generation", () => {
     );
     const result = await generateB30Png(data);
     expect(result).toEqual({ blob: generatedBlob, filename: "machun1-aj-b30-2026-10-17.png", missingCovers: 0 });
-    expect(encodedSizes).toEqual([{ width: 2360, height: 1120 }]);
-    expect(drawnText).toEqual(expect.arrayContaining(["AJ B30", "AJ", "AJC", "SSS+", "金 FCHAIN", "定数 14.0 · Rin服", "Song 2", "Song 3"]));
+    expect(encodedSizes).toEqual([{ width: 2360, height: 1360 }]);
+    expect(drawnText).toEqual(expect.arrayContaining(["AJ B30", "ALL JUSTICE", "ALL JUSTICE CRITICAL", "SSS+", "金 FCHAIN", "MASTER 14.0", "Song 2", "Song 3"]));
     expect(drawnText).not.toContain("B30");
     expect(drawnText).not.toContain("FC");
     expect(drawnText).not.toContain("Song 1");
@@ -103,8 +105,36 @@ describe("B30 PNG generation", () => {
     const data = createB30CandidatesExport([], new Map(), "test");
     const result = await generateB30Png(data);
     expect(result.filename).toMatch(/^machun1-b30-candidates20-\d{4}-\d{2}-\d{2}\.png$/);
-    expect(encodedSizes).toEqual([{ width: 2360, height: 1792 }]);
+    expect(encodedSizes).toEqual([{ width: 2360, height: 2192 }]);
     expect(drawnText.filter((text) => text === "EMPTY SLOT")).toHaveLength(50);
+  });
+
+  it("places source above score, rank at the right, and CLEAR before grade when no combo exists", async () => {
+    const record = { ...makeRecord("clear", undefined), clear: "absolute" as const };
+    await generateB30Png(createB30Export([record], new Map(), "test"));
+    const source = drawnPositions.find(({ text }) => text === "Rin服")!;
+    const rank = drawnPositions.find(({ text }) => text === "#01")!;
+    const score = drawnPositions.find(({ text }) => text === "1,009,000")!;
+    const status = drawnPositions.find(({ text }) => text === "ABSOLUTE")!;
+    const grade = drawnPositions.find(({ text }) => text === "SSS+")!;
+    expect(source.x).toBeLessThan(rank.x);
+    expect(source.y).toBeLessThan(score.y);
+    expect(status.x).toBeLessThan(grade.x);
+    expect(status.y).toBe(grade.y);
+  });
+
+  it("prefers combo lamps without inventing a CLEAR for unknown records", async () => {
+    const records = [
+      { ...makeRecord("combo", "aj"), clear: "absolute" as const },
+      { ...makeRecord("failed", undefined), clear: "failed" as const },
+      makeRecord("unknown", undefined),
+    ];
+    await generateB30Png(createB30Export(records, new Map(), "test"));
+    expect(drawnText).toContain("ALL JUSTICE");
+    expect(drawnText).not.toContain("ABSOLUTE");
+    expect(drawnText).toContain("FAILED");
+    expect(drawnText).toContain("—");
+    expect(drawnText).not.toContain("CLEAR");
   });
 
   it("keeps failed covers as placeholders and reports their count", async () => {

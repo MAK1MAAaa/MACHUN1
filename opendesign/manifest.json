@@ -1,5 +1,5 @@
 {
-  "generated": "2026-10-13T02:11:28.480768+00:00",
+  "generated": "2026-11-01T12:22:44.238Z",
   "sections": [
     {
       "id": "mockups",
@@ -13,6 +13,15 @@
               "path": "mockups/mobile-workspace/index.html"
             }
           ]
+        },
+        {
+          "slug": "score-card-refresh",
+          "files": [
+            {
+              "label": "index.html",
+              "path": "mockups/score-card-refresh/index.html"
+            }
+          ]
         }
       ]
     },
@@ -24,20 +33,20 @@
           "slug": "machun-workspace",
           "files": [
             {
-              "label": "README.md",
-              "path": "design-systems/machun-workspace/README.md"
-            },
-            {
-              "label": "SKILL.md",
-              "path": "design-systems/machun-workspace/SKILL.md"
-            },
-            {
               "label": "brand/style-notes.md",
               "path": "design-systems/machun-workspace/brand/style-notes.md"
             },
             {
               "label": "brand/voice-and-tone.md",
               "path": "design-systems/machun-workspace/brand/voice-and-tone.md"
+            },
+            {
+              "label": "README.md",
+              "path": "design-systems/machun-workspace/README.md"
+            },
+            {
+              "label": "SKILL.md",
+              "path": "design-systems/machun-workspace/SKILL.md"
             },
             {
               "label": "tokens/colors_and_type.css",

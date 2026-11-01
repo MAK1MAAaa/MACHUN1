@@ -1,8 +1,8 @@
-import type { CatalogChart, ComboStatus, Difficulty, FullChainStatus, ScoreAchievements, ScoreSource, SingleRating } from "../types";
+import type { CatalogChart, ClearStatus, ComboStatus, Difficulty, FullChainStatus, ScoreAchievements, ScoreSource, SingleRating } from "../types";
 import { B30_SIZE, chartKey, compareRatings, getB30 } from "./b30";
 import { SCORE_SOURCE_LABELS } from "./sources";
 import { scoreGrade } from "./rating";
-import { CHAIN_LABELS, COMBO_LABELS, mergeScoreAchievements } from "./scoreAchievements";
+import { CHAIN_LABELS, CLEAR_LABELS, COMBO_DESCRIPTIONS, mergeScoreAchievements } from "./scoreAchievements";
 import { downloadBlob } from "./fileDelivery";
 
 export interface B30ExportSlot extends ScoreAchievements {
@@ -118,6 +118,7 @@ interface OtoB30Record {
   score: number;
   full_combo?: "fullcombo" | "alljustice" | "alljusticecritical";
   full_chain?: "fchain" | "fullchain2" | "fullchain";
+  clear?: ClearStatus;
 }
 
 const EXPORTED_COMBO: Record<ComboStatus, NonNullable<OtoB30Record["full_combo"]>> = {
@@ -147,6 +148,7 @@ export function createOtoB30Export(scores: Iterable<SingleRating>, withCandidate
     score: record.score,
     ...(record.combo ? { full_combo: EXPORTED_COMBO[record.combo] } : {}),
     ...(record.fullChain ? { full_chain: EXPORTED_CHAIN[record.fullChain] } : {}),
+    ...(record.clear ? { clear: record.clear } : {}),
   });
   return {
     code: 0,
@@ -165,15 +167,9 @@ export function downloadB30Json(scores: Iterable<SingleRating>, withCandidates =
 }
 
 const DIFFICULTY_COLORS: Record<Difficulty, string> = {
-  EXP: "#ef4454",
-  MAS: "#a989ed",
-  ULT: "#050506",
-};
-
-const DIFFICULTY_TINTS: Record<Difficulty, string> = {
-  EXP: "rgba(239, 68, 84, 0.24)",
-  MAS: "rgba(169, 137, 237, 0.32)",
-  ULT: "rgba(5, 5, 6, 0.16)",
+  EXP: "#dd2636",
+  MAS: "#8b4bb7",
+  ULT: "#26212e",
 };
 
 const DIFFICULTY_LABELS: Record<Difficulty, string> = {
@@ -299,6 +295,50 @@ function drawCover(
   context.restore();
 }
 
+function drawCardBadge(
+  context: CanvasRenderingContext2D,
+  label: string,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  color: string,
+  border: string,
+  background: string,
+  rainbow = false,
+): void {
+  roundedRect(context, x, y, width, height, 2);
+  if (rainbow) {
+    const shimmer = context.createLinearGradient(x, y, x + width, y + height);
+    for (const [offset, fill] of [[0, "#e5f9ee"], [0.3, "#fff1ba"], [0.6, "#eee1ff"], [1, "#dcf2ff"]] as const) {
+      shimmer.addColorStop(offset, fill);
+    }
+    context.fillStyle = shimmer;
+  } else context.fillStyle = background;
+  context.fill();
+  context.lineWidth = 1.5;
+  context.strokeStyle = border;
+  context.stroke();
+  let size = 14;
+  do {
+    context.font = `900 ${size}px Inter, "Noto Sans SC", "PingFang SC", sans-serif`;
+    if (context.measureText(label).width <= width - 12) break;
+    size--;
+  } while (size > 8);
+  context.fillStyle = color;
+  context.textAlign = "center";
+  context.fillText(label, x + width / 2, y + (height + size * 0.72) / 2);
+}
+
+const CLEAR_BADGE_COLORS: Record<ClearStatus, { text: string; border: string; background: string }> = {
+  failed: { text: "#666b75", border: "#b8bec8", background: "#f2f3f5" },
+  clear: { text: "#336846", border: "#85b796", background: "#e7f5eb" },
+  hard: { text: "#a33639", border: "#d98b8d", background: "#ffeaeb" },
+  brave: { text: "#75509d", border: "#b89cd3", background: "#f3eaff" },
+  absolute: { text: "#256885", border: "#81b7ce", background: "#e4f5fc" },
+  catastrophy: { text: "#8b6415", border: "#c5a253", background: "#fff1c7" },
+};
+
 function drawFilledCard(
   context: CanvasRenderingContext2D,
   slot: B30ExportSlot,
@@ -308,91 +348,72 @@ function drawFilledCard(
   width: number,
   height: number,
 ): void {
-  const accent = DIFFICULTY_COLORS[slot.difficulty];
-  roundedRect(context, x, y, width, height, 10);
+  context.save();
+  roundedRect(context, x, y, width, height, 4);
+  context.clip();
+  context.fillStyle = DIFFICULTY_COLORS[slot.difficulty];
+  context.fillRect(x, y, width, height);
   context.fillStyle = "#ffffff";
+  context.fillRect(x, y + height - 39, width, 39);
+
+  const sourceLabel = SCORE_SOURCE_LABELS[slot.source];
+  context.font = '800 10px Inter, "PingFang SC", sans-serif';
+  const sourceWidth = context.measureText(sourceLabel).width + 16;
+  roundedRect(context, x + 8, y + 6, sourceWidth, 18, 3);
+  context.fillStyle = "rgba(0, 0, 0, 0.28)";
   context.fill();
-  context.fillStyle = DIFFICULTY_TINTS[slot.difficulty];
-  context.fill();
-  context.strokeStyle = "rgba(32, 42, 60, 0.10)";
+  context.textAlign = "left";
+  context.fillStyle = "#ffffff";
+  context.fillText(sourceLabel, x + 16, y + 19);
+  if (slot.fullChain) {
+    context.font = '800 10px Inter, "PingFang SC", sans-serif';
+    context.fillText(CHAIN_LABELS[slot.fullChain], x + sourceWidth + 24, y + 19);
+  }
+  context.font = '900 15px ui-monospace, "SFMono-Regular", monospace';
+  context.textAlign = "right";
+  context.fillText(`#${String(slot.rank).padStart(2, "0")}`, x + width - 10, y + 20);
+
+  const coverSize = height - 42;
+  context.fillStyle = "#ffffff";
+  context.fillRect(x + 8, y + 30, coverSize + 4, coverSize + 4);
+  drawCover(context, image, x + 10, y + 32, coverSize);
+  const contentX = x + coverSize + 24;
+  const contentWidth = width - coverSize - 36;
+  context.textAlign = "left";
+  context.fillStyle = "#ffffff";
+  context.font = '800 20px Inter, "Noto Sans SC", "PingFang SC", sans-serif';
+  context.fillText(titleLines(context, slot.title, contentWidth, 1)[0] ?? "", contentX, y + 54);
+  const score = slot.score.toLocaleString("en-US");
+  let scoreSize = 40;
+  do {
+    context.font = `900 ${scoreSize}px ui-monospace, "SFMono-Regular", monospace`;
+    if (context.measureText(score).width <= contentWidth) break;
+    scoreSize--;
+  } while (scoreSize > 28);
+  context.fillText(score, contentX, y + 104);
+  context.font = '800 13px Inter, "PingFang SC", sans-serif';
+  context.fillText(`${DIFFICULTY_LABELS[slot.difficulty]} ${slot.constant.toFixed(1)}`, contentX, y + 133);
+  context.font = '800 12px ui-monospace, "SFMono-Regular", monospace';
+  context.textAlign = "right";
+  context.fillText(`Rating: ${slot.rating.toFixed(4)}`, x + width - 12, y + 133);
+
+  const leftWidth = Math.floor((contentWidth - 8) * 0.62);
+  const badgeY = y + height - 31;
+  const lampLabel = slot.combo ? COMBO_DESCRIPTIONS[slot.combo] : slot.clear ? CLEAR_LABELS[slot.clear] : "—";
+  const lampColor = slot.combo
+    ? slot.combo === "fc"
+      ? { text: "#246842", border: "#81bd99", background: "#e2f5e6" }
+      : { text: "#80571a", border: "#c4aa68", background: "#fff2c9" }
+    : slot.clear ? CLEAR_BADGE_COLORS[slot.clear] : { text: "#6f7780", border: "#c9cfd4", background: "#f3f5f7" };
+  drawCardBadge(context, lampLabel, contentX, badgeY, leftWidth, 23,
+    lampColor.text, lampColor.border, lampColor.background, slot.combo === "aj" || slot.combo === "ajc");
+  drawCardBadge(context, scoreGrade(slot.score), contentX + leftWidth + 8, badgeY, contentWidth - leftWidth - 8, 23,
+    "#334f67", "#88a3b5", "#eef5f8", slot.score >= 1_000_000);
+  context.restore();
+  roundedRect(context, x, y, width, height, 4);
+  context.strokeStyle = "rgba(32, 42, 60, 0.18)";
   context.lineWidth = 1;
   context.stroke();
-
-  context.fillStyle = accent;
-  roundedRect(context, x, y, 5, height, 3);
-  context.fill();
-  if (slot.difficulty === "ULT") {
-    context.fillStyle = "#737b87";
-    context.fillRect(x + 5, y, 1, height);
-  }
-
-  const coverSize = height - 24;
-  drawCover(context, image, x + 14, y + 12, coverSize);
-
-  context.fillStyle = "rgba(5, 8, 13, 0.88)";
-  roundedRect(context, x + 20, y + 18, 42, 24, 6);
-  context.fill();
-  context.fillStyle = "#ffffff";
-  context.font = '800 13px ui-monospace, "SFMono-Regular", monospace';
-  context.textAlign = "center";
-  context.fillText(`#${String(slot.rank).padStart(2, "0")}`, x + 41, y + 35);
-
-  const contentX = x + coverSize + 30;
-  const contentWidth = width - coverSize - 44;
-  context.textAlign = "left";
-  context.font = '800 12px Inter, "PingFang SC", sans-serif';
-  const difficultyLabel = DIFFICULTY_LABELS[slot.difficulty];
-  const labelWidth = context.measureText(difficultyLabel).width + 16;
-  roundedRect(context, contentX, y + 9, labelWidth, 22, 5);
-  context.fillStyle = accent;
-  context.fill();
-  if (slot.difficulty === "ULT") {
-    context.strokeStyle = "#737b87";
-    context.stroke();
-  }
-  context.fillStyle = slot.difficulty === "ULT" ? "#f5f6f8" : "#080b12";
-  context.fillText(difficultyLabel, contentX + 8, y + 24);
-  context.fillStyle = "#5c6575";
-  context.fillText(
-    `定数 ${slot.constant.toFixed(1)} · ${SCORE_SOURCE_LABELS[slot.source]}`,
-    contentX + labelWidth + 9,
-    y + 24,
-  );
-
-  context.fillStyle = "#202a3c";
-  context.font = '800 19px Inter, "Noto Sans SC", "PingFang SC", sans-serif';
-  const lines = titleLines(context, slot.title, contentWidth, 2);
-  lines.forEach((line, index) => context.fillText(line, contentX, y + 54 + index * 23));
-
-  const badges = [
-    { label: scoreGrade(slot.score), background: "#fff2c9", color: "#80571a" },
-    ...(slot.combo ? [{ label: COMBO_LABELS[slot.combo], background: slot.combo === "fc" ? "#e2f5e6" : slot.combo === "aj" ? "#ffedcc" : "#ede3ff", color: slot.combo === "fc" ? "#246842" : slot.combo === "aj" ? "#9b5718" : "#6442a0" }] : []),
-    ...(slot.fullChain ? [{ label: CHAIN_LABELS[slot.fullChain], background: slot.fullChain === "gold" ? "#fff1bf" : "#e4f2fa", color: slot.fullChain === "gold" ? "#87611c" : "#43677c" }] : []),
-  ];
-  let badgeX = contentX;
-  context.font = '800 11px Inter, "PingFang SC", sans-serif';
-  for (const badge of badges) {
-    const badgeWidth = context.measureText(badge.label).width + 12;
-    roundedRect(context, badgeX, y + height - 52, badgeWidth, 18, 4);
-    context.fillStyle = badge.background;
-    context.fill();
-    context.fillStyle = badge.color;
-    context.fillText(badge.label, badgeX + 6, y + height - 39);
-    badgeX += badgeWidth + 5;
-  }
-  context.fillStyle = "#667085";
-  context.font = '700 10px Inter, "PingFang SC", sans-serif';
-  context.textAlign = "right";
-  context.fillText("RATING", x + width - 15, y + height - 35);
-
-  context.fillStyle = "#202a3c";
-  context.font = '800 18px ui-monospace, "SFMono-Regular", monospace';
-  context.textAlign = "left";
-  context.fillText(slot.score.toLocaleString("en-US"), contentX, y + height - 13);
-  context.fillStyle = "#202a3c";
-  context.font = '900 20px ui-monospace, "SFMono-Regular", monospace';
-  context.textAlign = "right";
-  context.fillText(slot.rating.toFixed(4), x + width - 15, y + height - 13);
 }
 
 function drawEmptyCard(
@@ -403,7 +424,7 @@ function drawEmptyCard(
   width: number,
   height: number,
 ): void {
-  roundedRect(context, x, y, width, height, 10);
+  roundedRect(context, x, y, width, height, 4);
   context.fillStyle = "rgba(255, 255, 255, 0.65)";
   context.fill();
   context.strokeStyle = "#d7dde5";
@@ -412,8 +433,8 @@ function drawEmptyCard(
   context.setLineDash([]);
   context.fillStyle = "#6f90a5";
   context.font = '800 13px ui-monospace, "SFMono-Regular", monospace';
-  context.textAlign = "left";
-  context.fillText(`#${String(rank).padStart(2, "0")}`, x + 16, y + 25);
+  context.textAlign = "right";
+  context.fillText(`#${String(rank).padStart(2, "0")}`, x + width - 10, y + 20);
   context.fillStyle = "#9099a8";
   context.font = '800 13px Inter, "PingFang SC", sans-serif';
   context.textAlign = "center";
@@ -448,7 +469,7 @@ export async function generateB30Png(data: B30ExportV3 | B30CandidatesExport | A
   const columnGap = 14;
   const rowGap = 12;
   const headerHeight = 132;
-  const cardHeight = 148;
+  const cardHeight = 188;
   const cardWidth = (width - margin * 2 - columnGap * (columns - 1)) / columns;
   const candidateGap = withCandidates ? 32 : 0;
   const height = headerHeight + cardHeight * rows + rowGap * (rows - 1) + margin + candidateGap;

@@ -34,7 +34,7 @@ describe.skipIf(!enabled)('isolated MySQL persistence and accounts', () => {
   let repository: WorkspaceRepository;
   const first = catalog[0]; const key = `${first.id}:${first.difficulty}`;
   const record = (score: number, source: SingleRating['source'] = 'rin'): SingleRating => ({ ...first,
-    score, source, rating: 999, updatedAt: '2026-10-08T10:00:00.000Z', combo: 'aj', fullChain: 'platinum' });
+    score, source, rating: 999, updatedAt: '2026-10-08T10:00:00.000Z', combo: 'aj', fullChain: 'platinum', clear: 'absolute' });
   const sync = (score: number, source: SyncResult['source'] = 'rin'): SyncResult => ({ source, records: [record(score, source)],
     report: { parsedScores: 1, importedScores: 1, updatedScores: 0, skippedScores: 0, unknownCharts: 0, invalidEntries: 0 },
     connection: { source, bound: true, status: 'ready', identity: { id: 'fixture', label: '测试' }, lastAttemptAt: null, lastSuccessAt: null, error: null } });
@@ -136,6 +136,31 @@ describe.skipIf(!enabled)('isolated MySQL persistence and accounts', () => {
     const image = createB30Export(Object.values(snapshot.state.scores), catalogByKey, 'test');
     expect(image).toBeDefined();
   });
+  it('persists independent clear lamps, preserves them across repeated migration and isolates owners', async () => {
+    await fixture.db.insert(users).values({ username: 'clear-owner', pwd: hashPassword('clear-pwd') });
+    await repository.action('clear-owner', { type: 'manual', key, score: '1009000' });
+    expect((await repository.get('clear-owner')).state.scores[key]).not.toHaveProperty('clear');
+    const result = sync(1_008_000, 'lxns');
+    await repository.mergeSync('clear-owner', result, {});
+    expect((await repository.get('clear-owner')).state.scores[key]).toMatchObject({ score: 1_009_000, source: 'manual', clear: 'absolute' });
+    result.records[0] = { ...result.records[0], clear: 'catastrophy', score: 1_007_000 };
+    await repository.mergeSync('clear-owner', result, {});
+    await fixture.admin.query(fixture.migration);
+    const current = await repository.get('clear-owner');
+    expect(current.state.scores[key]).toMatchObject({ score: 1_009_000, source: 'manual', clear: 'catastrophy' });
+    const [column] = await fixture.admin.query("SHOW COLUMNS FROM machun1.scores LIKE 'clear_status'");
+    expect((column as { Null: string; Default: unknown }[])[0]).toMatchObject({ Null: 'YES', Default: null });
+    const [migration] = await fixture.admin.query("SELECT name FROM machun1._machun_migrations WHERE name='0003_score_clear_status'");
+    expect(migration).toHaveLength(1);
+    const backup = createFullBackup(current.state, 'test');
+    await repository.action('clear-owner', { type: 'clear' });
+    await repository.action('clear-owner', { type: 'backup', mode: 'replace', raw: JSON.stringify(backup) });
+    await repository.action('clear-owner', { type: 'manual', key, score: '900000' });
+    expect((await repository.get('clear-owner')).state.scores[key]).toMatchObject({ score: 900_000, source: 'manual', clear: 'catastrophy' });
+    expect((await repository.get('alice')).state.scores[key]).toBeUndefined();
+    await repository.action('clear-owner', { type: 'delete', key });
+    expect((await repository.get('clear-owner')).state.scores[key]).toBeUndefined();
+  });
   it('isolates scores and personal aliases and clears only the active workspace, including obsolete rows', async () => {
     await repository.action('alice', { type: 'manual', key, score: '999000' });
     await repository.action('alice', { type: 'aliases', id: first.id, aliases: [' Only Alice ', 'only alice'] });
@@ -160,6 +185,7 @@ describe.skipIf(!enabled)('isolated MySQL persistence and accounts', () => {
     expect((await a.load('lxns')).binding?.token).toBe('fixture-root-private');
     expect((await b.load('lxns')).binding?.token).toBe('fixture-alice-private');
     expect((await b.load('otogame')).binding).toBeNull();
+    expect((await a.load('otogame')).otogameCache?.records[0].clear).toBe('absolute');
     expect(a.profilePath(profile)).not.toBe(b.profilePath(profile));
     const provider = {} as BrowserProvider;
     const manager = new SourceManager({ store: a, providers: { rin: provider, munet: provider, otogame: provider } });

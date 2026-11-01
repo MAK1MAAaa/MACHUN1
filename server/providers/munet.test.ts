@@ -105,6 +105,16 @@ describe("MuNET browser provider", () => {
     expect(mock.fetch).toHaveBeenCalledTimes(4);
   });
 
+  it("retains explicit clear lamps and native failure flags without leaking raw account fields", async () => {
+    const mock = session([response(userHome), response({ gameId: "SDHD", userMusicDetailList: [
+      { ...score, isSuccess: true, clear_status: "absolute", privateField: "not-returned" },
+      { ...score, musicId: 101, isSuccess: false },
+    ] })]);
+    await expect(munetProvider.fetchScores(mock.value, identity)).resolves.toEqual({ gameId: "SDHD", userMusicDetailList: [
+      { ...score, clear: "absolute" }, { ...score, musicId: 101, clear: "failed" },
+    ] });
+  });
+
   it("refuses a different saved identity before downloading scores", async () => {
     const mock = session([response(userHome)]);
     await expect(munetProvider.fetchScores(mock.value, { ...identity, id: "99" })).rejects.toMatchObject({ code: "IDENTITY_CHANGED" });

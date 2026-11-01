@@ -29,7 +29,8 @@ const first = catalog[0]; const key = `${first.id}:${first.difficulty}`;
 const seed: LocalState = { ...structuredClone(EMPTY_STATE),
   scores: Object.fromEntries(catalog.slice(0, 50).map((chart, index) => [`${chart.id}:${chart.difficulty}`, {
     id: chart.id, title: chart.title, difficulty: chart.difficulty, constant: chart.constant,
-    score: 1_000_000 + index, rating: 99, source: index % 2 ? 'rin' : 'munet', updatedAt: '2026-10-08T10:00:00.000Z', combo: 'fc',
+    score: 1_000_000 + index, rating: 99, source: index % 2 ? 'rin' : 'munet', updatedAt: '2026-10-08T10:00:00.000Z',
+    combo: index === 1 ? undefined : 'fc', clear: index === 1 ? 'absolute' : undefined,
   }])), nicknameOverrides: { [first.id]: ['迁移别名'] } };
 class FakeManager implements HttpManager {
   readonly state = new Map<ExternalScoreSource, SourceConnection>(SYNC_SOURCES.map(source => [source, {
@@ -131,7 +132,7 @@ async function exportPng(page: Page, name: string) {
     const download = await downloadPromise; const file = await download.path(); assert(file);
     assert.match(download.suggestedFilename(), new RegExp(`^machun1-${filePrefix}-\\d{4}-\\d{2}-\\d{2}\\.png$`));
     const png = await readFile(file); assert.equal(png.readUInt32BE(16), 2360);
-    assert.equal(png.readUInt32BE(20), withCandidates ? 1792 : 1120);
+    assert.equal(png.readUInt32BE(20), withCandidates ? 2192 : 1360);
     assert.equal(downloads, 1);
     assert(await dialog.isVisible(), 'preview remains available for a retry or long-press saving');
     assert((await dialog.getByRole('status').innerText()).includes('已发起保存'));
@@ -172,13 +173,15 @@ try {
     assert.equal(await page.getByRole('dialog').count(), 0);
     assert.equal(emptyAjDownloads, 0);
   } finally { page.off('download', countEmptyAjDownload); }
-  mark('FC-only scores cannot generate an AJ B30 preview or download');
+  mark('scores without AJ cannot generate an AJ B30 preview or download');
   const toggle = page.locator('.b30-preview-toggle');
   assert.equal(await toggle.getAttribute('aria-expanded'), 'false');
   await toggle.click();
   assert.equal(await page.locator('.b30-card').count(), 30);
   assert.equal(await page.locator('.b30-grid').evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length), 3);
-  assert((await page.locator('.b30-card').first().innerText()).includes('FC'));
+  assert(await page.locator('.b30-card .score-card-lamp').filter({ hasText: /^FULL COMBO$/ }).count() > 0);
+  assert.equal(await page.locator('.b30-card .score-card-lamp').filter({ hasText: /^ABSOLUTE$/ }).count(), 1);
+  assert.equal(await page.locator('.b30-card .score-card-source').count(), 30);
   await toggle.click();
   await edit(page, 1_001_000);
   await page.reload(); await page.locator('.account-toolbar').waitFor(); await score(page, 1_001_000, 'manual');
@@ -227,6 +230,7 @@ try {
   const saved = JSON.parse(await readFile(path, 'utf8'));
   assert.equal(saved.scores.length, 50);
   assert(saved.scores.some((row: SingleRating) => row.combo === 'aj' && row.fullChain === 'platinum'));
+  assert(saved.scores.some((row: SingleRating) => row.clear === 'absolute' && !row.combo));
   assert.equal(saved.nicknameOverrides['3055'][0], '个人测试别名');
   assert(!JSON.stringify(saved).includes('token'));
   await edit(page, 1_005_000);

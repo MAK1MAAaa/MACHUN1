@@ -11,13 +11,13 @@ import { CATALOG_DATE, CATALOG_VERSION, catalog, catalogByKey } from "./core/cat
 import { createB30Export, createB30CandidatesExport, createAjB30Export, downloadB30Json, generateB30Png } from "./core/b30Export";
 import { createDownloadResource, type DownloadResource } from "./core/fileDelivery";
 import { ImageExportDialog } from "./components/ImageExportDialog";
-import { formatScore } from "./core/rating";
 import type { Account, WorkspaceSnapshot } from "./accountTypes";
 import { useAccountWorkspace } from "./components/useAccountWorkspace";
 import { createFullBackup, downloadFullBackup } from "./core/backup";
 import { SourceSyncControls, useSourceSync } from "./components/SourceSyncControls";
 import { RecordsSection } from "./components/RecordsSection";
 import { ScoreBadges } from "./components/ScoreBadges";
+import { B30ScoreCard } from "./components/B30ScoreCard";
 import {
   SCORE_SOURCE_LABELS,
   type ExternalScoreSource,
@@ -111,20 +111,6 @@ const difficultyLabel: Record<CatalogChart["difficulty"], string> = {
   MAS: "MASTER",
   ULT: "ULTIMA",
 };
-
-function CoverImage({ src, className = "" }: { src: string; className?: string }) {
-  return (
-    <span className={`cover-image ${className}`} aria-hidden="true">
-      <img
-        src={src}
-        alt=""
-        crossOrigin="anonymous"
-        loading="lazy"
-        onError={(event) => { event.currentTarget.style.opacity = "0"; }}
-      />
-    </span>
-  );
-}
 
 function SourceTag({ source }: { source: ScoreSource }) {
   return <span className={`score-source ${source}`}>{SCORE_SOURCE_LABELS[source]}</span>;
@@ -687,35 +673,12 @@ function App({ account, initial, initialNotice }: AppProps) {
             <div className="b30-grid">
               {Array.from({ length: B30_SIZE }, (_, index) => {
                 const record = b30[index];
-                return record ? (
-                  <article className={`b30-card ${record.difficulty.toLowerCase()}`} key={chartKey(record)}>
-                    <div className="card-rank">#{String(index + 1).padStart(2, "0")}</div>
-                    <CoverImage
-                      src={catalogByKey.get(chartKey(record))?.coverUrl ?? ""}
-                      className="card-cover"
-                    />
-                    <div className="card-content">
-                      <div className="card-title">
-                        <div className="card-chart-meta">
-                          <span>{difficultyLabel[record.difficulty]}</span>
-                          <span>定数 <strong>{record.constant.toFixed(1)}</strong></span>
-                          <SourceTag source={record.source} />
-                        </div>
-                        <h3 title={record.title}>{record.title}</h3>
-                        <ScoreBadges record={record} />
-                      </div>
-                      <div className="card-stats">
-                        <div><span>分数</span><strong>{formatScore(record.score)}</strong></div>
-                        <div><span>单曲 RATING</span><strong>{record.rating.toFixed(4)}</strong></div>
-                      </div>
-                    </div>
-                  </article>
-                ) : (
-                  <article className="b30-card empty" key={`empty-${index}`}>
-                    <div className="card-rank">#{String(index + 1).padStart(2, "0")}</div>
-                    <div className="empty-mark">EMPTY SLOT</div>
-                  </article>
-                );
+                return <B30ScoreCard
+                  key={record ? chartKey(record) : `empty-${index}`}
+                  record={record}
+                  rank={index + 1}
+                  coverUrl={record ? catalogByKey.get(chartKey(record))?.coverUrl ?? "" : ""}
+                />;
               })}
             </div>
           </div>}

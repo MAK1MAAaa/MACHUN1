@@ -21,6 +21,17 @@ export type Database = ReturnType<typeof createDatabase>['db'];
 export function databaseFailure(): SyncError {
   return new SyncError('DATABASE_UNAVAILABLE', 'MySQL 暂不可用，请检查 SSH 隧道和数据库连接后重试；本次未保存。', 503);
 }
+function needsClearMigration(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const wrapper = error as { cause?: unknown };
+  const driver = wrapper.cause && typeof wrapper.cause === 'object' ? wrapper.cause : error;
+  const detail = driver as { code?: unknown; sqlMessage?: unknown };
+  return detail.code === 'ER_BAD_FIELD_ERROR' && typeof detail.sqlMessage === 'string' && detail.sqlMessage.includes('clear_status');
+}
 export async function withDatabase<T>(operation: () => Promise<T>): Promise<T> {
-  try { return await operation(); } catch (error) { if (error instanceof SyncError) throw error; throw databaseFailure(); }
+  try { return await operation(); } catch (error) {
+    if (error instanceof SyncError) throw error;
+    if (needsClearMigration(error)) throw new SyncError('DATABASE_SCHEMA_OUTDATED', '数据库结构需要更新，请由管理员执行 db/migrations/0003_score_clear_status.sql 后重试；本次未保存。', 503);
+    throw databaseFailure();
+  }
 }

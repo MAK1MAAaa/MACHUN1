@@ -28,7 +28,7 @@
 | 保留 FC / AJ / AJC、FULL CHAIN 与评级 | 筛选难度、等级、定数、分类、版本及来源 | Docker / 1Panel 部署，无远程桌面 |
 | B30、候选20、PNG 与 JSON 导出 | 查看未游玩谱面，按分数排序 | 完整成绩与个人别名备份 |
 
-**当前曲库**：截至 **2026-10-08** 的日服 Mate 快照，包含 **1,507 张 13.0+ 谱面、1,243 首歌曲**，支持 EXP、MAS、ULT；内置 **2,458 条别名，覆盖 800 首歌曲**。详情卡另有低定数补充，未知定数显示 `/`。
+**当前曲库**：截至 **2026-11-01** 的日服 Mate 快照，包含 **1,522 张 13.0+ 谱面、1,255 首歌曲**，支持 EXP、MAS、ULT；内置 **2,458 条别名，覆盖 800 首歌曲**。详情卡另有低定数补充，未知定数显示 `/`。
 
 应用采用 React、TypeScript、Vite、Node.js、mysql2 和 Drizzle。网页只提供登录，暂不提供注册；成绩同步由用户主动触发。
 
@@ -38,12 +38,12 @@
 
 ### Docker / 1Panel
 
-适合部署到服务器后，通过 `http://服务器公网IP:1650` 使用。镜像为 `linux/amd64`，支持 `latest` 和固定标签 `20261017-amd64`。
+适合部署到服务器后，通过 `http://服务器公网IP:1650` 使用。镜像为 `linux/amd64`，支持 `latest` 和固定标签 `20261101-amd64`。
 
 | 方式 | 操作 |
 | --- | --- |
 | 从 Docker Hub 拉取 | 在 1Panel「容器 → 编排」使用 [compose.hub.yaml](compose.hub.yaml)，项目名设为 `machun1`。 |
-| 上传部署包 | 上传并解压本地生成的 `release/machun1-hub-deploy-20261017-amd64-1650.tar.gz`，进入目录运行 `sudo bash start.sh`。 |
+| 上传部署包 | 上传并解压本地生成的 `release/machun1-hub-deploy-20261101-amd64-1650.tar.gz`，进入目录运行 `sudo bash start.sh`。 |
 | 离线部署 | 使用 `pnpm docker:package` 生成的一体部署包；启动脚本导入随包镜像后启动编排。 |
 
 也可以在服务器终端执行：
@@ -53,7 +53,7 @@ docker compose -p machun1 -f compose.hub.yaml pull
 docker compose -p machun1 -f compose.hub.yaml up -d
 ```
 
-**编排面向已有 1Panel MySQL 环境**：默认接入 `1panel-network`，映射 `1650:1650`，将 `/data` 保存到命名卷。它不会自动创建数据库或执行迁移；换用其他数据库时需要调整连接并初始化表结构。仅拉取镜像再单独创建容器，不会获得编排中的数据库配置。
+**编排面向已有 1Panel MySQL 环境**：默认接入 `1panel-network`，映射 `1650:1650`，将 `/data` 保存到命名卷。数据库需完成全部三项迁移；从旧版本升级前，由管理员使用管理连接执行 [0003_score_clear_status.sql](db/migrations/0003_score_clear_status.sql)。部署包不会自动创建数据库或执行 DDL；换用其他数据库时需要调整连接并初始化表结构。仅拉取镜像再单独创建容器，不会获得编排中的数据库配置。
 
 首次初始化的网页账号为 `root / pwd`，重复迁移不会重置已有密码。端口、数据库准备、更新和备份见 [1Panel 部署说明](docs/1panel.md)。部署包由本地打包命令生成，不随 Git 仓库提供。
 
@@ -117,6 +117,8 @@ MuNET 只有严格高于当前国服成绩时才覆盖国服。此前将国服�
 
 达成标记通常与最高分独立合并，保留 `AJC > AJ > FC` 的最高标记和已知 FULL CHAIN 等级。更高分未附带标记时，不清除历史标记；手动改分保留标记，删除成绩同时删除标记。MuNET 未超过国服分数时整条跳过；国服修复模式按国服记录替换。
 
+CLEAR 同样按独立的历史达成保留，支持 `FAILED / CLEAR / HARD / BRAVE / ABSOLUTE / CATASTROPHY`。只读取来源明确提供的状态，不按分数推算；未提供状态的旧记录保持未知，重新同步或导入包含状态的文件后可以补齐。
+
 ### 浏览与 Rating
 
 两种成绩表均为每页 10 项，Rating 排名多一列名次。手机和平板以逐项卡片展示，直接查看歌曲、成绩、Rating 和达成标记，搜索常驻，高级筛选可展开；桌面保留表格。等级和定数联动：例如 `13` 只显示 `13.0–13.4`，`13+` 只显示 `13.5–13.9`。点击曲名打开详情卡，也可编辑仅属于当前账号的个人别名。
@@ -135,6 +137,8 @@ MuNET 只有严格高于当前国服成绩时才覆盖国服。此前将国服�
 | 完整备份 | `machun1-backup.json` | 保存全部成绩、来源、达成标记和个人别名 |
 
 PNG 保留曲绘、定数、分数、评级、达成标记、Rating 与来源。点击导出后先生成图片预览，再点击「保存 PNG」；手机也可长按图片，或打开原图后保存。浏览器支持文件分享时显示「分享图片」。图片生成完成不代表已保存到设备，预览会保留以便重试。网页 B30 在手机和桌面均为 3 × 10，PNG 仍为 5 × 6 / 5 × 10。远程曲绘不可用时使用占位图。完整备份不含门户绑定或凭据，B30 JSON 不等于完整备份。
+
+分表卡片使用难度底色、大分数和白底状态栏，来源位于左上角、排名位于右上角。左侧状态栏优先显示 FC／AJ／AJC；没有这些标记时显示已知 CLEAR，未知显示 `—`；右侧显示分数评级。B30 和 AJ B30 PNG 为 `2360×1360`，包含候选20的 PNG 为 `2360×2192`。
 
 AJ B30 从全部已有成绩中筛选 AJ / AJC 标记，再按单曲 Rating 取前 30；普通 FC 和无标记成绩不计入。不足 30 张时保留空位，平均值仍固定除以 30；没有 AJ / AJC 成绩时提示无法生成。
 
@@ -199,12 +203,14 @@ scripts/              曲库维护、数据库管理、打包与测试
 曲库、分类、初出版本和远程曲绘参考 [OTOGE DB](https://github.com/zvuc/otoge-db) 与官方曲库，快照信息见 [catalog-sources.json](src/data/catalog-sources.json)。别名来自[落雪公开列表](https://maimai.lxns.net/docs/api/chunithm)及 [ChunithmUtil 社区快照](https://github.com/AmethystTim/ChunithmUtil/blob/abdddd70decc18540dc9fd8f21d37ab5fcfe8954/data/alias.json)。未知 BPM、物量及详情定数按现有未知表示保留，不推测填写。
 
 ```bash
-pnpm catalog:refresh /path/to/music-ex.json /path/to/official-music.json 2026-10-08
+pnpm catalog:refresh /path/to/music-ex.json /path/to/official-music.json 2026-11-01
 node scripts/merge-aliases.mjs /path/to/alias-list.json
 pnpm db:catalog
 ```
 
 曲库更新保留既有别名及有效补充数据，支持已有歌曲新增 ULT；个人别名按用户独立保存。
+
+升级已有数据库到包含 CLEAR 状态的版本前，先由管理员使用管理连接执行 [0003_score_clear_status.sql](db/migrations/0003_score_clear_status.sql)，再通过 `pnpm db:catalog` 更新共享曲库。迁移仅新增可空的 CLEAR 列，旧成绩保持未知，不修改用户密码。应用运行账号只有 CRUD 权限，启动过程不会自动执行结构迁移；自定义数据库使用自己的管理连接执行，勿将管理员凭据交给应用。
 
 </details>
 
