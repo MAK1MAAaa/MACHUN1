@@ -1,4 +1,4 @@
-import { CONSTANT_TABLE_DIFFICULTY_COLORS, constantTableLamp, validateConstantSelection, type ConstantTableEntry, type ConstantTableFilters, type ConstantTableGroup } from "./constantTable";
+import { CONSTANT_TABLE_AJ_COLORS, CONSTANT_TABLE_AJC_COLORS, CONSTANT_TABLE_DIFFICULTY_COLORS, constantTableLamp, validateConstantSelection, type ConstantTableEntry, type ConstantTableFilters, type ConstantTableGroup } from "./constantTable";
 import { scoreGrade } from "./rating";
 import { drawMateLogo, loadMateLogo } from "./exportBrand";
 
@@ -115,8 +115,8 @@ function achievementBackground(context: CanvasRenderingContext2D, entry: Constan
   if (lamp !== "aj" && lamp !== "ajc") return "#fff";
   const gradient = context.createLinearGradient(x, y, x + size, y + size);
   const colors = lamp === "aj"
-    ? ["#fff0ef", "#fff9d7", "#e8f8df", "#e5f3ff", "#f5e7ff"]
-    : ["#f3a5bc", "#ffe08c", "#b0e0a1", "#9dc9ef", "#c7a5e8"];
+    ? CONSTANT_TABLE_AJ_COLORS
+    : CONSTANT_TABLE_AJC_COLORS;
   colors.forEach((color, index) => gradient.addColorStop(index / (colors.length - 1), color));
   return gradient;
 }
@@ -128,7 +128,7 @@ function scorePanel(context: CanvasRenderingContext2D, entry: ConstantTableEntry
   context.lineWidth = 1;
   context.strokeRect(x + 0.5, y + 0.5, size - 1, size - 1);
   context.textAlign = "center";
-  context.fillStyle = "#293f32";
+  context.fillStyle = constantTableLamp(entry.record) === "ajc" ? "#17251c" : "#293f32";
   const score = entry.record ? scoreFormatter.format(entry.record.score) : "—";
   let scoreSize = 34;
   do { context.font = `900 ${scoreSize--}px ui-monospace, "SFMono-Regular", monospace`; }

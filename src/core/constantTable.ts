@@ -7,6 +7,8 @@ export const MAX_CONSTANT_TABLE_SELECTION = 5;
 export const CONSTANT_TABLE_DIFFICULTY_COLORS: Record<Difficulty, string> = {
   ULT: "#26212e", MAS: "#8b4bb7", EXP: "#dd2636",
 };
+export const CONSTANT_TABLE_AJ_COLORS = ["#f3a5bc", "#ffe08c", "#b0e0a1", "#9dc9ef", "#c7a5e8"] as const;
+export const CONSTANT_TABLE_AJC_COLORS = ["#dc7097", "#e2b64e", "#74b76d", "#5998cf", "#a179ca"] as const;
 
 export interface ConstantTableFilters {
   difficulty: Difficulty | "";

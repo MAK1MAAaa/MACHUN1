@@ -40,8 +40,8 @@
 .constant-table-grade { font-weight: 900; font-size: clamp(12px, 1.2vw, 18px); line-height: 1.1; }
 .constant-table-lamp { font-size: clamp(10px, .95vw, 14px); font-weight: 700; line-height: 1.2; }
 .constant-table-card.lamp-fc .constant-table-score-panel { background: #fff2c4; }
-.constant-table-card.lamp-aj .constant-table-score-panel { background: linear-gradient(130deg, #ffe6ec, #fff4d8 28%, #e7f5dd 52%, #dcf0fb 75%, #ede2fb); }
-.constant-table-card.lamp-ajc .constant-table-score-panel { color: #26323b; background: linear-gradient(130deg, #f59db6, #f6d475 28%, #a4d998 52%, #80c3ec 75%, #bd94e7); }
+.constant-table-card.lamp-aj .constant-table-score-panel { background: var(--constant-achievement-background); }
+.constant-table-card.lamp-ajc .constant-table-score-panel { color: #17251c; background: var(--constant-achievement-background); }
 .constant-table-card.lamp-unplayed .constant-table-score-panel { color: #87928b; }
 .constant-table-empty { margin: 0; padding: 12px 0; color: var(--muted); font-size: .8rem; }
 @media (max-width: 1200px) {

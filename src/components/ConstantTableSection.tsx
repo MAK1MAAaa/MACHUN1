@@ -3,6 +3,8 @@ import { catalog } from "../core/catalog";
 import { chartKey } from "../core/b30";
 import {
   buildConstantTableGroups,
+  CONSTANT_TABLE_AJ_COLORS,
+  CONSTANT_TABLE_AJC_COLORS,
   CONSTANT_TABLE_DIFFICULTY_COLORS,
   constantTableLamp,
   DEFAULT_CONSTANT_TABLE_FILTERS,
@@ -28,7 +30,9 @@ export function ConstantTableCard({ entry, showScores }: { entry: ConstantTableE
   const lamp = constantTableLamp(record);
   const title = `${chart.title} · ${chart.difficulty} ${chart.constant.toFixed(1)} · ${releaseDate ?? "上线日期未知"}`;
   return <li className={`constant-table-card difficulty-${chart.difficulty.toLowerCase()} lamp-${lamp}${showScores ? " with-score" : ""}`}
-    style={{ "--constant-difficulty-color": CONSTANT_TABLE_DIFFICULTY_COLORS[chart.difficulty] } as CSSProperties}
+    style={{ "--constant-difficulty-color": CONSTANT_TABLE_DIFFICULTY_COLORS[chart.difficulty],
+      "--constant-achievement-background": lamp === "aj" ? `linear-gradient(130deg, ${CONSTANT_TABLE_AJ_COLORS.join(", ")})`
+        : lamp === "ajc" ? `linear-gradient(130deg, ${CONSTANT_TABLE_AJC_COLORS.join(", ")})` : undefined } as CSSProperties}
     title={title} aria-label={showScores ? `${title}，${record ? `${formatScore(record.score)}，${scoreGrade(record.score)}，${lamp.toUpperCase()}` : "未游玩"}` : title}
     data-chart-key={chartKey(chart)} data-difficulty={chart.difficulty} data-release-date={releaseDate ?? ""}>
     <span className="constant-table-cover" aria-hidden="true">

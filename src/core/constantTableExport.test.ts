@@ -100,8 +100,8 @@ describe("constant table PNG", () => {
     expect(texts.map(text => text.text)).toEqual(expect.arrayContaining(["1,009,000", "SSS+", "CLEAR", "FC", "AJ", "AJC", "未游玩"]));
     expect(rectangles.some(rect => rect.style === "#fff4c7")).toBe(true);
     expect(gradients).toEqual(expect.arrayContaining([
-      ["#fff0ef", "#fff9d7", "#e8f8df", "#e5f3ff", "#f5e7ff"],
       ["#f3a5bc", "#ffe08c", "#b0e0a1", "#9dc9ef", "#c7a5e8"],
+      ["#dc7097", "#e2b64e", "#74b76d", "#5998cf", "#a179ca"],
     ]));
   });
 
