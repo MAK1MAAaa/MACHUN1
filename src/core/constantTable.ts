@@ -34,6 +34,9 @@ export interface ConstantTableGroup {
 }
 
 export type ConstantTableLamp = "unplayed" | "clear" | "fc" | "aj" | "ajc";
+export const CONSTANT_TABLE_LAMP_LABELS: Record<ConstantTableLamp, string> = {
+  unplayed: "未游玩", clear: "CLEAR", fc: "FULL COMBO", aj: "ALL JUSTICE", ajc: "AJC",
+};
 
 /** This table's four visual achievement groups do not change source clear lamps. */
 export function constantTableLamp(record: SingleRating | undefined): ConstantTableLamp {

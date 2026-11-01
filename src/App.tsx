@@ -718,7 +718,7 @@ function App({ account, initial, initialNotice }: AppProps) {
           onDelete={deleteRecord}
           onAliases={async (id, aliases) => { await workspace.action({ type: "aliases", id, aliases }); }}
         />
-        <ConstantTableSection scores={localState.scores} nickname={savedExportNickname || account.username} />
+        <ConstantTableSection scores={localState.scores} />
       </main>
 
       <footer>

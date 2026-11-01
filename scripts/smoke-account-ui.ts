@@ -265,7 +265,12 @@ async function verifyConstantTable(page: Page) {
   const card = section.locator(`li[data-chart-key="${key}"]`);
   const current = (await state(page)).scores[key];
   assert.equal((await card.locator('.constant-table-score').innerText()).replaceAll(',', ''), String(current.score));
-  assert.equal(await card.locator('.constant-table-lamp').innerText(), current.combo?.toUpperCase() ?? 'CLEAR');
+  assert.equal(await card.locator('.constant-table-lamp').innerText(), current.combo ? { fc: 'FULL COMBO', aj: 'ALL JUSTICE', ajc: 'AJC' }[current.combo] : 'CLEAR');
+  assert(await section.locator('.constant-table-lamp').evaluateAll(elements => elements.every(element => {
+    const range = document.createRange(); range.selectNodeContents(element);
+    const text = range.getBoundingClientRect(), panel = element.parentElement!.getBoundingClientRect();
+    return text.left >= panel.left - 1 && text.right <= panel.right + 1;
+  })), 'full achievement labels fit the desktop score panel');
   const box = await card.boundingBox(); assert(box && Math.abs(box.width - box.height * 2) < 2);
   await exportConstantTable(page, true);
   mark('constant tables enforce continuous five-step ranges, combine all filters, sort release dates, render 10/5 columns and save both PNG modes');
@@ -451,6 +456,15 @@ try {
   await exportConstantTable(mobile, false);
   await exportConstantTable(mobile, true);
   assert.equal(await mobileConstants.locator('.constant-table-grid').first().evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length), 1);
+  for (const width of [320, 390, 768]) {
+    await mobile.setViewportSize({ width, height: 844 });
+    assert(await mobileConstants.locator('.constant-table-lamp').evaluateAll(elements => elements.every(element => {
+      const range = document.createRange(); range.selectNodeContents(element);
+      const text = range.getBoundingClientRect(), panel = element.parentElement!.getBoundingClientRect();
+      return text.left >= panel.left - 1 && text.right <= panel.right + 1;
+    })), `full achievement labels fit the ${width}px score panel`);
+  }
+  await mobile.setViewportSize({ width: 390, height: 844 });
   mark('touch constant tables avoid horizontal overflow and both cover and score PNGs save after an explicit tap');
   const mobileRecords = mobile.locator('.records-browser');
   await mobileRecords.getByRole('button', { name: '曲库筛选', exact: true }).click();

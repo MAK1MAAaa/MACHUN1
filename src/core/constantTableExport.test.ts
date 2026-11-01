@@ -36,7 +36,7 @@ describe("constant table PNG", () => {
   });
   const canvas = { width: 0, height: 0, getContext: vi.fn(() => context), toBlob: vi.fn<(callback: BlobCallback, type: string) => void>() };
   const createElement = vi.fn(() => canvas);
-  const options = (showScores = false) => ({ showScores, nickname: "测试玩家", filters: { difficulty: "" as const, level: "", constants: ["14.0"], genre: "", version: "" } });
+  const options = (showScores = false) => ({ showScores, filters: { difficulty: "" as const, level: "", constants: ["14.0"], genre: "", version: "" } });
 
   function entry(id: string, difficulty: Difficulty = "MAS", combo?: SingleRating["combo"], played = true, coverUrl = ""): ConstantTableEntry {
     return {
@@ -97,7 +97,9 @@ describe("constant table PNG", () => {
     expect(new Set(frames.slice(0, 5).map(frame => frame.y)).size).toBe(1);
     expect(frames[5].y).toBeGreaterThan(frames[4].y);
     for (const frame of frames) expect(rectangles.some(rect => rect.x === frame.x + frame.width && rect.y === frame.y && rect.width === frame.width && rect.height === frame.height)).toBe(true);
-    expect(texts.map(text => text.text)).toEqual(expect.arrayContaining(["1,009,000", "SSS+", "CLEAR", "FC", "AJ", "AJC", "未游玩"]));
+    expect(texts.map(text => text.text)).toEqual(expect.arrayContaining(["1,009,000", "SSS+", "CLEAR", "FULL COMBO", "ALL JUSTICE", "AJC", "未游玩"]));
+    expect(texts.map(text => text.text)).not.toContain("FC");
+    expect(texts.map(text => text.text)).not.toContain("AJ");
     expect(rectangles.some(rect => rect.style === "#fff4c7")).toBe(true);
     expect(gradients).toEqual(expect.arrayContaining([
       ["#f3a5bc", "#ffe08c", "#b0e0a1", "#9dc9ef", "#c7a5e8"],
@@ -105,7 +107,7 @@ describe("constant table PNG", () => {
     ]));
   });
 
-  it("keeps each constant group separate and places the title next to the nickname without a branding date line", async () => {
+  it("keeps each constant group separate and places the title after the logo without a nickname or branding date line", async () => {
     const opts = options(); opts.filters.constants = ["14.0", "14.1"];
     await generateConstantTablePng([{ constant: "14.1", entries: [entry("new", "ULT")] }, { constant: "14.0", entries: [entry("old", "EXP")] }], opts);
     const first = texts.find(text => text.text === "14.1")!, second = texts.find(text => text.text === "14.0")!;
@@ -113,9 +115,11 @@ describe("constant table PNG", () => {
     expect(lines).toHaveLength(1);
     expect(lines[0]).toBeGreaterThan(covers()[0].y + covers()[0].height);
     expect(lines[0]).toBeLessThan(second.y);
-    const name = texts.find(text => text.text === "测试玩家")!, title = texts.find(text => text.text === "定数表")!;
-    expect(title.x).toBe(name.x + "测试玩家".length * 8 + 30);
-    expect(name.y).toBe(title.y);
+    const title = texts.find(text => text.text === "定数表")!;
+    expect(title.x).toBe(40 + 120 + 22);
+    expect(title.y).toBe(76);
+    expect(texts.map(text => text.text)).not.toContain("测试玩家");
+    expect(texts.map(text => text.text)).not.toContain("神秘游客");
     expect(texts.some(text => text.text.includes("MACHUN1 ·"))).toBe(false);
   });
 

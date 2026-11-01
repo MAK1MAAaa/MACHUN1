@@ -1,10 +1,9 @@
-import { CONSTANT_TABLE_AJ_COLORS, CONSTANT_TABLE_AJC_COLORS, CONSTANT_TABLE_DIFFICULTY_COLORS, constantTableLamp, validateConstantSelection, type ConstantTableEntry, type ConstantTableFilters, type ConstantTableGroup } from "./constantTable";
+import { CONSTANT_TABLE_AJ_COLORS, CONSTANT_TABLE_AJC_COLORS, CONSTANT_TABLE_DIFFICULTY_COLORS, CONSTANT_TABLE_LAMP_LABELS, constantTableLamp, validateConstantSelection, type ConstantTableEntry, type ConstantTableFilters, type ConstantTableGroup } from "./constantTable";
 import { scoreGrade } from "./rating";
 import { drawMateLogo, loadMateLogo } from "./exportBrand";
 
 export interface ConstantTablePngOptions {
   showScores: boolean;
-  nickname: string;
   filters: ConstantTableFilters;
 }
 
@@ -31,10 +30,6 @@ function fitText(context: CanvasRenderingContext2D, text: string, width: number)
   if (context.measureText(text).width <= width) return text;
   while (characters.length && context.measureText(`${characters.join("")}…`).width > width) characters.pop();
   return `${characters.join("")}…`;
-}
-
-function sanitizedNickname(value: string): string {
-  return value.replace(/[\u0000-\u001f\u007f]/gu, " ").trim() || "神秘游客";
 }
 
 async function waitForFonts(): Promise<void> {
@@ -137,8 +132,11 @@ function scorePanel(context: CanvasRenderingContext2D, entry: ConstantTableEntry
   context.font = '900 30px Inter, "PingFang SC", sans-serif';
   context.fillText(entry.record ? scoreGrade(entry.record.score) : "—", x + size / 2, y + size * 0.58);
   const lamp = constantTableLamp(entry.record);
-  context.font = '800 22px Inter, "Noto Sans SC", "PingFang SC", sans-serif';
-  context.fillText(lamp === "unplayed" ? "未游玩" : lamp.toUpperCase(), x + size / 2, y + size * 0.84);
+  const label = CONSTANT_TABLE_LAMP_LABELS[lamp];
+  let lampSize = 22;
+  do { context.font = `800 ${lampSize--}px Inter, "Noto Sans SC", "PingFang SC", sans-serif`; }
+  while (context.measureText(label).width > size - 16 && lampSize > 12);
+  context.fillText(label, x + size / 2, y + size * 0.84);
 }
 
 function subtitle(options: ConstantTablePngOptions, constants: string[]): string {
@@ -174,11 +172,8 @@ export async function generateConstantTablePng(groups: readonly ConstantTableGro
     context.scale(scale, scale);
     context.fillStyle = "#f6f8f3"; context.fillRect(0, 0, WIDTH, logicalHeight);
     const logoWidth = drawMateLogo(context, logo, MARGIN, 28, 60);
-    const nicknameX = MARGIN + logoWidth + 22;
-    context.font = '800 38px "Noto Sans SC", "PingFang SC", sans-serif'; context.textAlign = "left"; context.fillStyle = "#2c4433";
-    const name = fitText(context, sanitizedNickname(options.nickname), 570);
-    context.fillText(name, nicknameX, 76);
-    const titleX = nicknameX + context.measureText(name).width + 30;
+    const titleX = MARGIN + logoWidth + 22;
+    context.textAlign = "left"; context.fillStyle = "#2c4433";
     context.font = '900 42px "Noto Sans SC", "PingFang SC", sans-serif';
     context.fillText("定数表", titleX, 76);
     context.font = '500 23px "Noto Sans SC", "PingFang SC", sans-serif'; context.fillStyle = "#607465";

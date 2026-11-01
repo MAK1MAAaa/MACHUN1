@@ -37,7 +37,7 @@ describe("constant table cards", () => {
     expect(html).toContain(`lamp-${combo} with-score`);
     expect(html).toContain('class="constant-table-score">1,009,123</strong>');
     expect(html).toContain('class="constant-table-grade">SSS+</span>');
-    expect(html).toContain(`class="constant-table-lamp">${combo.toUpperCase()}</span>`);
+    expect(html).toContain(`class="constant-table-lamp">${{ fc: "FULL COMBO", aj: "ALL JUSTICE", ajc: "AJC" }[combo]}</span>`);
   });
 
   it("uses the default CLEAR visual group for played scores without combo", () => {
@@ -59,7 +59,7 @@ describe("constant table cards", () => {
 
 describe("constant table section", () => {
   it("starts with a generated 14.0 cover table and independent accessible filters", () => {
-    const html = renderToStaticMarkup(createElement(ConstantTableSection, { scores: {}, nickname: "test" }));
+    const html = renderToStaticMarkup(createElement(ConstantTableSection, { scores: {} }));
     for (const label of ["定数表难度", "定数表等级", "定数表分类", "定数表版本", "定数表定数"]) expect(html).toContain(`aria-label="${label}"`);
     expect(html).toContain('data-constant="14.0"');
     expect(html).toContain(`共 ${catalog.filter(chart => chart.constant === 14).length} 张谱面`);

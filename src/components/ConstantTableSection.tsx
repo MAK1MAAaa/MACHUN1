@@ -6,6 +6,7 @@ import {
   CONSTANT_TABLE_AJ_COLORS,
   CONSTANT_TABLE_AJC_COLORS,
   CONSTANT_TABLE_DIFFICULTY_COLORS,
+  CONSTANT_TABLE_LAMP_LABELS,
   constantTableLamp,
   DEFAULT_CONSTANT_TABLE_FILTERS,
   toggleConstantSelection,
@@ -33,7 +34,7 @@ export function ConstantTableCard({ entry, showScores }: { entry: ConstantTableE
     style={{ "--constant-difficulty-color": CONSTANT_TABLE_DIFFICULTY_COLORS[chart.difficulty],
       "--constant-achievement-background": lamp === "aj" ? `linear-gradient(130deg, ${CONSTANT_TABLE_AJ_COLORS.join(", ")})`
         : lamp === "ajc" ? `linear-gradient(130deg, ${CONSTANT_TABLE_AJC_COLORS.join(", ")})` : undefined } as CSSProperties}
-    title={title} aria-label={showScores ? `${title}，${record ? `${formatScore(record.score)}，${scoreGrade(record.score)}，${lamp.toUpperCase()}` : "未游玩"}` : title}
+    title={title} aria-label={showScores ? `${title}，${record ? `${formatScore(record.score)}，${scoreGrade(record.score)}，${CONSTANT_TABLE_LAMP_LABELS[lamp]}` : "未游玩"}` : title}
     data-chart-key={chartKey(chart)} data-difficulty={chart.difficulty} data-release-date={releaseDate ?? ""}>
     <span className="constant-table-cover" aria-hidden="true">
       <span className="constant-table-cover-placeholder">NO COVER</span>
@@ -42,12 +43,12 @@ export function ConstantTableCard({ entry, showScores }: { entry: ConstantTableE
     {showScores && <span className="constant-table-score-panel">
       <strong className="constant-table-score">{record ? formatScore(record.score) : "—"}</strong>
       <span className="constant-table-grade">{record ? scoreGrade(record.score) : "—"}</span>
-      <span className="constant-table-lamp">{lamp === "unplayed" ? "未游玩" : lamp.toUpperCase()}</span>
+      <span className="constant-table-lamp">{CONSTANT_TABLE_LAMP_LABELS[lamp]}</span>
     </span>}
   </li>;
 }
 
-export function ConstantTableSection({ scores, nickname }: { scores: Record<string, SingleRating>; nickname: string }) {
+export function ConstantTableSection({ scores }: { scores: Record<string, SingleRating> }) {
   const [filters, setFilters] = useState<ConstantTableFilters>(() => copyFilters(DEFAULT_CONSTANT_TABLE_FILTERS));
   const [generatedFilters, setGeneratedFilters] = useState<ConstantTableFilters>(() => copyFilters(DEFAULT_CONSTANT_TABLE_FILTERS));
   const [showScores, setShowScores] = useState(false);
@@ -116,12 +117,12 @@ export function ConstantTableSection({ scores, nickname }: { scores: Record<stri
     const version = ++generation.current.version;
     setExporting(true); setExportError(null);
     try {
-      const result = await generateConstantTablePng(groups, { showScores, nickname, filters: generatedFilters });
+      const result = await generateConstantTablePng(groups, { showScores, filters: generatedFilters });
       if (version !== generation.current.version) return;
       const file = createDownloadResource(result.blob, result.filename);
       imageExportRef.current?.dispose(); imageExportRef.current = file;
       setImageExport({ file, missingCovers: result.missingCovers, previewAlt: showScores
-        ? "定数表，按定数与难度分组，显示封面、分数、评级及 CLEAR、FC、AJ、AJC 状态"
+        ? "定数表，按定数与难度分组，显示封面、分数、评级及 CLEAR、FULL COMBO、ALL JUSTICE、AJC 状态"
         : "定数表，按定数与难度分组显示带难度色框的歌曲封面" });
     } catch (error) {
       if (version === generation.current.version) setExportError(error instanceof Error ? error.message : "定数表图片生成失败，请重试。");
