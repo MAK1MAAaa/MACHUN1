@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { SingleRating } from "../types";
-import { createAjB30Export, createB30CandidatesExport, createB30Export, generateB30Png } from "./b30Export";
+import type { CatalogChart, SingleRating } from "../types";
+import { createAjB30Export, createB30CandidatesExport, createB30Export, createB50Export, generateB30Png } from "./b30Export";
 
 describe("B30 PNG generation", () => {
   const drawnText: string[] = [];
@@ -80,6 +80,51 @@ describe("B30 PNG generation", () => {
       fullChain: "gold",
     };
   }
+
+  it("renders B50 as six OLD rows and four NEW rows with adjacent group averages and independent ranks", async () => {
+    const old = { ...makeRecord("old", undefined), clear: "absolute" as const };
+    const fresh = makeRecord("new", "aj");
+    const chart = (score: SingleRating, version: string): CatalogChart => ({ ...score, version,
+      genre: "ORIGINAL", nickname: [], coverUrl: "", bpm: null,
+      notes: { total: 0, tap: 0, hold: 0, slide: 0, air: 0, flick: 0 } });
+    const data = createB50Export([old, fresh], new Map([
+      ["old:MAS", chart(old, "AIR PLUS")], ["new:MAS", chart(fresh, "MATE")],
+    ]), "test", "2026-11-02T00:00:00Z");
+    const result = await generateB30Png(data, { nickname: "示例昵称" });
+    expect(result).toEqual({ blob: generatedBlob, filename: "machun1-b50-2026-11-02.png", missingCovers: 0 });
+    expect(encodedSizes).toEqual([{ width: 2360, height: 2268 }]);
+    expect(drawnText).toEqual(expect.arrayContaining(["B50", "OLD 30", "NEW 20", "示例昵称", "Rin服", "ABSOLUTE", "ALL JUSTICE", "SSS+"]));
+    expect(drawnText.filter(text => text === "EMPTY SLOT")).toHaveLength(48);
+    expect(drawnText.filter(text => text === "#01")).toHaveLength(2);
+    expect(drawnText.filter(text => text === "#20")).toHaveLength(2);
+    expect(drawnText).toContain("#30");
+    expect(drawnText).not.toContain("#31");
+    expect(drawnText).not.toContain("C20 · B31–B50");
+
+    for (const [label, average, headingY] of [["OLD 30", data.summary.oldAverage, 166], ["NEW 20", data.summary.newAverage, 1426]] as const) {
+      const heading = drawnPositions.find(position => position.text === label)!;
+      const groupAverage = drawnPositions.find(position => position.text === average.toFixed(4) && position.y === heading.y)!;
+      expect(heading).toEqual({ text: label, x: 40, y: headingY });
+      expect(groupAverage.x).toBe(heading.x + label.length * 6 + 20);
+      expect(drawnLines).toContainEqual({ fromX: 40, fromY: headingY - 33, toX: 2320, toY: headingY - 33 });
+    }
+    const firstRanks = drawnPositions.filter(position => position.text === "#01");
+    expect(firstRanks[0].y).toBe(200);
+    expect(firstRanks[1].y).toBe(1460);
+    expect(drawnPositions.find(position => position.text === "B50")?.y).toBe(85);
+    expect(drawnPositions.find(position => position.text === data.summary.average.toFixed(4) && position.y === 85)).toBeDefined();
+    expect(canvas.width).toBe(0);
+    expect(canvas.height).toBe(0);
+  });
+
+  it("retains both fixed B50 groups when no eligible score is available", async () => {
+    await generateB30Png(createB50Export([], new Map(), "test"));
+    expect(encodedSizes).toEqual([{ width: 2360, height: 2268 }]);
+    expect(drawnText.filter(text => text === "EMPTY SLOT")).toHaveLength(50);
+    expect(drawnText.filter(text => text === "#01")).toHaveLength(2);
+    expect(drawnText.filter(text => text === "#30")).toHaveLength(1);
+    expect(drawnText.filter(text => text === "0.0000")).toHaveLength(3);
+  });
 
   it("generates the original 5×6 PNG with marks and source, without starting a download", async () => {
     const data = createB30Export([makeRecord("1", "fc"), makeRecord("2", "aj")], new Map(), "test", "2026-10-13T00:00:00Z");

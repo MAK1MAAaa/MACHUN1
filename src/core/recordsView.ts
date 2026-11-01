@@ -6,7 +6,7 @@ import type { CatalogChart, Difficulty, ScoreSource, SingleRating } from "../typ
 export const RECORDS_PAGE_SIZE = 10;
 
 // Catalog version names follow Japanese release chronology, including major revisions.
-const GAME_VERSION_ORDER = [
+export const GAME_VERSION_ORDER = [
   "CHUNITHM", "PLUS", "AIR", "AIR PLUS", "STAR", "STAR PLUS",
   "AMAZON", "AMAZON PLUS", "CRYSTAL", "CRYSTAL PLUS", "PARADISE", "PARADISE LOST",
   "NEW", "NEW PLUS", "SUN", "SUN PLUS", "LUMINOUS", "LUMINOUS PLUS",

@@ -27,8 +27,9 @@ let fixture = await prepareTestDatabase();
 const directory = await mkdtemp(join(tmpdir(), 'machun-account-ui-'));
 let service = new AccountService(fixture.db, directory, directory);
 const first = catalog[0]; const key = `${first.id}:${first.difficulty}`;
+const initialCharts = [...catalog.slice(0, 45), ...catalog.filter(chart => chart.version === 'MATE' && !catalog.slice(0, 45).includes(chart)).slice(0, 5)];
 const seed: LocalState = { ...structuredClone(EMPTY_STATE),
-  scores: Object.fromEntries(catalog.slice(0, 50).map((chart, index) => [`${chart.id}:${chart.difficulty}`, {
+  scores: Object.fromEntries(initialCharts.map((chart, index) => [`${chart.id}:${chart.difficulty}`, {
     id: chart.id, title: chart.title, difficulty: chart.difficulty, constant: chart.constant,
     score: 1_000_000 + index, rating: 99, source: index % 2 ? 'rin' : 'munet', updatedAt: '2026-10-08T10:00:00.000Z',
     combo: index === 1 ? undefined : 'fc', clear: index === 1 ? 'absolute' : undefined,
@@ -158,9 +159,10 @@ async function verifyRecordsMultiSort(page: Page) {
 
 async function exportPng(page: Page, name: string) {
   const isAj = name === '导出 AJ B30 图片';
+  const isB50 = name === '导出 B50 图片';
   const withCandidates = name.includes('候选20');
-  const imageLabel = isAj ? 'AJ B30' : withCandidates ? 'B30 + 候选20' : 'B30';
-  const filePrefix = isAj ? 'aj-b30' : `b30${withCandidates ? '-candidates20' : ''}`;
+  const imageLabel = isB50 ? 'B50' : isAj ? 'AJ B30' : withCandidates ? 'B30 + 候选20' : 'B30';
+  const filePrefix = isB50 ? 'b50' : isAj ? 'aj-b30' : `b30${withCandidates ? '-candidates20' : ''}`;
   let downloads = 0;
   const countDownload = () => { downloads++; };
   page.on('download', countDownload);
@@ -178,7 +180,7 @@ async function exportPng(page: Page, name: string) {
     const download = await downloadPromise; const file = await download.path(); assert(file);
     assert.match(download.suggestedFilename(), new RegExp(`^machun1-${filePrefix}-\\d{4}-\\d{2}-\\d{2}\\.png$`));
     const png = await readFile(file); assert.equal(png.readUInt32BE(16), 2360);
-    assert.equal(png.readUInt32BE(20), withCandidates ? 2224 : 1360);
+    assert.equal(png.readUInt32BE(20), isB50 ? 2268 : withCandidates ? 2224 : 1360);
     assert.equal(downloads, 1);
     assert(await dialog.isVisible(), 'preview remains available for a retry or long-press saving');
     assert((await dialog.getByRole('status').innerText()).includes('已发起保存'));
@@ -434,10 +436,10 @@ try {
   await score(page, 1_006_000, 'rin');
   mark('full backup import restores all records, personal aliases, source and AJ/full-chain marks');
   assert.equal(await page.getByLabel('导出昵称', { exact: true }).inputValue(), exportNickname);
-  for (const name of ['导出 B30 图片', '导出 B30 + 候选20 图片', '导出 AJ B30 图片']) {
+  for (const name of ['导出 B30 图片', '导出 B30 + 候选20 图片', '导出 AJ B30 图片', '导出 B50 图片']) {
     await exportPng(page, name);
   }
-  mark('full JSON backup, both regular PNGs and the AJ B30 PNG export retain source, FC/AJ and grades');
+  mark('full JSON backup and regular, AJ B30 and OLD 30 / NEW 20 B50 PNGs retain source, FC/AJ and grades');
   await verifyConstantTable(page);
   paused = true; execFileSync('docker', ['pause', container], { stdio: 'ignore' });
   // Pausing holds TCP connections; destroy them so MySQL fails promptly instead of hanging.
@@ -528,8 +530,8 @@ try {
   mark('touch sorting buttons stay available with filters collapsed and combine constant, score and Rating with the same priorities as desktop');
   await mobileRecords.getByRole('button', { name: '收起筛选', exact: true }).click();
   await mobileRecords.getByRole('button', { name: 'Rating 排名', exact: true }).click();
-  for (const name of ['导出 B30 图片', '导出 B30 + 候选20 图片', '导出 AJ B30 图片']) await exportPng(mobile, name);
-  mark('touch viewport keeps 3×10 B30, readable score cards and collapsed filters; regular and AJ B30 PNGs save after an explicit tap without reporting unconfirmed success');
+  for (const name of ['导出 B30 图片', '导出 B30 + 候选20 图片', '导出 AJ B30 图片', '导出 B50 图片']) await exportPng(mobile, name);
+  mark('touch viewport keeps 3×10 B30, readable score cards and collapsed filters; regular, AJ B30 and B50 PNGs save after an explicit tap without reporting unconfirmed success');
   await mobile.locator('.source-tools-toggle').click();
   const mobileManager = managers.get('root')!;
   for (const connection of mobileManager.state.values()) if (connection.source !== 'lxns') connection.bindingMode = 'companion';

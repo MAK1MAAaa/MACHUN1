@@ -8,7 +8,7 @@ import {
 import type { CatalogChart, ScoreSource, SingleRating } from "./types";
 import { B30_SIZE, chartKey, compareRatings, getB30, getB30Summary, getB30Axis } from "./core/b30";
 import { CATALOG_DATE, CATALOG_VERSION, catalog, catalogByKey } from "./core/catalog";
-import { createB30Export, createB30CandidatesExport, createAjB30Export, downloadB30Json, generateB30Png } from "./core/b30Export";
+import { createB30Export, createB30CandidatesExport, createAjB30Export, createB50Export, downloadB30Json, generateB30Png } from "./core/b30Export";
 import { createDownloadResource, type DownloadResource } from "./core/fileDelivery";
 import { ImageExportDialog } from "./components/ImageExportDialog";
 import type { Account, WorkspaceSnapshot } from "./accountTypes";
@@ -248,19 +248,21 @@ function App({ account, initial, initialNotice }: AppProps) {
     }
   };
 
-  const exportB30Image = async (mode: "b30" | "candidates" | "aj" = "b30") => {
+  const exportB30Image = async (mode: "b30" | "candidates" | "aj" | "b50" = "b30") => {
     if (imageGeneration.current.running) return;
     imageGeneration.current.running = true;
     const version = ++imageGeneration.current.version;
     setExportingImage(true);
-    const imageLabel = mode === "aj" ? "AJ B30" : mode === "candidates" ? "B30 + 候选20" : "B30";
+    const imageLabel = mode === "b50" ? "B50" : mode === "aj" ? "AJ B30" : mode === "candidates" ? "B30 + 候选20" : "B30";
     setNotice({ kind: "success", text: `正在加载曲绘并生成 ${imageLabel} 图片` });
     try {
-      const data = mode === "aj"
-        ? createAjB30Export(records, catalogByKey, CATALOG_VERSION)
-        : mode === "candidates"
-          ? createB30CandidatesExport(records, catalogByKey, CATALOG_VERSION)
-          : createB30Export(records, catalogByKey, CATALOG_VERSION);
+      const data = mode === "b50"
+        ? createB50Export(records, catalogByKey, CATALOG_VERSION)
+        : mode === "aj"
+          ? createAjB30Export(records, catalogByKey, CATALOG_VERSION)
+          : mode === "candidates"
+            ? createB30CandidatesExport(records, catalogByKey, CATALOG_VERSION)
+            : createB30Export(records, catalogByKey, CATALOG_VERSION);
       if (mode === "aj" && data.summary.filled === 0) {
         setNotice({ kind: "warning", text: "暂无 AJ 或 AJC 成绩，无法生成 AJ B30 图片。" });
         return;
@@ -604,6 +606,10 @@ function App({ account, initial, initialNotice }: AppProps) {
                 <button type="button" onClick={() => exportB30Image("aj")} disabled={exportingImage}
                   title="仅统计 AJ / AJC 谱面，按单曲 Rating 取前 30">
                   导出 AJ B30 图片
+                </button>
+                <button type="button" onClick={() => exportB30Image("b50")} disabled={exportingImage}
+                  title="MATE 曲目取 NEW 20，此前版本取 OLD 30，平均 Rating 固定除以 50">
+                  导出 B50 图片
                 </button>
               </div>
             </div>

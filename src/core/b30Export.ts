@@ -5,6 +5,7 @@ import { scoreGrade } from "./rating";
 import { CHAIN_LABELS, CLEAR_LABELS, COMBO_DESCRIPTIONS, mergeScoreAchievements } from "./scoreAchievements";
 import { downloadBlob } from "./fileDelivery";
 import { drawMateLogo, loadMateLogo } from "./exportBrand";
+import { GAME_VERSION_ORDER } from "./recordsView";
 
 export interface B30ExportSlot extends ScoreAchievements {
   rank: number;
@@ -32,6 +33,69 @@ export interface B30ExportV3 {
 
 export interface AjB30Export extends Omit<B30ExportV3, "type"> {
   type: "machun1-aj-b30";
+}
+
+export interface B50Export {
+  schemaVersion: 3;
+  type: "machun1-b50";
+  catalogVersion: string;
+  exportedAt: string;
+  summary: {
+    filled: number;
+    average: number;
+    oldFilled: number;
+    newFilled: number;
+    oldAverage: number;
+    newAverage: number;
+  };
+  old30: Array<B30ExportSlot | null>;
+  new20: Array<B30ExportSlot | null>;
+}
+
+const B50_OLD_VERSIONS = new Set<string>(GAME_VERSION_ORDER.slice(0, GAME_VERSION_ORDER.indexOf("MATE")));
+
+export function createB50Export(
+  scores: Iterable<SingleRating>,
+  charts: Map<string, CatalogChart>,
+  catalogVersion: string,
+  exportedAt = new Date().toISOString(),
+): B50Export {
+  const known = new Map<string, SingleRating>();
+  for (const record of scores) {
+    const key = chartKey(record);
+    const version = charts.get(key)?.version.normalize("NFKC").trim().toUpperCase();
+    // An absent chart or unknown/future version cannot establish an OLD/NEW boundary.
+    if (!version || (version !== "MATE" && !B50_OLD_VERSIONS.has(version))) continue;
+    const previous = known.get(key);
+    if (!previous) known.set(key, record);
+    else {
+      const best = compareRatings(record, previous) < 0 ? record : previous;
+      known.set(key, { ...best, ...mergeScoreAchievements(previous, record) });
+    }
+  }
+  const old: SingleRating[] = [];
+  const fresh: SingleRating[] = [];
+  for (const record of known.values()) {
+    const version = charts.get(chartKey(record))!.version.normalize("NFKC").trim().toUpperCase();
+    (version === "MATE" ? fresh : old).push(record);
+  }
+  const oldRanked = old.sort(compareRatings).slice(0, 30);
+  const newRanked = fresh.sort(compareRatings).slice(0, 20);
+  const slots = (records: SingleRating[], count: number): Array<B30ExportSlot | null> => Array.from({ length: count }, (_, index) => {
+    const record = records[index];
+    return record ? { rank: index + 1, id: record.id, title: record.title, difficulty: record.difficulty,
+      constant: record.constant, score: record.score, rating: record.rating,
+      coverUrl: charts.get(chartKey(record))!.coverUrl, source: record.source,
+      ...mergeScoreAchievements(record, {}) } : null;
+  });
+  const oldTotal = oldRanked.reduce((sum, record) => sum + record.rating, 0);
+  const newTotal = newRanked.reduce((sum, record) => sum + record.rating, 0);
+  return {
+    schemaVersion: 3, type: "machun1-b50", catalogVersion, exportedAt,
+    summary: { filled: oldRanked.length + newRanked.length, average: (oldTotal + newTotal) / 50,
+      oldFilled: oldRanked.length, newFilled: newRanked.length, oldAverage: oldTotal / 30, newAverage: newTotal / 20 },
+    old30: slots(oldRanked, 30), new20: slots(newRanked, 20),
+  };
 }
 
 export function createB30Export(
@@ -469,12 +533,13 @@ async function waitForExportFonts(): Promise<void> {
   });
 }
 
-export async function generateB30Png(data: B30ExportV3 | B30CandidatesExport | AjB30Export, options: B30PngOptions = {}): Promise<GeneratedB30Png> {
+export async function generateB30Png(data: B30ExportV3 | B30CandidatesExport | AjB30Export | B50Export, options: B30PngOptions = {}): Promise<GeneratedB30Png> {
   await waitForExportFonts();
   const canvas = document.createElement("canvas");
   const withCandidates = "candidates" in data;
+  const isB50 = data.type === "machun1-b50";
   const isAj = data.type === "machun1-aj-b30";
-  const slots = withCandidates ? [...data.b30, ...data.candidates] : data.b30;
+  const slots = isB50 ? [...data.old30, ...data.new20] : withCandidates ? [...data.b30, ...data.candidates] : data.b30;
   const columns = 5;
   const rows = Math.ceil(slots.length / columns);
   const width = 2360;
@@ -485,7 +550,12 @@ export async function generateB30Png(data: B30ExportV3 | B30CandidatesExport | A
   const cardHeight = 188;
   const cardWidth = (width - margin * 2 - columnGap * (columns - 1)) / columns;
   const candidateGap = withCandidates ? 64 : 0;
-  const height = headerHeight + cardHeight * rows + rowGap * (rows - 1) + margin + candidateGap;
+  const b50SectionHeight = 48;
+  const b50OldTop = headerHeight + b50SectionHeight;
+  const b50NewHeading = b50OldTop + cardHeight * 6 + rowGap * 5 + 24;
+  const b50NewTop = b50NewHeading + b50SectionHeight;
+  const height = isB50 ? b50NewTop + cardHeight * 4 + rowGap * 3 + margin
+    : headerHeight + cardHeight * rows + rowGap * (rows - 1) + margin + candidateGap;
   canvas.width = width;
   canvas.height = height;
 
@@ -502,7 +572,7 @@ export async function generateB30Png(data: B30ExportV3 | B30CandidatesExport | A
   context.fillStyle = "#202a3c";
   const logoWidth = drawMateLogo(context, logo, margin, 20, 84);
   const nicknameX = margin + logoWidth + 28;
-  const title = isAj ? "AJ B30" : withCandidates ? "B30 + C20" : "B30";
+  const title = isB50 ? "B50" : isAj ? "AJ B30" : withCandidates ? "B30 + C20" : "B30";
   const average = data.summary.average.toFixed(4);
   context.font = '900 48px Inter, "PingFang SC", sans-serif';
   const titleAndGapWidth = context.measureText(`${title}  `).width;
@@ -518,7 +588,22 @@ export async function generateB30Png(data: B30ExportV3 | B30CandidatesExport | A
   context.font = '900 52px ui-monospace, "SFMono-Regular", monospace';
   context.fillText(average, ratingX, 85);
 
-  if (withCandidates) {
+  if (isB50) {
+    const sectionHeading = (label: string, average: number, y: number) => {
+      context.save();
+      context.strokeStyle = "#bdcbbf"; context.lineWidth = 2;
+      context.beginPath(); context.moveTo(margin, y + 1); context.lineTo(width - margin, y + 1); context.stroke();
+      context.textAlign = "left"; context.fillStyle = "#36513e";
+      context.font = '900 30px Inter, "PingFang SC", sans-serif';
+      context.fillText(label, margin, y + 34);
+      const averageX = margin + context.measureText(label).width + 20;
+      context.font = '800 30px ui-monospace, "SFMono-Regular", monospace';
+      context.fillStyle = "#3e5d49"; context.fillText(average.toFixed(4), averageX, y + 34);
+      context.restore();
+    };
+    sectionHeading("OLD 30", data.summary.oldAverage, headerHeight);
+    sectionHeading("NEW 20", data.summary.newAverage, b50NewHeading);
+  } else if (withCandidates) {
     const separatorY = headerHeight + (B30_SIZE / columns) * (cardHeight + rowGap) - rowGap + (rowGap + candidateGap) / 2;
     const label = "C20 · B31–B50";
     context.font = '800 16px Inter, "PingFang SC", sans-serif';
@@ -540,19 +625,22 @@ export async function generateB30Png(data: B30ExportV3 | B30CandidatesExport | A
     const column = index % columns;
     const row = Math.floor(index / columns);
     const x = margin + column * (cardWidth + columnGap);
-    const y = headerHeight + row * (cardHeight + rowGap) + (index >= B30_SIZE ? candidateGap : 0);
+    const y = isB50 ? index < 30
+      ? b50OldTop + row * (cardHeight + rowGap)
+      : b50NewTop + Math.floor((index - 30) / columns) * (cardHeight + rowGap)
+      : headerHeight + row * (cardHeight + rowGap) + (index >= B30_SIZE ? candidateGap : 0);
     if (slot) drawFilledCard(context, slot, covers.get(slot.coverUrl), x, y, cardWidth, cardHeight);
-    else drawEmptyCard(context, index + 1, x, y, cardWidth, cardHeight);
+    else drawEmptyCard(context, isB50 && index >= 30 ? index - 30 + 1 : index + 1, x, y, cardWidth, cardHeight);
   });
 
   try {
     const blob = await new Promise<Blob>((resolve, reject) => {
-      const timeout = window.setTimeout(() => reject(new Error("B30 图片生成超时，请重试。")), 30_000);
+      const timeout = window.setTimeout(() => reject(new Error(`${isB50 ? "B50" : "B30"} 图片生成超时，请重试。`)), 30_000);
       try {
         canvas.toBlob((result) => {
           window.clearTimeout(timeout);
           if (result) resolve(result);
-          else reject(new Error("B30 图片生成失败"));
+          else reject(new Error(`${isB50 ? "B50" : "B30"} 图片生成失败`));
         }, "image/png");
       } catch (error) {
         window.clearTimeout(timeout);
@@ -562,7 +650,8 @@ export async function generateB30Png(data: B30ExportV3 | B30CandidatesExport | A
 
     return {
       blob,
-      filename: `machun1-${isAj ? "aj-" : ""}b30${withCandidates ? "-candidates20" : ""}-${data.exportedAt.slice(0, 10)}.png`,
+      filename: isB50 ? `machun1-b50-${data.exportedAt.slice(0, 10)}.png`
+        : `machun1-${isAj ? "aj-" : ""}b30${withCandidates ? "-candidates20" : ""}-${data.exportedAt.slice(0, 10)}.png`,
       missingCovers: [...covers.values()].filter((image) => image === null).length,
     };
   } finally {
