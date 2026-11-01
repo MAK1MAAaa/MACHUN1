@@ -87,6 +87,24 @@ export function getRecordsFilterOptions(charts: readonly CatalogChart[]): {
   };
 }
 
+/** The constant itself is excluded so choosing one value cannot hide the others. */
+export function getAvailableChartConstants(
+  charts: readonly CatalogChart[],
+  filters: Pick<RecordsFilters, "difficulty" | "level" | "genre" | "version">,
+): string[] {
+  return [...new Set(charts
+    .filter(chart => (!filters.difficulty || chart.difficulty === filters.difficulty)
+      && (!filters.level || getChartLevel(chart.constant) === filters.level)
+      && (!filters.genre || chart.genre === filters.genre)
+      && (!filters.version || chart.version === filters.version))
+    .map(chart => chart.constant.toFixed(1)))].sort((left, right) => Number(left) - Number(right));
+}
+
+export function clearUnavailableRecordConstant(charts: readonly CatalogChart[], filters: RecordsFilters): RecordsFilters {
+  return filters.constant && !getAvailableChartConstants(charts, filters).includes(filters.constant)
+    ? { ...filters, constant: "" } : filters;
+}
+
 function matchesSearch(row: RecordsRow, query: string, nicknameOverrides: Record<string, string[]>): boolean {
   if (!query) return true;
   const { chart, record } = row;

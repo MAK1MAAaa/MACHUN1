@@ -5,8 +5,10 @@ import { formatScore } from "../core/rating";
 import { getSongCharts } from "../core/songDetails";
 import {
   buildRecordsRows,
+  clearUnavailableRecordConstant,
   cycleRecordsSort,
   EMPTY_RECORDS_FILTERS,
+  getAvailableChartConstants,
   getChartLevel,
   getRecordsFilterOptions,
   paginateRecords,
@@ -44,10 +46,10 @@ export function RecordsSection({ records, scores, nicknameOverrides, onEdit, onD
       ...(nicknameOverrides[selectedChart.id] ?? []),
     ].map((alias) => alias.trim()).filter(Boolean))]
     : [], [selectedChart, nicknameOverrides]);
-  const options = useMemo(() => getRecordsFilterOptions(catalog), []);
+  const options = useMemo(() => getRecordsFilterOptions(catalog), [catalog]);
   const constantOptions = useMemo(
-    () => options.constants.filter((constant) => !filters.level || getChartLevel(Number(constant)) === filters.level),
-    [options.constants, filters.level],
+    () => getAvailableChartConstants(catalog, filters),
+    [catalog, filters.difficulty, filters.level, filters.genre, filters.version],
   );
   const rows = useMemo(
     () => buildRecordsRows(catalog, records, scores, nicknameOverrides, mode, filters),
@@ -62,14 +64,14 @@ export function RecordsSection({ records, scores, nicknameOverrides, onEdit, onD
     setRequestedPage((page) => Math.min(page, pagination.pageCount));
   }, [pagination.pageCount]);
 
+  useEffect(() => {
+    if (!filters.constant || constantOptions.includes(filters.constant)) return;
+    setFilters(current => clearUnavailableRecordConstant(catalog, current));
+    setRequestedPage(1);
+  }, [constantOptions, filters.constant]);
+
   function changeFilter<Key extends keyof RecordsFilters>(key: Key, value: RecordsFilters[Key]) {
-    setFilters((current) => {
-      const next = { ...current, [key]: value };
-      if (key === "level" && next.level && next.constant && getChartLevel(Number(next.constant)) !== next.level) {
-        next.constant = "";
-      }
-      return next;
-    });
+    setFilters(current => clearUnavailableRecordConstant(catalog, { ...current, [key]: value }));
     setRequestedPage(1);
   }
 

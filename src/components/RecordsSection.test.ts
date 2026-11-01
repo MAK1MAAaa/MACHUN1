@@ -115,6 +115,21 @@ describe("records section", () => {
     expect(columns.join("")).not.toContain("清除筛选");
   });
 
+  it("restricts constant options to existing difficulty and metadata combinations instead of the whole level range", () => {
+    renderState.mode = "catalog";
+    const constants = (html: string) => [...(html.match(/<select\b[^>]*aria-label="定数"[^>]*>([\s\S]*?)<\/select>/)?.[1] ?? "")
+      .matchAll(/<option\b[^>]*value="([^"]*)"/g)].map(match => match[1]);
+    renderState.filters = { difficulty: "ULT", level: "15+" };
+    expect(constants(renderRecords())).toEqual(["", "15.8"]);
+    renderState.filters = { difficulty: "EXP", level: "15+" };
+    expect(constants(renderRecords())).toEqual([""]);
+    const actual = catalog.find(chart => chart.difficulty === "ULT" && chart.constant === 15.8)!;
+    renderState.filters = { difficulty: "ULT", level: "15+", genre: actual.genre, version: actual.version };
+    expect(constants(renderRecords())).toEqual(["", "15.8"]);
+    renderState.filters = { ...renderState.filters, version: "NO_SUCH_VERSION" };
+    expect(constants(renderRecords())).toEqual([""]);
+  });
+
   it("uses the same column structure in both modes with only an extra rank column", () => {
     const ratingColumns = headers(renderRecords()).map((header) => header.replace(/<[^>]*>/g, ""));
     renderState.mode = "catalog";

@@ -3,8 +3,10 @@ import { SCORE_SOURCES, type CatalogChart, type Difficulty, type SingleRating } 
 import { chartKey } from "./b30";
 import {
   buildRecordsRows,
+  clearUnavailableRecordConstant,
   cycleRecordsSort,
   EMPTY_RECORDS_FILTERS,
+  getAvailableChartConstants,
   getRecordsFilterOptions,
   getChartLevel,
   paginateRecords,
@@ -38,6 +40,40 @@ function rows(
 }
 
 describe("record browsing", () => {
+  it("offers only constants that exist under difficulty, level, genre and version without selecting a hidden gap", () => {
+    const charts = [
+      chart("mas", { constant: 15.7 }),
+      chart("ult-low", { difficulty: "ULT", constant: 15.8 }),
+      chart("ult-high", { difficulty: "ULT", constant: 16 }),
+      chart("ult-genre", { difficulty: "ULT", constant: 15.6, genre: "VARIETY" }),
+      chart("ult-version", { difficulty: "ULT", constant: 15.5, version: "AIR" }),
+      chart("exp", { difficulty: "EXP", constant: 14.9 }),
+    ];
+    expect(getAvailableChartConstants(charts, { ...EMPTY_RECORDS_FILTERS, difficulty: "ULT" }))
+      .toEqual(["15.5", "15.6", "15.8", "16.0"]);
+    const selectedUlt: RecordsFilters = { ...EMPTY_RECORDS_FILTERS, difficulty: "ULT", constant: "15.8", query: "no match", source: "rin" };
+    expect(getAvailableChartConstants(charts, selectedUlt)).toEqual(["15.5", "15.6", "15.8", "16.0"]);
+    const filters: RecordsFilters = { ...EMPTY_RECORDS_FILTERS, difficulty: "ULT", level: "15+", genre: "ORIGINAL", version: "NEW", constant: "15.9" };
+    expect(getAvailableChartConstants(charts, filters)).toEqual(["15.8"]);
+    expect(getAvailableChartConstants(charts, { ...filters, constant: "15.8" } as RecordsFilters)).toEqual(["15.8"]);
+    expect(getAvailableChartConstants(charts, { ...filters, difficulty: "EXP" })).toEqual([]);
+    expect(getAvailableChartConstants(charts, { ...filters, difficulty: "MAS" })).toEqual(["15.7"]);
+  });
+
+  it("clears an unavailable constant after any catalog condition changes and preserves valid selections and other filters", () => {
+    const charts = [chart("mas", { constant: 15.7 }), chart("exp", { difficulty: "EXP", constant: 14.9 })];
+    const filters: RecordsFilters = { ...EMPTY_RECORDS_FILTERS, constant: "15.7", query: "alias", source: "rin", includeUnplayed: true, sorts: ["score-ascending"] };
+    expect(clearUnavailableRecordConstant(charts, filters)).toBe(filters);
+    expect(clearUnavailableRecordConstant(charts, { ...filters, difficulty: "EXP" })).toEqual({ ...filters, difficulty: "EXP", constant: "" });
+    for (const extra of [{ level: "14+" }, { genre: "VARIETY" }, { version: "AIR" }]) {
+      expect(clearUnavailableRecordConstant(charts, { ...filters, ...extra })).toEqual({ ...filters, ...extra, constant: "" });
+    }
+    const cleared = clearUnavailableRecordConstant(charts, { ...filters, difficulty: "EXP" });
+    expect(clearUnavailableRecordConstant(charts, { ...cleared, difficulty: "" }).constant).toBe("");
+    expect(clearUnavailableRecordConstant(charts, { ...filters, constant: "15.9" }).constant).toBe("");
+    expect(filters.constant).toBe("15.7");
+  });
+
   it("cycles each sort independently and retains direction changes at the same priority", () => {
     const start = [...EMPTY_RECORDS_FILTERS.sorts];
     const scoreFirst = cycleRecordsSort(start, "score");

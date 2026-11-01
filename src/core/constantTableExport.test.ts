@@ -123,6 +123,17 @@ describe("constant table PNG", () => {
     expect(texts.some(text => text.text.includes("MACHUN1 ·"))).toBe(false);
   });
 
+  it("exports consecutive available options across the missing 15.9 without creating a phantom group", async () => {
+    const optionsWithGap = { ...options(), filters: { ...options().filters, difficulty: "ULT" as const, constants: ["15.8", "16.0"] } };
+    const high = entry("high", "ULT"), low = entry("low", "ULT");
+    high.chart.constant = 16; low.chart.constant = 15.8;
+    await generateConstantTablePng([{ constant: "16.0", entries: [high] }, { constant: "15.8", entries: [low] }], optionsWithGap);
+    expect(texts.map(text => text.text)).toContain("16.0");
+    expect(texts.map(text => text.text)).toContain("15.8");
+    expect(texts.map(text => text.text)).not.toContain("15.9");
+    expect(texts.some(text => text.text.includes("定数 15.8、16.0"))).toBe(true);
+  });
+
   it("loads duplicate cover URLs once and counts missing images once", async () => {
     const entries = [entry("a", "MAS", undefined, true, "https://example.com/same.png"), entry("b", "EXP", undefined, true, "https://example.com/same.png")];
     imageMode = "error";
@@ -164,7 +175,7 @@ describe("constant table PNG", () => {
   it("refuses empty or mismatched selections before allocating a canvas", async () => {
     await expect(generateConstantTablePng(group([]), options())).rejects.toThrow("没有可导出的谱面");
     const opts = options(); opts.filters.constants = ["14.0", "14.2"];
-    await expect(generateConstantTablePng(group([entry("a")]), opts)).rejects.toThrow("必须连续");
+    await expect(generateConstantTablePng(group([entry("a")]), opts)).rejects.toThrow("连续");
     await expect(generateConstantTablePng([{ constant: "15.0", entries: [entry("a")] }], options())).rejects.toThrow("超出范围");
     expect(createElement).not.toHaveBeenCalled();
   });

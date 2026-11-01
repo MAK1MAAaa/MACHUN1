@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { CatalogChart, SingleRating } from "../types";
 import { chartKey } from "./b30";
-import { buildConstantTableGroups, constantTableLamp, DEFAULT_CONSTANT_TABLE_FILTERS, toggleConstantSelection, validateConstantSelection } from "./constantTable";
+import { buildConstantTableGroups, constantTableLamp, DEFAULT_CONSTANT_TABLE_FILTERS, reconcileConstantSelection, toggleConstantSelection, validateConstantSelection } from "./constantTable";
 
 const dates = vi.hoisted(() => ({ old: "2020-01-01", new: "2026-01-01", "2": "2020-01-01", "10": "2020-01-01" } as Record<string, string>));
 vi.mock("./chartReleaseDates", () => ({ getChartReleaseDate: (chart: CatalogChart) => dates[chart.id] ?? null }));
@@ -39,6 +39,33 @@ describe("constant table selection", () => {
     expect(toggleConstantSelection(["14.0"], "14.0")).toEqual([]);
     expect(toggleConstantSelection([], "15.0")).toEqual(["15.0"]);
   });
+
+  it("skips the nonexistent 15.9 and allows both available endpoints to be deselected", () => {
+    const available = ["15.8", "16.0"];
+    const selected = toggleConstantSelection(["15.8"], "16.0", available);
+    expect(selected).toEqual(["15.8", "16.0"]);
+    expect(validateConstantSelection(selected, available)).toEqual(selected);
+    expect(toggleConstantSelection(selected, "15.8", available)).toEqual(["16.0"]);
+    expect(toggleConstantSelection(["16.0"], "16.0", available)).toEqual([]);
+    expect(toggleConstantSelection(selected, "16.0", available)).toEqual(["15.8"]);
+    expect(toggleConstantSelection(["15.8"], "15.8", available)).toEqual([]);
+    expect(() => toggleConstantSelection(selected, "15.9", available)).toThrow("没有这个定数");
+  });
+
+  it("cleans old hidden values and follows the new available interval without automatically selecting a replacement", () => {
+    expect(reconcileConstantSelection(["15.8", "15.9", "16.0"], ["15.8", "16.0"])).toEqual(["15.8", "16.0"]);
+    expect(reconcileConstantSelection(["15.9"], ["15.8", "16.0"])).toEqual([]);
+    expect(reconcileConstantSelection(["15.8", "16.0"], ["13.0", "13.1"])).toEqual([]);
+    expect(reconcileConstantSelection([], ["13.0", "13.1"])).toEqual([]);
+    expect(reconcileConstantSelection(["13.1", "13.2", "13.5"], ["13.1", "13.2", "13.5"])).toEqual(["13.1", "13.2", "13.5"]);
+    expect(reconcileConstantSelection(["13.1", "13.5"], ["13.1", "13.2", "13.3", "13.4", "13.5"])).toEqual(["13.1", "13.2", "13.3", "13.4", "13.5"]);
+  });
+
+  it("still rejects skipped available options and ranges wider than four tenths", () => {
+    expect(() => validateConstantSelection(["14.0", "14.2"], ["14.0", "14.1", "14.2"])).toThrow("连续");
+    expect(() => validateConstantSelection(["15.5", "16.0"], ["15.5", "16.0"])).toThrow("跨度不超过 0.4");
+    expect(() => validateConstantSelection(["15.9"], ["15.8", "16.0"])).toThrow("不存在");
+  });
 });
 
 describe("constant table groups", () => {
@@ -67,8 +94,11 @@ describe("constant table groups", () => {
     expect(filters.constants).toEqual(["13.5"]);
   });
 
-  it("retains selected groups with no matches so the view can show an explicit empty state", () => {
-    expect(buildConstantTableGroups([], {}, DEFAULT_CONSTANT_TABLE_FILTERS)).toEqual([{ constant: "14.0", entries: [] }]);
+  it("does not keep groups that have no available charts under the active filters", () => {
+    expect(buildConstantTableGroups([], {}, DEFAULT_CONSTANT_TABLE_FILTERS)).toEqual([]);
+    const charts = [chart("a", { difficulty: "ULT", constant: 15.8 }), chart("b", { difficulty: "ULT", constant: 16 })];
+    expect(buildConstantTableGroups(charts, {}, { ...DEFAULT_CONSTANT_TABLE_FILTERS, constants: ["15.8", "15.9", "16.0"] })
+      .map(group => group.constant)).toEqual(["16.0", "15.8"]);
   });
 
   it("keeps the four requested achievement groups separate from unplayed charts", () => {

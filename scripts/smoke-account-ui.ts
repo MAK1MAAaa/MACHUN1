@@ -211,6 +211,49 @@ async function exportConstantTable(page: Page, withScores: boolean) {
   await dialog.waitFor({ state: 'hidden' });
 }
 
+async function verifyAvailableConstantFilters(page: Page) {
+  const section = page.locator('.records-browser');
+  const constant = section.getByLabel('定数', { exact: true });
+  await section.getByRole('button', { name: '清除筛选', exact: true }).click();
+  await section.getByLabel('难度', { exact: true }).selectOption('ULT');
+  await section.getByLabel('等级', { exact: true }).selectOption('15+');
+  assert.deepEqual(await constant.locator('option').allTextContents(), ['全部定数', '15.8']);
+  await constant.selectOption('15.8');
+  await section.getByLabel('难度', { exact: true }).selectOption('MAS');
+  assert.deepEqual(await constant.locator('option').allTextContents(), ['全部定数', '15.5', '15.6', '15.7']);
+  assert.equal(await constant.inputValue(), '', 'switching difficulty clears an unavailable constant');
+  await constant.selectOption('15.7');
+  await section.getByLabel('难度', { exact: true }).selectOption('EXP');
+  assert.deepEqual(await constant.locator('option').allTextContents(), ['全部定数']);
+  assert.equal(await constant.inputValue(), '');
+  await section.getByRole('button', { name: '清除筛选', exact: true }).click();
+}
+
+async function verifyConstantTableMissingStep(page: Page) {
+  const section = page.locator('.constant-table-section');
+  const choices = section.getByRole('group', { name: '定数表定数', exact: true });
+  await section.getByLabel('定数表难度', { exact: true }).selectOption('ULT');
+  await choices.getByRole('button', { name: '清空定数', exact: true }).click();
+  await choices.getByRole('button', { name: '15.8', exact: true }).click();
+  await choices.getByRole('button', { name: '16.0', exact: true }).click();
+  assert.equal(await choices.getByRole('button', { name: '15.9', exact: true }).count(), 0);
+  assert.deepEqual(await choices.locator('button[aria-pressed="true"]').allTextContents(), ['15.8', '16.0']);
+  await section.getByRole('button', { name: '生成定数表', exact: true }).click();
+  assert.deepEqual(await section.locator('.constant-table-group').evaluateAll(elements => elements.map(element => element.getAttribute('data-constant'))), ['16.0', '15.8']);
+  await exportConstantTable(page, false);
+  await choices.getByRole('button', { name: '15.8', exact: true }).click();
+  await choices.getByRole('button', { name: '16.0', exact: true }).click();
+  assert.equal(await choices.locator('button[aria-pressed="true"]').count(), 0, 'both visible endpoints can be removed without leaving a hidden 15.9');
+  assert(await section.getByRole('button', { name: '生成定数表', exact: true }).isDisabled());
+  await choices.getByRole('button', { name: '16.0', exact: true }).click();
+  await section.getByLabel('定数表难度', { exact: true }).selectOption('EXP');
+  assert.equal(await choices.locator('button[aria-pressed="true"]').count(), 0);
+  assert.equal(await choices.getByRole('button', { name: '16.0', exact: true }).count(), 0);
+  await section.getByLabel('定数表难度', { exact: true }).selectOption('');
+  await choices.getByRole('button', { name: '14.0', exact: true }).click();
+  await section.getByRole('button', { name: '生成定数表', exact: true }).click();
+}
+
 async function verifyConstantTable(page: Page) {
   const section = page.locator('.constant-table-section');
   const choices = section.getByRole('group', { name: '定数表定数', exact: true });
@@ -218,6 +261,7 @@ async function verifyConstantTable(page: Page) {
   const exportButton = section.getByRole('button', { name: '导出定数表 PNG', exact: true });
   assert.equal(await section.locator('.constant-table-score-panel').count(), 0);
   assert.equal(await section.locator('.constant-table-grid').first().evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length), 10);
+  await verifyConstantTableMissingStep(page);
   await choices.getByRole('button', { name: '清空定数', exact: true }).click();
   assert(await generate.isDisabled());
   await choices.getByRole('button', { name: '13.0', exact: true }).click();
@@ -244,6 +288,7 @@ async function verifyConstantTable(page: Page) {
   assert(target);
   await section.getByLabel('定数表等级', { exact: true }).selectOption('13+');
   assert.deepEqual(await choices.locator('button[aria-pressed]').allTextContents(), ['13.5', '13.6', '13.7', '13.8', '13.9']);
+  await choices.getByRole('button', { name: '13.5', exact: true }).click();
   await choices.getByRole('button', { name: '13.9', exact: true }).click();
   await section.getByLabel('定数表难度', { exact: true }).selectOption('MAS');
   await section.getByLabel('定数表分类', { exact: true }).selectOption(target.genre);
@@ -332,6 +377,7 @@ try {
   mark('manual score, achievements and source survive refresh; legacy migration does not repeat');
   const section = page.locator('.records-browser');
   await section.getByRole('button', { name: '曲库筛选', exact: true }).click();
+  await verifyAvailableConstantFilters(page);
   await page.getByLabel('等级', { exact: true }).selectOption('13');
   assert.deepEqual(await page.getByLabel('定数', { exact: true }).locator('option').allTextContents(), ['全部定数', '13.0', '13.1', '13.2', '13.3', '13.4']);
   await page.getByRole('button', { name: '清除筛选', exact: true }).click();
@@ -453,6 +499,7 @@ try {
     assert(await mobileConstants.evaluate(element => element.scrollWidth <= element.clientWidth));
   }
   await mobile.setViewportSize({ width: 390, height: 844 });
+  await verifyConstantTableMissingStep(mobile);
   await exportConstantTable(mobile, false);
   await exportConstantTable(mobile, true);
   assert.equal(await mobileConstants.locator('.constant-table-grid').first().evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length), 1);
@@ -470,6 +517,7 @@ try {
   await mobileRecords.getByRole('button', { name: '曲库筛选', exact: true }).click();
   assert.equal(await mobileRecords.getByLabel('等级', { exact: true }).isVisible(), false);
   await mobileRecords.getByRole('button', { name: '展开筛选', exact: true }).click();
+  await verifyAvailableConstantFilters(mobile);
   await mobileRecords.getByLabel('等级', { exact: true }).selectOption('13');
   assert.deepEqual(await mobileRecords.getByLabel('定数', { exact: true }).locator('option').allTextContents(), ['全部定数', '13.0', '13.1', '13.2', '13.3', '13.4']);
   await mobileRecords.getByRole('button', { name: '清除筛选', exact: true }).click();

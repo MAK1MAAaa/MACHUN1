@@ -9,6 +9,7 @@ import {
   CONSTANT_TABLE_LAMP_LABELS,
   constantTableLamp,
   DEFAULT_CONSTANT_TABLE_FILTERS,
+  reconcileConstantSelection,
   toggleConstantSelection,
   validateConstantSelection,
   type ConstantTableEntry,
@@ -16,7 +17,7 @@ import {
 } from "../core/constantTable";
 import { generateConstantTablePng } from "../core/constantTableExport";
 import { createDownloadResource, type DownloadResource } from "../core/fileDelivery";
-import { getChartLevel, getRecordsFilterOptions } from "../core/recordsView";
+import { getAvailableChartConstants, getRecordsFilterOptions } from "../core/recordsView";
 import { formatScore, scoreGrade } from "../core/rating";
 import type { Difficulty, SingleRating } from "../types";
 import { ImageExportDialog } from "./ImageExportDialog";
@@ -58,12 +59,13 @@ export function ConstantTableSection({ scores }: { scores: Record<string, Single
   const [imageExport, setImageExport] = useState<{ file: DownloadResource; missingCovers: number; previewAlt: string } | null>(null);
   const imageExportRef = useRef<DownloadResource | null>(null);
   const generation = useRef({ version: 0, running: false });
-  const options = useMemo(() => getRecordsFilterOptions(catalog), []);
-  const constantOptions = options.constants.filter(constant => !filters.level || getChartLevel(Number(constant)) === filters.level);
+  const options = useMemo(() => getRecordsFilterOptions(catalog), [catalog]);
+  const constantOptions = useMemo(() => getAvailableChartConstants(catalog, filters),
+    [catalog, filters.difficulty, filters.level, filters.genre, filters.version]);
   const pendingChanges = JSON.stringify(filters) !== JSON.stringify(generatedFilters);
   const selectionValid = useMemo(() => {
-    try { validateConstantSelection(filters.constants); return true; } catch { return false; }
-  }, [filters.constants]);
+    try { validateConstantSelection(filters.constants, constantOptions); return true; } catch { return false; }
+  }, [filters.constants, constantOptions]);
   const groups = useMemo(() => buildConstantTableGroups(catalog, scores, generatedFilters), [scores, generatedFilters]);
   const chartCount = groups.reduce((total, group) => total + group.entries.length, 0);
 
@@ -74,14 +76,17 @@ export function ConstantTableSection({ scores }: { scores: Record<string, Single
     imageExportRef.current = null;
   }, []);
 
+  useEffect(() => {
+    setFilters(current => {
+      const constants = reconcileConstantSelection(current.constants, getAvailableChartConstants(catalog, current));
+      return JSON.stringify(constants) === JSON.stringify(current.constants) ? current : { ...current, constants };
+    });
+  }, [constantOptions]);
+
   function changeFilter<Key extends keyof ConstantTableFilters>(key: Key, value: ConstantTableFilters[Key]) {
     setFilters(current => {
       const next = { ...current, [key]: value };
-      if (key === "level" && next.level) {
-        const available = options.constants.filter(constant => getChartLevel(Number(constant)) === next.level);
-        const kept = next.constants.filter(constant => available.includes(constant));
-        next.constants = kept.length ? kept : available.slice(0, 1);
-      }
+      next.constants = reconcileConstantSelection(next.constants, getAvailableChartConstants(catalog, next));
       return next;
     });
     setSelectionError(null); setExportError(null);
@@ -89,7 +94,7 @@ export function ConstantTableSection({ scores }: { scores: Record<string, Single
 
   function selectConstant(constant: string) {
     try {
-      const selected = toggleConstantSelection(filters.constants, constant);
+      const selected = toggleConstantSelection(filters.constants, constant, constantOptions);
       changeFilter("constants", selected);
     } catch (error) {
       setSelectionError(error instanceof Error ? error.message : "定数选择无效。");
@@ -98,7 +103,7 @@ export function ConstantTableSection({ scores }: { scores: Record<string, Single
 
   function generate() {
     try {
-      const constants = validateConstantSelection(filters.constants);
+      const constants = validateConstantSelection(filters.constants, constantOptions);
       setGeneratedFilters({ ...filters, constants });
       setSelectionError(null); setExportError(null);
     } catch (error) {
@@ -154,10 +159,11 @@ export function ConstantTableSection({ scores }: { scores: Record<string, Single
     <fieldset className="constant-table-constant-picker" disabled={exporting} aria-describedby="constant-table-selection-hint">
       <legend>定数</legend>
       <div className="constant-table-constants" role="group" aria-label="定数表定数">
+        {constantOptions.length === 0 && <span className="constant-table-no-constants">当前条件下没有可选定数。</span>}
         {constantOptions.map(constant => <button type="button" key={constant} aria-pressed={filters.constants.includes(constant)} onClick={() => selectConstant(constant)}>{constant}</button>)}
         <button type="button" className="constant-table-clear-constants" onClick={() => changeFilter("constants", [])}>清空定数</button>
       </div>
-      <p id="constant-table-selection-hint">最多连续 5 档；点击区间端点会补齐中间定数，只能移除两端。{filters.constants.length > 0 && <span> 当前：{[...filters.constants].sort().join("、")}</span>}</p>
+      <p id="constant-table-selection-hint">最多连续 5 档，跨度不超过 0.4；按当前可用选项补齐区间，自动跳过缺档，只能移除两端。筛选变化后会清理失效项。{filters.constants.length > 0 && <span> 当前：{[...filters.constants].sort().join("、")}</span>}</p>
     </fieldset>
     {selectionError && <p className="constant-table-error" role="alert">{selectionError}</p>}
     <div className="constant-table-actions">
@@ -169,6 +175,7 @@ export function ConstantTableSection({ scores }: { scores: Record<string, Single
     {pendingChanges && <p className="constant-table-pending" role="status">筛选已修改，点击“生成定数表”更新下方结果。</p>}
     {exportError && <p className="constant-table-error" role="alert">{exportError}</p>}
     <div className={`constant-table-results${showScores ? " show-scores" : ""}`} aria-label="定数表结果" aria-busy={exporting}>
+      {chartCount === 0 && <p className="constant-table-empty">当前生成条件下没有可显示的谱面。</p>}
       {groups.map(group => <div key={group.constant} className="constant-table-group" data-constant={group.constant}>
         <h3><strong>{group.constant}</strong><span>{group.entries.length} 张</span></h3>
         {group.entries.length > 0 ? <ol className="constant-table-grid" aria-label={`${group.constant} 定数谱面`}>

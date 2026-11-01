@@ -1,5 +1,7 @@
 import { CONSTANT_TABLE_AJ_COLORS, CONSTANT_TABLE_AJC_COLORS, CONSTANT_TABLE_DIFFICULTY_COLORS, CONSTANT_TABLE_LAMP_LABELS, constantTableLamp, validateConstantSelection, type ConstantTableEntry, type ConstantTableFilters, type ConstantTableGroup } from "./constantTable";
 import { scoreGrade } from "./rating";
+import { catalog } from "./catalog";
+import { getAvailableChartConstants } from "./recordsView";
 import { drawMateLogo, loadMateLogo } from "./exportBrand";
 
 export interface ConstantTablePngOptions {
@@ -140,14 +142,15 @@ function scorePanel(context: CanvasRenderingContext2D, entry: ConstantTableEntry
 }
 
 function subtitle(options: ConstantTablePngOptions, constants: string[]): string {
-  const constant = constants.length === 1 ? constants[0] : `${constants[0]}–${constants.at(-1)}`;
+  const hasGaps = constants.some((value, index) => index > 0 && Math.round(Number(value) * 10) - Math.round(Number(constants[index - 1]) * 10) !== 1);
+  const constant = constants.length === 1 || hasGaps ? constants.join("、") : `${constants[0]}–${constants.at(-1)}`;
   return [options.filters.difficulty || "全部难度", options.filters.level ? `等级 ${options.filters.level}` : "全部等级",
     `定数 ${constant}`, options.filters.genre || "全部分类", options.filters.version || "全部版本", options.showScores ? "显示成绩" : "封面模式"].join(" · ");
 }
 
 /** Render every supplied entry in its existing group order; never trim rows to fit. */
 export async function generateConstantTablePng(groups: readonly ConstantTableGroup[], options: ConstantTablePngOptions): Promise<GeneratedConstantTablePng> {
-  const constants = validateConstantSelection(options.filters.constants);
+  const constants = validateConstantSelection(options.filters.constants, getAvailableChartConstants(catalog, options.filters));
   const count = groups.reduce((sum, group) => sum + group.entries.length, 0);
   if (!count) throw new Error("没有可导出的谱面，请调整筛选条件。");
   if (groups.length > 5 || count > 5000 || groups.some(group => !constants.includes(group.constant))) throw new Error("定数表内容超出范围，请重新生成。");
