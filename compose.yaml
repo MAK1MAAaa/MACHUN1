@@ -1,6 +1,6 @@
 services:
   machun1:
-    image: machun1:companion-20261101-r2-ip-amd64
+    image: machun1:companion-20261101-r3-ip-amd64
     platform: linux/amd64
     restart: unless-stopped
     shm_size: 1gb

@@ -95,7 +95,7 @@ describe("records section", () => {
     const columns = headers(html);
     expect(columns).toHaveLength(10);
     const aboveTable = html.slice(0, html.indexOf("<table"));
-    for (const label of ["搜索", "难度", "等级", "定数", "分类", "版本", "成绩来源", "排序方式"]) {
+    for (const label of ["搜索", "难度", "等级", "定数", "分类", "版本", "成绩来源"]) {
       expect(aboveTable).toContain(`aria-label="${label}"`);
     }
     expect(aboveTable).toContain('<option value="13">13</option>');
@@ -105,7 +105,9 @@ describe("records section", () => {
     expect(aboveTable).toContain('aria-pressed="false">显示未游玩谱面</button>');
     expect(aboveTable).toContain(">清除筛选</button>");
     expect(columns[7]).toContain('aria-label="按分数排序"');
-    expect(columns[7]).toContain('aria-sort="none"');
+    expect(columns[3]).toContain('aria-sort="descending"');
+    expect(columns[7]).not.toContain('aria-sort=');
+    expect(aboveTable).not.toContain('aria-label="排序方式"');
     expect(html).toContain('colSpan="10"');
     expect(aboveTable).toContain("records-filters");
     expect(columns.join("")).not.toContain("<select");
@@ -116,7 +118,7 @@ describe("records section", () => {
   it("uses the same column structure in both modes with only an extra rank column", () => {
     const ratingColumns = headers(renderRecords()).map((header) => header.replace(/<[^>]*>/g, ""));
     renderState.mode = "catalog";
-    const catalogColumns = headers(renderRecords()).map((header) => header.replace(/<[^>]*>/g, "").replace(" ↕", ""));
+    const catalogColumns = headers(renderRecords()).map((header) => header.replace(/<[^>]*>/g, "").replace(/[↕↓↑0-9]/g, ""));
     expect(ratingColumns).toEqual(["排名", ...catalogColumns]);
     expect(catalogColumns).toEqual(["歌曲", "难度", "等级", "定数", "分类", "版本", "来源", "分数", "Rating", "操作"]);
     expect(renderRecords().match(/<col\b/g)).toHaveLength(10);
@@ -124,21 +126,24 @@ describe("records section", () => {
     expect(renderRecords().match(/<col\b/g)).toHaveLength(11);
   });
 
-  it("offers constant, Rating and score sorting above the table and marks the active column", () => {
+  it("offers three independent header buttons and mobile equivalents with priorities, without a sort select", () => {
     renderState.mode = "catalog";
-    renderState.filters = { sort: "rating-ascending" };
+    renderState.filters = { sorts: ["rating-ascending", "score-descending", "constant-ascending"] };
     const html = renderRecords();
-    const aboveTable = html.slice(0, html.indexOf("<table"));
-    expect(aboveTable).toContain('aria-label="排序方式"');
-    for (const field of ["constant", "rating", "score"]) {
-      for (const direction of ["ascending", "descending"]) {
-        expect(aboveTable).toContain(`value="${field}-${direction}"`);
-      }
+    const columns = headers(html);
+    expect(html).not.toContain('aria-label="排序方式"');
+    expect(columns[8]).toContain('aria-sort="ascending"');
+    expect(columns[3]).not.toContain('aria-sort=');
+    expect(columns[7]).not.toContain('aria-sort=');
+    for (const [index, label, priority, direction] of [[3, "定数", 3, "升序"], [7, "分数", 2, "降序"], [8, "Rating", 1, "升序"]] as const) {
+      expect(columns[index]).toContain(`aria-label="按${label}排序"`);
+      expect(columns[index]).toContain('aria-pressed="true"');
+      expect(columns[index]).toContain(`当前${direction}，第 ${priority} 优先`);
+      expect(columns[index]).toContain(`<sup aria-hidden="true">${priority}</sup>`);
     }
-    expect(aboveTable).toContain('value="rating-ascending" selected=""');
-    expect(headers(html)[8]).toContain('aria-sort="ascending"');
-    expect(headers(html)[3]).toContain('aria-sort="none"');
-    expect(headers(html)[7]).toContain('aria-sort="none"');
+    const mobile = html.match(/<div class="records-mobile-sort"[\s\S]*?<\/div>/)?.[0] ?? "";
+    for (const label of ["定数", "分数", "Rating"]) expect(mobile).toContain(`aria-label="按${label}排序"`);
+    expect(html).toContain("数字越小越优先");
     expect(html).toContain("排序时置于已游玩谱面之后");
   });
 
@@ -172,7 +177,7 @@ describe("records section", () => {
     expect(html).toContain('展开筛选<span class="records-filter-count">3</span>');
     expect(html).toContain('id="records-advanced-filters" class="records-advanced-filters"');
     expect(html.indexOf('aria-label="搜索"')).toBeLessThan(html.indexOf('id="records-advanced-filters"'));
-    expect(html.match(/aria-label="按分数排序"/g)).toHaveLength(1);
+    expect(html.match(/aria-label="按分数排序"/g)).toHaveLength(2);
     renderState.filtersExpanded = true;
     const expanded = renderRecords();
     expect(expanded).toContain('aria-expanded="true"');

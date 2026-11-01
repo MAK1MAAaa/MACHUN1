@@ -34,6 +34,7 @@ export const workspaces = mysqlTable('workspaces', {
   revision: int('revision', { unsigned: true }).notNull().default(0),
   legacyMigrated: boolean('legacy_migrated').notNull().default(false),
   sourcesMigrated: boolean('sources_migrated').notNull().default(false),
+  exportNickname: varchar('export_nickname', { length: 64 }).notNull().default(''),
 });
 export const scores = mysqlTable('scores', {
   username: varchar('username', { length: 64 }).notNull().references(() => users.username),

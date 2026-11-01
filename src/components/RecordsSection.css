@@ -11,7 +11,6 @@
 .records-genre-filter { width: 168px; }
 .records-version-filter { width: 132px; }
 .records-source-filter { width: 118px; }
-.records-sort-filter { width: 176px; }
 .records-filter select, .records-page-jump select { color: #30483b; border: 1px solid var(--line); border-radius: 7px; background: #fff; padding: 6px 8px; font-size: 0.78rem; min-height: 36px; width: 100%; min-width: 0; }
 .records-browser .record-search input { width: 100%; height: 36px; min-width: 0; padding: 6px 10px; font-size: 0.78rem; letter-spacing: normal; }
 .records-filter-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
@@ -46,9 +45,13 @@
 .record-title-details:hover { color: var(--cyan); text-decoration: underline; text-underline-offset: 3px; }
 .records-browser .diff-tag { margin-right: 0; }
 .records-browser .score-source { max-width: 100%; padding: 4px 5px; letter-spacing: normal; }
-.records-score-sort { display: inline-flex; align-items: center; justify-content: flex-start; gap: 5px; min-height: 30px; border: 1px solid transparent; border-radius: 7px; background: transparent; color: inherit; padding: 3px 0; font: inherit; text-align: left; cursor: pointer; white-space: nowrap; }
-.records-score-sort:hover { border-color: var(--line); background: var(--surface-2); }
-.records-score-sort span { font-size: 1rem; }
+.records-column-sort { display: inline-flex; align-items: center; justify-content: flex-start; gap: 4px; min-height: 30px; border: 1px solid transparent; border-radius: 7px; background: transparent; color: inherit; padding: 3px 0; font: inherit; text-align: left; cursor: pointer; white-space: nowrap; }
+.records-column-sort:hover { border-color: var(--line); background: var(--surface-2); }
+.records-column-sort span { font-size: 0.9rem; }
+.records-column-sort sup { display: inline-grid; place-items: center; min-width: 16px; height: 16px; border-radius: 4px; background: #e3ecdf; color: #47725d; font-size: 0.65rem; line-height: 1; }
+.records-column-sort:focus-visible { outline: 2px solid #47725d; outline-offset: 3px; }
+.records-sort-help { margin: 12px 0 0; color: var(--muted); font-size: 0.72rem; line-height: 1.65; }
+.records-mobile-sort { display: none; }
 .records-source-note { margin: 10px 0 0; color: var(--muted); font-size: 0.72rem; }
 .records-browser .records-metadata-cell { font-size: 0.7rem; color: var(--muted); }
 .records-unplayed { color: var(--muted); font-size: 0.72rem; white-space: nowrap; }
@@ -94,14 +97,11 @@
   .records-browser .record-table-wrap { overflow: visible; border: 0; background: transparent; border-radius: 0; }
   .records-browser .record-table { display: block; width: 100%; min-width: 0; border-collapse: separate; }
   .records-browser .record-table colgroup { display: none; }
-  .records-browser .record-table caption,
-  .records-browser .records-rating-table thead,
-  .records-browser .records-catalog-table thead th:not(.records-score-heading) { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
-  .records-browser .records-catalog-table thead { display: block; margin-bottom: 10px; }
-  .records-browser .records-catalog-table thead tr { display: flex; justify-content: flex-end; }
-  .records-browser .records-catalog-table .records-score-heading { display: block; padding: 0; border: 0; border-radius: 9px; background: transparent; }
-  .records-browser .records-score-sort { min-height: 44px; gap: 9px; padding: 8px 12px; border-color: var(--line); background: var(--surface); color: #4c6655; font-size: 0.8rem; }
-  .records-browser .records-score-sort::before { content: "排序："; color: var(--muted); font-weight: 400; }
+  .records-browser .record-table caption { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+  .records-browser .record-table thead { display: none; }
+  .records-browser .records-mobile-sort { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; margin-top: 10px; }
+  .records-browser .records-mobile-sort .records-column-sort { justify-content: center; min-width: 0; min-height: 44px; padding: 8px 5px; border-color: var(--line); background: var(--surface); color: #4c6655; font-size: 0.8rem; }
+  .records-browser .records-mobile-sort .records-column-sort[aria-pressed="true"] { border-color: #a6bca0; background: #edf3e9; }
   .records-browser .record-table tbody { display: grid; gap: 12px; }
   .records-browser .record-table tbody tr { position: relative; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); column-gap: 10px; row-gap: 10px; padding: 14px; border: 1px solid var(--line); border-radius: 13px; background: var(--surface); box-shadow: 0 3px 12px rgba(65, 91, 66, 0.035); }
   .records-browser .record-table tbody td { display: block; min-width: 0; border: 0; padding: 0; text-align: left; font-size: 0.83rem; }

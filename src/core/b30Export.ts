@@ -447,6 +447,18 @@ export interface GeneratedB30Png {
   missingCovers: number;
 }
 
+export interface B30PngOptions {
+  nickname?: string;
+}
+
+function exportNickname(context: CanvasRenderingContext2D, value: string | undefined, maxWidth: number): string {
+  const nickname = value?.replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim() || "神秘游客";
+  if (context.measureText(nickname).width <= maxWidth) return nickname;
+  const characters = Array.from(nickname);
+  while (characters.length && context.measureText(`${characters.join("")}…`).width > maxWidth) characters.pop();
+  return `${characters.join("")}…`;
+}
+
 async function waitForExportFonts(): Promise<void> {
   if (!document.fonts) return;
   await new Promise<void>((resolve) => {
@@ -456,7 +468,7 @@ async function waitForExportFonts(): Promise<void> {
   });
 }
 
-export async function generateB30Png(data: B30ExportV3 | B30CandidatesExport | AjB30Export): Promise<GeneratedB30Png> {
+export async function generateB30Png(data: B30ExportV3 | B30CandidatesExport | AjB30Export, options: B30PngOptions = {}): Promise<GeneratedB30Png> {
   await waitForExportFonts();
   const canvas = document.createElement("canvas");
   const withCandidates = "candidates" in data;
@@ -471,7 +483,7 @@ export async function generateB30Png(data: B30ExportV3 | B30CandidatesExport | A
   const headerHeight = 132;
   const cardHeight = 188;
   const cardWidth = (width - margin * 2 - columnGap * (columns - 1)) / columns;
-  const candidateGap = withCandidates ? 32 : 0;
+  const candidateGap = withCandidates ? 64 : 0;
   const height = headerHeight + cardHeight * rows + rowGap * (rows - 1) + margin + candidateGap;
   canvas.width = width;
   canvas.height = height;
@@ -486,11 +498,36 @@ export async function generateB30Png(data: B30ExportV3 | B30CandidatesExport | A
   context.fillRect(0, 0, width, height);
   context.textAlign = "left";
   context.fillStyle = "#202a3c";
+  const titleX = Math.round(width * 0.34);
+  context.font = '800 44px Inter, "Noto Sans SC", "PingFang SC", sans-serif';
+  context.fillText(exportNickname(context, options.nickname, titleX - margin - 64), margin, 85);
   context.font = '900 48px Inter, "PingFang SC", sans-serif';
-  context.fillText(isAj ? "AJ B30" : "B30", margin, 85);
-  context.textAlign = "right";
+  const title = isAj ? "AJ B30" : withCandidates ? "B30 + C20" : "B30";
+  context.fillText(title, titleX, 85);
+  const ratingX = titleX + context.measureText(`${title}  `).width;
   context.font = '900 52px ui-monospace, "SFMono-Regular", monospace';
-  context.fillText(data.summary.average.toFixed(4), width - margin, 85);
+  context.fillText(`Rating: ${data.summary.average.toFixed(4)}`, ratingX, 85);
+  context.font = '500 15px Inter, "PingFang SC", sans-serif';
+  context.fillStyle = "#758378";
+  context.fillText(`MACHUN1 · ${data.exportedAt.slice(0, 10)}`, margin, 112);
+
+  if (withCandidates) {
+    const separatorY = headerHeight + (B30_SIZE / columns) * (cardHeight + rowGap) - rowGap + (rowGap + candidateGap) / 2;
+    const label = "C20 · B31–B50";
+    context.font = '800 16px Inter, "PingFang SC", sans-serif';
+    const labelGap = context.measureText(label).width / 2 + 24;
+    context.strokeStyle = "#bdcbbf";
+    context.lineWidth = 2;
+    context.beginPath();
+    context.moveTo(margin, separatorY);
+    context.lineTo(width / 2 - labelGap, separatorY);
+    context.moveTo(width / 2 + labelGap, separatorY);
+    context.lineTo(width - margin, separatorY);
+    context.stroke();
+    context.fillStyle = "#59715f";
+    context.textAlign = "center";
+    context.fillText(label, width / 2, separatorY + 6);
+  }
 
   slots.forEach((slot, index) => {
     const column = index % columns;

@@ -131,6 +131,9 @@ interface AppProps {
 function App({ account, initial, initialNotice }: AppProps) {
   const workspace = useAccountWorkspace(initial);
   const localState = workspace.snapshot.state;
+  const [exportNickname, setExportNickname] = useState(initial.exportNickname);
+  const savedExportNickname = workspace.snapshot.exportNickname;
+  const nicknameTooLong = Array.from(exportNickname.trim()).length > 32;
   const [notice, setNotice] = useState<Notice | null>(initialNotice ? { kind: "warning", text: initialNotice } : null);
   const [editing, setEditing] = useState<{ key: string; title: string; difficulty: string; score: string; isNew: boolean } | null>(null);
   const [editError, setEditError] = useState<string | null>(null);
@@ -156,6 +159,16 @@ function App({ account, initial, initialNotice }: AppProps) {
   });
   const nationalRepairBusy = Boolean(sourceSync.pending.lxns)
     || sourceSync.connections.lxns.status === "syncing" || sourceSync.connections.lxns.status === "binding";
+
+  useEffect(() => { setExportNickname(savedExportNickname); }, [savedExportNickname]);
+
+  const saveExportNickname = async () => {
+    if (workspace.busy || nicknameTooLong) return;
+    try {
+      const result = await workspace.action({ type: "export-nickname", nickname: exportNickname });
+      setNotice({ kind: "success", text: result.notice ?? "导出昵称已保存。" });
+    } catch { /* Keep the draft and show the workspace save error. */ }
+  };
 
   useEffect(() => {
     if (editing && !editDialogRef.current?.open) editDialogRef.current?.showModal();
@@ -251,7 +264,7 @@ function App({ account, initial, initialNotice }: AppProps) {
         setNotice({ kind: "warning", text: "暂无 AJ 或 AJC 成绩，无法生成 AJ B30 图片。" });
         return;
       }
-      const result = await generateB30Png(data);
+      const result = await generateB30Png(data, { nickname: savedExportNickname || account.username });
       if (version !== imageGeneration.current.version) return;
       const file = createDownloadResource(result.blob, result.filename);
       imageExportRef.current?.dispose();
@@ -594,6 +607,14 @@ function App({ account, initial, initialNotice }: AppProps) {
               </div>
             </div>
           </div>
+          <form className="b30-export-settings" onSubmit={(event) => { event.preventDefault(); void saveExportNickname(); }}>
+            <label htmlFor="export-nickname">导出昵称</label>
+            <input id="export-nickname" value={exportNickname} onChange={(event) => setExportNickname(event.target.value)}
+              placeholder={account.username} maxLength={64} disabled={workspace.busy}
+              aria-describedby="export-nickname-hint" aria-invalid={nicknameTooLong || undefined} />
+            <button type="submit" disabled={workspace.busy || nicknameTooLong || exportNickname.trim() === savedExportNickname}>保存昵称</button>
+            <span id="export-nickname-hint">{nicknameTooLong ? "昵称最多 32 个字符。" : "保存后显示在所有分表图片左上角，留空使用登录用户名。"}</span>
+          </form>
           <div className="b30-analysis" aria-label="B30 Rating 柱状分析">
             <div className="b30-analysis-heading">
               <div>

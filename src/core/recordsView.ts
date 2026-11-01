@@ -26,6 +26,7 @@ export type RecordsViewMode = "rating" | "catalog";
 export type RecordsSort = "constant-descending" | "constant-ascending"
   | "rating-descending" | "rating-ascending"
   | "score-descending" | "score-ascending";
+export type RecordsSortField = "constant" | "rating" | "score";
 
 export interface RecordsFilters {
   query: string;
@@ -36,7 +37,7 @@ export interface RecordsFilters {
   version: string;
   includeUnplayed: boolean;
   source: ScoreSource | "";
-  sort: RecordsSort;
+  sorts: RecordsSort[];
 }
 
 export const EMPTY_RECORDS_FILTERS: RecordsFilters = {
@@ -48,8 +49,16 @@ export const EMPTY_RECORDS_FILTERS: RecordsFilters = {
   version: "",
   includeUnplayed: false,
   source: "",
-  sort: "constant-descending",
+  sorts: ["constant-descending"],
 };
+
+/** Newly enabled columns take priority; changing a direction preserves its place. */
+export function cycleRecordsSort(sorts: readonly RecordsSort[], field: RecordsSortField): RecordsSort[] {
+  const current = sorts.find(sort => sort.startsWith(`${field}-`));
+  if (!current) return [`${field}-descending`, ...sorts];
+  if (current.endsWith("descending")) return sorts.map<RecordsSort>(sort => sort === current ? `${field}-ascending` : sort);
+  return sorts.filter(sort => sort !== current);
+}
 
 export interface RecordsRow {
   chart: CatalogChart;
@@ -89,17 +98,18 @@ function matchesSearch(row: RecordsRow, query: string, nicknameOverrides: Record
   return normalizeSearchText(text).includes(query);
 }
 
-function compareCatalogRows(left: RecordsRow, right: RecordsRow, sort: RecordsSort): number {
+function compareCatalogRows(left: RecordsRow, right: RecordsRow, sorts: readonly RecordsSort[]): number {
   // A missing score is not a zero score and always follows played charts.
   if (Boolean(left.record) !== Boolean(right.record)) return left.record ? -1 : 1;
-  const difference = sort.startsWith("constant-")
-    ? left.chart.constant - right.chart.constant
-    : left.record && right.record
-      ? sort.startsWith("rating-") ? left.record.rating - right.record.rating : left.record.score - right.record.score
-      : 0;
-  if (difference) return sort.endsWith("ascending") ? difference : -difference;
-  return (sort.startsWith("rating-") && left.record && right.record ? right.record.score - left.record.score : 0)
-    || right.chart.constant - left.chart.constant
+  for (const sort of sorts) {
+    const difference = sort.startsWith("constant-")
+      ? left.chart.constant - right.chart.constant
+      : left.record && right.record
+        ? sort.startsWith("rating-") ? left.record.rating - right.record.rating : left.record.score - right.record.score
+        : 0;
+    if (difference) return sort.endsWith("ascending") ? difference : -difference;
+  }
+  return right.chart.constant - left.chart.constant
     || left.chart.title.localeCompare(right.chart.title, "zh-CN")
     || chartKey(left.chart).localeCompare(chartKey(right.chart));
 }
@@ -135,7 +145,7 @@ export function buildRecordsRows(
       ? row.record?.source === filters.source
       : filters.includeUnplayed || row.record !== undefined)
       && matchesSearch(row, query, nicknameOverrides))
-    .sort((left, right) => compareCatalogRows(left, right, filters.sort));
+    .sort((left, right) => compareCatalogRows(left, right, filters.sorts));
 }
 
 export function paginateRecords(rows: readonly RecordsRow[], requestedPage: number): {

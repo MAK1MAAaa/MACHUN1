@@ -16,7 +16,7 @@ import { hashPassword } from '../server/auth';
 import { createDatabase } from '../server/db/connection';
 import { catalog } from '../src/core/catalog';
 import { calculateRating } from '../src/core/rating';
-import type { RecordsSort } from '../src/core/recordsView';
+import type { RecordsSort, RecordsSortField } from '../src/core/recordsView';
 import { EMPTY_STATE, STORAGE_KEY } from '../src/core/storage';
 import { SYNC_SOURCES, type SourceConnection, type SyncResult } from '../src/syncTypes';
 import type { ExternalScoreSource } from '../src/core/sources';
@@ -111,17 +111,51 @@ async function edit(page: Page, value: number) {
   await dialog.waitFor({ state: 'hidden' });
   await score(page, value, 'manual'); await section.getByRole('searchbox').fill('');
 }
-async function verifyRecordsSort(page: Page, sort: RecordsSort) {
+async function verifyRecordsMultiSort(page: Page) {
   const section = page.locator('.records-browser');
-  const field = sort.startsWith('constant-') ? 'constant' : sort.startsWith('rating-') ? 'rating' : 'score';
-  const values = Object.values((await state(page)).scores).map(record => record[field]);
-  values.sort((left, right) => sort.endsWith('ascending') ? left - right : right - left);
-  await section.getByRole('button', { name: '下一页', exact: true }).click();
-  await section.getByLabel('排序方式', { exact: true }).selectOption(sort);
-  const displayed = await section.locator(field === 'score' ? '.records-score-value' : `.records-${field}-cell`).allTextContents();
-  assert.deepEqual(displayed.map(value => Number(value.replaceAll(',', '').trim().split(/\s/)[0])), values.slice(0, 10));
-  assert.match(await section.locator('.records-page-status').innerText(), /^第 1 \/ /, 'changing sort resets pagination');
+  let sorts: RecordsSort[] = ['constant-descending'];
+  const labels: Record<RecordsSortField, string> = { constant: '定数', score: '分数', rating: 'Rating' };
+  const records = Object.values((await state(page)).scores);
+  assert.equal(await section.getByLabel('排序方式', { exact: true }).count(), 0);
+  async function click(field: RecordsSortField) {
+    await section.getByRole('button', { name: '下一页', exact: true }).click();
+    await section.getByRole('button', { name: `按${labels[field]}排序`, exact: true }).click();
+    const current = sorts.find(sort => sort.startsWith(`${field}-`));
+    sorts = !current ? [`${field}-descending`, ...sorts]
+      : current.endsWith('descending') ? sorts.map(sort => sort === current ? `${field}-ascending` as RecordsSort : sort)
+      : sorts.filter(sort => sort !== current);
+    const expected = [...records].sort((left, right) => {
+      for (const sort of sorts) {
+        const key = sort.split('-')[0] as RecordsSortField;
+        const difference = left[key] - right[key];
+        if (difference) return sort.endsWith('ascending') ? difference : -difference;
+      }
+      return right.constant - left.constant || left.title.localeCompare(right.title, 'zh-CN')
+        || `${left.id}:${left.difficulty}`.localeCompare(`${right.id}:${right.difficulty}`);
+    });
+    const displayed = await section.locator('.record-table tbody tr').evaluateAll(rows => rows.map(row => {
+      const id = row.querySelector('.record-song-info small')!.textContent!.replace(/^ID /, '');
+      const difficulty = row.querySelector('.records-difficulty-cell')!.textContent!;
+      return `${id}:${difficulty}`;
+    }));
+    assert.deepEqual(displayed, expected.slice(0, 10).map(record => `${record.id}:${record.difficulty}`));
+    assert.match(await section.locator('.records-page-status').innerText(), /^第 1 \/ /, 'changing any sort resets pagination');
+    for (const key of ['constant', 'score', 'rating'] as const) {
+      const button = section.getByRole('button', { name: `按${labels[key]}排序`, exact: true });
+      const index = sorts.findIndex(sort => sort.startsWith(`${key}-`));
+      assert.equal(await button.getAttribute('aria-pressed'), String(index >= 0));
+      if (index >= 0) assert.equal(await button.locator('sup').innerText(), String(index + 1));
+    }
+  }
+  await click('score'); await click('rating');
+  assert.equal(sorts.length, 3, 'all three criteria stay enabled together');
+  await click('constant'); await click('rating'); await click('rating');
+  await click('score'); await click('score'); await click('constant');
+  assert.equal(sorts.length, 0, 'every column can independently cycle off');
+  await click('rating'); await click('score'); await click('constant');
+  assert.deepEqual(sorts, ['constant-descending', 'score-descending', 'rating-descending']);
 }
+
 async function exportPng(page: Page, name: string) {
   const isAj = name === '导出 AJ B30 图片';
   const withCandidates = name.includes('候选20');
@@ -144,7 +178,7 @@ async function exportPng(page: Page, name: string) {
     const download = await downloadPromise; const file = await download.path(); assert(file);
     assert.match(download.suggestedFilename(), new RegExp(`^machun1-${filePrefix}-\\d{4}-\\d{2}-\\d{2}\\.png$`));
     const png = await readFile(file); assert.equal(png.readUInt32BE(16), 2360);
-    assert.equal(png.readUInt32BE(20), withCandidates ? 2192 : 1360);
+    assert.equal(png.readUInt32BE(20), withCandidates ? 2224 : 1360);
     assert.equal(downloads, 1);
     assert(await dialog.isVisible(), 'preview remains available for a retry or long-press saving');
     assert((await dialog.getByRole('status').innerText()).includes('已发起保存'));
@@ -176,6 +210,17 @@ try {
   assert.equal(await page.evaluate(key => localStorage.getItem(key), STORAGE_KEY), JSON.stringify(seed));
   assert.equal(await page.locator('.record-table tbody tr').count(), 10);
   mark('root login migrates 50 legacy scores and one alias while keeping the old browser copy');
+  const exportNickname = '分表测试玩家';
+  await page.getByLabel('导出昵称', { exact: true }).fill(exportNickname);
+  await page.getByRole('button', { name: '保存昵称', exact: true }).click();
+  await page.waitForFunction(async nickname => {
+    const response = await fetch('/api/workspace');
+    return response.ok && (await response.json()).exportNickname === nickname;
+  }, exportNickname);
+  await page.reload(); await page.locator('.account-toolbar').waitFor();
+  assert.equal(await page.getByLabel('导出昵称', { exact: true }).inputValue(), exportNickname);
+  assert(await page.getByRole('button', { name: '保存昵称', exact: true }).isDisabled());
+  mark('export nickname is saved to the account and survives a full page reload');
   let emptyAjDownloads = 0;
   const countEmptyAjDownload = () => { emptyAjDownloads++; };
   page.on('download', countEmptyAjDownload);
@@ -203,11 +248,9 @@ try {
   await page.getByLabel('等级', { exact: true }).selectOption('13');
   assert.deepEqual(await page.getByLabel('定数', { exact: true }).locator('option').allTextContents(), ['全部定数', '13.0', '13.1', '13.2', '13.3', '13.4']);
   await page.getByRole('button', { name: '清除筛选', exact: true }).click();
-  for (const sort of ['constant-ascending', 'constant-descending', 'rating-ascending', 'rating-descending'] as const) await verifyRecordsSort(page, sort);
-  await section.getByRole('button', { name: '按分数排序', exact: true }).click();
-  assert.equal(await section.getByLabel('排序方式', { exact: true }).inputValue(), 'score-descending');
+  await verifyRecordsMultiSort(page);
   await page.getByRole('button', { name: '清除筛选', exact: true }).click();
-  mark('desktop catalog sorts by actual constant or Rating in both directions before paging; score shortcut updates the shared selector');
+  mark('desktop header clicks combine all three sort criteria, preserve priorities, cycle directions/off and reset pagination without a selector');
   await page.getByRole('button', { name: '显示未游玩谱面', exact: true }).click();
   await section.getByRole('searchbox').fill('3055');
   await page.getByRole('button', { name: '查看歌曲详情：SAN値直葬', exact: true }).click();
@@ -257,6 +300,7 @@ try {
   await chooser.setFiles({ name: 'full-backup.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(saved)) });
   await score(page, 1_006_000, 'rin');
   mark('full backup import restores all records, personal aliases, source and AJ/full-chain marks');
+  assert.equal(await page.getByLabel('导出昵称', { exact: true }).inputValue(), exportNickname);
   for (const name of ['导出 B30 图片', '导出 B30 + 候选20 图片', '导出 AJ B30 图片']) {
     await exportPng(page, name);
   }
@@ -290,6 +334,8 @@ try {
   await login(page, 'ui-second', 'second-pwd'); manager.release!();
   await delay(150);
   assert.deepEqual(await state(page), EMPTY_STATE);
+  assert.equal(await page.getByLabel('导出昵称', { exact: true }).inputValue(), '');
+  assert.equal(await page.getByLabel('导出昵称', { exact: true }).getAttribute('placeholder'), 'ui-second');
   assert.equal(await page.evaluate(key => localStorage.getItem(key), STORAGE_KEY), JSON.stringify(seed));
   await page.locator('.source-tools-toggle').click();
   assert.equal(await page.locator('.source-connection-status').filter({ hasText: /^未绑定$/ }).count(), 4);
@@ -311,6 +357,8 @@ try {
   }
   await mobile.setViewportSize({ width: 390, height: 844 });
   await mobile.locator('.b30-preview-toggle').click();
+  assert.equal(await mobile.getByLabel('导出昵称', { exact: true }).inputValue(), exportNickname);
+  mark('a second user cannot read the nickname, while the same account on a fresh mobile context restores it from MySQL');
   const mobileRecords = mobile.locator('.records-browser');
   await mobileRecords.getByRole('button', { name: '曲库筛选', exact: true }).click();
   assert.equal(await mobileRecords.getByLabel('等级', { exact: true }).isVisible(), false);
@@ -318,10 +366,11 @@ try {
   await mobileRecords.getByLabel('等级', { exact: true }).selectOption('13');
   assert.deepEqual(await mobileRecords.getByLabel('定数', { exact: true }).locator('option').allTextContents(), ['全部定数', '13.0', '13.1', '13.2', '13.3', '13.4']);
   await mobileRecords.getByRole('button', { name: '清除筛选', exact: true }).click();
-  for (const sort of ['constant-ascending', 'constant-descending', 'rating-ascending', 'rating-descending'] as const) await verifyRecordsSort(mobile, sort);
-  assert(await mobileRecords.getByLabel('排序方式', { exact: true }).isVisible());
+  await mobileRecords.getByRole('button', { name: '收起筛选', exact: true }).click();
+  await verifyRecordsMultiSort(mobile);
+  await mobileRecords.getByRole('button', { name: '展开筛选', exact: true }).click();
   await mobileRecords.getByRole('button', { name: '清除筛选', exact: true }).click();
-  mark('touch catalog exposes constant and Rating sorting in expanded filters and updates the first page in both directions');
+  mark('touch sorting buttons stay available with filters collapsed and combine constant, score and Rating with the same priorities as desktop');
   await mobileRecords.getByRole('button', { name: '收起筛选', exact: true }).click();
   await mobileRecords.getByRole('button', { name: 'Rating 排名', exact: true }).click();
   for (const name of ['导出 B30 图片', '导出 B30 + 候选20 图片', '导出 AJ B30 图片']) await exportPng(mobile, name);

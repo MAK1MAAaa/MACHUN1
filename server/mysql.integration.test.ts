@@ -173,6 +173,55 @@ describe.skipIf(!enabled)('isolated MySQL persistence and accounts', () => {
     expect(await fixture.db.select().from(scores).where(eq(scores.username, 'alice'))).toEqual([]);
     expect(Object.keys((await repository.get('root')).state.scores)).toHaveLength(8);
   });
+  it('persists export nicknames per user without resetting them on clear, imports, synchronization or migrations', async () => {
+    await fixture.db.insert(users).values({ username: 'nickname-owner', pwd: hashPassword('nickname-pwd') });
+    const rootBefore = await repository.get('root');
+    const initial = await repository.get('nickname-owner');
+    expect(initial.exportNickname).toBe('');
+    const saved = await repository.action('nickname-owner', { type: 'export-nickname', nickname: '  分表玩家 🎵  ' });
+    expect(saved).toMatchObject({ exportNickname: '分表玩家 🎵', revision: initial.revision + 1, state: EMPTY_STATE });
+    expect((await repository.get('nickname-owner')).exportNickname).toBe('分表玩家 🎵');
+    await repository.action('nickname-owner', { type: 'manual', key, score: '1000000' });
+    const backup = createFullBackup((await repository.get('nickname-owner')).state, 'nickname-test');
+    await repository.action('nickname-owner', { type: 'clear' });
+    expect((await repository.get('nickname-owner')).exportNickname).toBe('分表玩家 🎵');
+    await repository.action('nickname-owner', { type: 'backup', mode: 'replace', raw: JSON.stringify(backup) });
+    const imported = await repository.action('nickname-owner', { type: 'import', source: 'rin', filename: 'scores.json', raw: JSON.stringify([{ id: first.id, difficulty: first.difficulty, score: 1001000 }]) });
+    expect(imported.exportNickname).toBe('分表玩家 🎵');
+    expect(imported.state.scores[key].score).toBe(1_001_000);
+    await repository.mergeSync('nickname-owner', sync(1_005_000), {});
+    await fixture.admin.query(fixture.migration);
+    const restored = await new WorkspaceRepository(fixture.db).get('nickname-owner');
+    expect(restored.exportNickname).toBe('分表玩家 🎵');
+    expect(restored.state.scores[key].score).toBe(1_005_000);
+    expect(await repository.get('root')).toEqual(rootBefore);
+    const [columns] = await fixture.admin.query("SHOW COLUMNS FROM machun1.workspaces LIKE 'export_nickname'");
+    expect((columns as { Null: string; Default: unknown }[])[0]).toMatchObject({ Null: 'NO', Default: '' });
+    const [migration] = await fixture.admin.query("SELECT name FROM machun1._machun_migrations WHERE name='0004_export_nickname'");
+    expect(migration).toHaveLength(1);
+  });
+  it('validates nickname Unicode length and keeps invalid updates atomic', async () => {
+    const fullLength = '🎵'.repeat(32);
+    await repository.action('nickname-owner', { type: 'export-nickname', nickname: fullLength });
+    const before = await repository.get('nickname-owner');
+    for (const nickname of [undefined, null, 123, '🎵'.repeat(33), 'player\nname', 'player\u0000name']) {
+      await expect(repository.action('nickname-owner', { type: 'export-nickname', nickname })).rejects.toMatchObject({ code: 'INVALID_REQUEST', status: 400 });
+      expect(await repository.get('nickname-owner')).toEqual(before);
+    }
+    expect(before.exportNickname).toBe(fullLength);
+    expect((await repository.action('nickname-owner', { type: 'export-nickname', nickname: '  ' })).exportNickname).toBe('');
+  });
+  it('retains export nicknames while score and synchronization writes run concurrently', async () => {
+    await Promise.all([
+      repository.action('nickname-owner', { type: 'export-nickname', nickname: '并发设置' }),
+      repository.action('nickname-owner', { type: 'manual', key, score: '1001000' }),
+      repository.mergeSync('nickname-owner', sync(1_008_000), {}),
+    ]);
+    const current = await repository.get('nickname-owner');
+    expect(current.exportNickname).toBe('并发设置');
+    expect(current.state.scores[key]).toBeDefined();
+    expect((await repository.get('alice')).exportNickname).toBe('');
+  });
   it('stores bindings, tokens, browser directories and Otogame checkpoints by username', async () => {
     const a = new MysqlSourceStore(fixture.db, 'root', directory); const b = new MysqlSourceStore(fixture.db, 'alice', directory);
     await a.initialize(); await b.initialize();

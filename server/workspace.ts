@@ -15,6 +15,7 @@ import type { WorkspaceSnapshot, WorkspaceResult } from '../src/accountTypes';
 import { SyncError } from './provider';
 
 type DataAccess = Pick<Database, 'select' | 'insert' | 'update' | 'delete'>;
+type WorkspaceMutation = { state: LocalState; notice?: string; report?: SourceImportReport; exportNickname?: string };
 function invalid(message = '工作区请求格式无效。'): never { throw new SyncError('INVALID_REQUEST', message, 400); }
 export function mergeOptions(value: unknown, source: string): SourceMergeOptions {
   if (value === undefined) return {};
@@ -66,14 +67,14 @@ export class WorkspaceRepository {
   async get(username: string): Promise<WorkspaceSnapshot> {
     return withDatabase(() => this.db.transaction(async tx => {
       const row = await this.lock(tx, username);
-      return { state: await this.read(tx, username), revision: row.revision, legacyMigrated: row.legacyMigrated };
+      return { state: await this.read(tx, username), revision: row.revision, legacyMigrated: row.legacyMigrated, exportNickname: row.exportNickname };
     }));
   }
-  private async change(username: string, apply: (state: LocalState) => { state: LocalState; notice?: string; report?: SourceImportReport }, migrate = false, replace = false): Promise<WorkspaceResult> {
+  private async change(username: string, apply: (state: LocalState) => WorkspaceMutation, migrate = false, replace = false): Promise<WorkspaceResult> {
     return withDatabase(() => this.db.transaction(async tx => {
       const row = await this.lock(tx, username);
       const before = await this.read(tx, username);
-      if (migrate && row.legacyMigrated) return { state: before, revision: row.revision, legacyMigrated: true, notice: '旧浏览器数据已经迁移，未重复导入。' };
+      if (migrate && row.legacyMigrated) return { state: before, revision: row.revision, legacyMigrated: true, exportNickname: row.exportNickname, notice: '旧浏览器数据已经迁移，未重复导入。' };
       let result: ReturnType<typeof apply>;
       try { result = apply(structuredClone(before)); } catch (error) {
         if (error instanceof SyncError) throw error;
@@ -85,8 +86,9 @@ export class WorkspaceRepository {
       }
       await this.write(tx, username, replace ? structuredClone(EMPTY_STATE) : before, result.state);
       const revision = row.revision + 1;
-      await tx.update(workspaces).set({ revision, ...(migrate ? { legacyMigrated: true } : {}) }).where(eq(workspaces.username, username));
-      return { ...result, revision, legacyMigrated: migrate || row.legacyMigrated };
+      const exportNickname = result.exportNickname ?? row.exportNickname;
+      await tx.update(workspaces).set({ revision, exportNickname, ...(migrate ? { legacyMigrated: true } : {}) }).where(eq(workspaces.username, username));
+      return { ...result, revision, legacyMigrated: migrate || row.legacyMigrated, exportNickname };
     }));
   }
   async action(username: string, input: Record<string, unknown>): Promise<WorkspaceResult> {
@@ -104,6 +106,12 @@ export class WorkspaceRepository {
           return { state, notice: '成绩已删除。' };
         }
         case 'clear': return { state: structuredClone(EMPTY_STATE), notice: '当前账号的成绩和个人别名已清空。' };
+        case 'export-nickname': {
+          if (typeof input.nickname !== 'string') invalid('导出昵称格式无效。');
+          const nickname = input.nickname.trim();
+          if (Array.from(nickname).length > 32 || /[\u0000-\u001f\u007f]/u.test(nickname)) invalid('导出昵称最多 32 个字符，且不能包含换行或控制字符。');
+          return { state, exportNickname: nickname, notice: '导出昵称已保存。' };
+        }
         case 'aliases': {
           if (typeof input.id !== 'string' || ![...catalogByKey.values()].some(chart => chart.id === input.id) || !Array.isArray(input.aliases) || input.aliases.length > 128 || input.aliases.some(alias => typeof alias !== 'string' || alias.length > 128)) invalid();
           const seen = new Set<string>();
