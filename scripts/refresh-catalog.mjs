@@ -1,7 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { songMetadata } from './catalog-metadata.mjs';
+import { songMetadata, songVersionOverride } from './catalog-metadata.mjs';
 
 export const OCTOBER_SUPPLEMENTS = [
   { id: '3052', title: '雑魚', difficulty: 'MAS', constant: 13.1 },
@@ -60,7 +60,7 @@ export function refreshCatalog(existing, details, upstream, official, cutoff = '
       }
       const previous = originals.get(key);
       const metadata = songMetadata(raw);
-      const version = previousSong?.version && previousSong.version !== 'Unknown' ? previousSong.version : metadata.version;
+      const version = songVersionOverride(raw) ?? (previousSong?.version && previousSong.version !== 'Unknown' ? previousSong.version : metadata.version);
       if (version === 'Unknown') throw new Error(`歌曲缺少已确认版本：${id}`);
       const total = number(raw[`${prefix}_notes`]);
       const notes = total ? Object.fromEntries(Object.keys(zeroNotes).map(kind => [kind, noteCount(raw[`${prefix}_notes${kind === 'total' ? '' : `_${kind}`}`]) ?? previous?.notes?.[kind] ?? 0])) : previous?.notes ?? { ...zeroNotes };

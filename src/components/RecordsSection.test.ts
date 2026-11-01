@@ -95,7 +95,7 @@ describe("records section", () => {
     const columns = headers(html);
     expect(columns).toHaveLength(10);
     const aboveTable = html.slice(0, html.indexOf("<table"));
-    for (const label of ["搜索", "难度", "等级", "定数", "分类", "版本", "成绩来源"]) {
+    for (const label of ["搜索", "难度", "等级", "定数", "分类", "版本", "成绩来源", "排序方式"]) {
       expect(aboveTable).toContain(`aria-label="${label}"`);
     }
     expect(aboveTable).toContain('<option value="13">13</option>');
@@ -122,6 +122,24 @@ describe("records section", () => {
     expect(renderRecords().match(/<col\b/g)).toHaveLength(10);
     renderState.mode = "rating";
     expect(renderRecords().match(/<col\b/g)).toHaveLength(11);
+  });
+
+  it("offers constant, Rating and score sorting above the table and marks the active column", () => {
+    renderState.mode = "catalog";
+    renderState.filters = { sort: "rating-ascending" };
+    const html = renderRecords();
+    const aboveTable = html.slice(0, html.indexOf("<table"));
+    expect(aboveTable).toContain('aria-label="排序方式"');
+    for (const field of ["constant", "rating", "score"]) {
+      for (const direction of ["ascending", "descending"]) {
+        expect(aboveTable).toContain(`value="${field}-${direction}"`);
+      }
+    }
+    expect(aboveTable).toContain('value="rating-ascending" selected=""');
+    expect(headers(html)[8]).toContain('aria-sort="ascending"');
+    expect(headers(html)[3]).toContain('aria-sort="none"');
+    expect(headers(html)[7]).toContain('aria-sort="none"');
+    expect(html).toContain("排序时置于已游玩谱面之后");
   });
 
   it("reuses one set of row controls and preserves all information for the mobile card layout", () => {

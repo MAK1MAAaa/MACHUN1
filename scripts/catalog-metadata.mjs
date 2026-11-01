@@ -6,8 +6,25 @@ const versionNames = new Map([
   ["PARADISE×", "PARADISE LOST"],
 ]);
 
+// These Linked VERSE songs were already available before Mate; earlier local
+// metadata incorrectly used the version in which their records were imported.
+// https://info-chunithm.sega.jp/12026/
+export const SONG_VERSION_OVERRIDES = [
+  { id: "2967", title: "YOUNITHM", version: "X-VERSE-X" },
+  { id: "2999", title: "Melodiniq", version: "X-VERSE-X" },
+  { id: "3000", title: "Linked Tune", version: "X-VERSE-X" },
+];
+const versionOverrides = new Map(SONG_VERSION_OVERRIDES.map(song => [song.id, song]));
+
 function metadataText(value) {
   return typeof value === "string" ? value.normalize("NFKC").trim() : "";
+}
+
+export function songVersionOverride(song) {
+  const override = versionOverrides.get(String(song?.id));
+  if (!override) return null;
+  if (metadataText(song?.title) !== override.title) throw new Error(`歌曲版本补充编号与曲名不匹配：${song.id}`);
+  return override.version;
 }
 
 export function songMetadata(song) {
@@ -15,7 +32,7 @@ export function songMetadata(song) {
   return {
     genre: metadataText(song?.catname) || "Unknown",
     // version belongs to the song, rather than a difficulty added later.
-    version: versionNames.get(rawVersion) || rawVersion.replace(/\+$/, " PLUS") || "Unknown",
+    version: songVersionOverride(song) || versionNames.get(rawVersion) || rawVersion.replace(/\+$/, " PLUS") || "Unknown",
   };
 }
 

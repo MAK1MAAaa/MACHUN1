@@ -11,6 +11,7 @@
 .records-genre-filter { width: 168px; }
 .records-version-filter { width: 132px; }
 .records-source-filter { width: 118px; }
+.records-sort-filter { width: 176px; }
 .records-filter select, .records-page-jump select { color: #30483b; border: 1px solid var(--line); border-radius: 7px; background: #fff; padding: 6px 8px; font-size: 0.78rem; min-height: 36px; width: 100%; min-width: 0; }
 .records-browser .record-search input { width: 100%; height: 36px; min-width: 0; padding: 6px 10px; font-size: 0.78rem; letter-spacing: normal; }
 .records-filter-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }

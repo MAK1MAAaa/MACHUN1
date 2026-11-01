@@ -23,7 +23,9 @@ function compareGameVersions(left: string, right: string): number {
 }
 
 export type RecordsViewMode = "rating" | "catalog";
-export type RecordsScoreSort = "default" | "descending" | "ascending";
+export type RecordsSort = "constant-descending" | "constant-ascending"
+  | "rating-descending" | "rating-ascending"
+  | "score-descending" | "score-ascending";
 
 export interface RecordsFilters {
   query: string;
@@ -34,7 +36,7 @@ export interface RecordsFilters {
   version: string;
   includeUnplayed: boolean;
   source: ScoreSource | "";
-  scoreSort: RecordsScoreSort;
+  sort: RecordsSort;
 }
 
 export const EMPTY_RECORDS_FILTERS: RecordsFilters = {
@@ -46,7 +48,7 @@ export const EMPTY_RECORDS_FILTERS: RecordsFilters = {
   version: "",
   includeUnplayed: false,
   source: "",
-  scoreSort: "default",
+  sort: "constant-descending",
 };
 
 export interface RecordsRow {
@@ -87,14 +89,17 @@ function matchesSearch(row: RecordsRow, query: string, nicknameOverrides: Record
   return normalizeSearchText(text).includes(query);
 }
 
-function compareCatalogRows(left: RecordsRow, right: RecordsRow, scoreSort: RecordsScoreSort): number {
+function compareCatalogRows(left: RecordsRow, right: RecordsRow, sort: RecordsSort): number {
   // A missing score is not a zero score and always follows played charts.
   if (Boolean(left.record) !== Boolean(right.record)) return left.record ? -1 : 1;
-  if (scoreSort !== "default" && left.record && right.record) {
-    const scoreDifference = left.record.score - right.record.score;
-    if (scoreDifference) return scoreSort === "ascending" ? scoreDifference : -scoreDifference;
-  }
-  return right.chart.constant - left.chart.constant
+  const difference = sort.startsWith("constant-")
+    ? left.chart.constant - right.chart.constant
+    : left.record && right.record
+      ? sort.startsWith("rating-") ? left.record.rating - right.record.rating : left.record.score - right.record.score
+      : 0;
+  if (difference) return sort.endsWith("ascending") ? difference : -difference;
+  return (sort.startsWith("rating-") && left.record && right.record ? right.record.score - left.record.score : 0)
+    || right.chart.constant - left.chart.constant
     || left.chart.title.localeCompare(right.chart.title, "zh-CN")
     || chartKey(left.chart).localeCompare(chartKey(right.chart));
 }
@@ -130,7 +135,7 @@ export function buildRecordsRows(
       ? row.record?.source === filters.source
       : filters.includeUnplayed || row.record !== undefined)
       && matchesSearch(row, query, nicknameOverrides))
-    .sort((left, right) => compareCatalogRows(left, right, filters.scoreSort));
+    .sort((left, right) => compareCatalogRows(left, right, filters.sort));
 }
 
 export function paginateRecords(rows: readonly RecordsRow[], requestedPage: number): {

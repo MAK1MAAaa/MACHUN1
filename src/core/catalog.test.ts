@@ -127,6 +127,15 @@ describe("Mate catalog snapshot", () => {
     expect(catalogByKey.get("3046:MAS")).toMatchObject({ genre: "ORIGINAL", version: "MATE" });
   });
 
+  it("uses the confirmed X-VERSE-X debut version for the three Linked VERSE songs", () => {
+    for (const [id, title] of [["2967", "YOUNITHM"], ["2999", "Melodiniq"], ["3000", "Linked Tune"]]) {
+      const charts = catalog.filter(chart => chart.id === id);
+      expect(charts.length).toBeGreaterThan(0);
+      expect(charts.every(chart => chart.title === title && chart.version === "X-VERSE-X")).toBe(true);
+    }
+    expect(sources.versionAudit).toMatchObject({ comparedCharts: catalog.length, comparedSongs: 1255, remainingDifferences: 0 });
+  });
+
   it("includes all five 2026-09-17 standard charts at their published constants", () => {
     const expected = [
       ["3044", "Knockout Ravebox", 14.1],

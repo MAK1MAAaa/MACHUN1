@@ -53,7 +53,7 @@ export function RecordsSection({ records, scores, nicknameOverrides, onEdit, onD
   );
   const pagination = paginateRecords(rows, requestedPage);
   const activeFilterCount = [filters.difficulty, filters.level, filters.constant, filters.genre, filters.version, filters.source]
-    .filter(Boolean).length + Number(filters.includeUnplayed);
+    .filter(Boolean).length + Number(filters.includeUnplayed) + Number(filters.sort !== EMPTY_RECORDS_FILTERS.sort);
   useEffect(() => {
     // Deleting the last row on a page should return to the remaining last page.
     setRequestedPage((page) => Math.min(page, pagination.pageCount));
@@ -76,7 +76,12 @@ export function RecordsSection({ records, scores, nicknameOverrides, onEdit, onD
   }
 
   function cycleScoreSort() {
-    changeFilter("scoreSort", filters.scoreSort === "default" ? "descending" : filters.scoreSort === "descending" ? "ascending" : "default");
+    changeFilter("sort", filters.sort === "score-descending" ? "score-ascending" : filters.sort === "score-ascending" ? "constant-descending" : "score-descending");
+  }
+
+  function sortDirection(field: "constant" | "rating" | "score"): "ascending" | "descending" | "none" {
+    return mode !== "catalog" || !filters.sort.startsWith(`${field}-`) ? "none"
+      : filters.sort.endsWith("ascending") ? "ascending" : "descending";
   }
 
   return (
@@ -158,6 +163,17 @@ export function RecordsSection({ records, scores, nicknameOverrides, onEdit, onD
                 {SCORE_SOURCES.map((source) => <option key={source} value={source}>{SCORE_SOURCE_LABELS[source]}</option>)}
               </select>
             </label>
+            <label className="records-filter records-sort-filter">
+              <span>排序</span>
+              <select aria-label="排序方式" value={filters.sort} onChange={(event) => changeFilter("sort", event.target.value as RecordsFilters["sort"])}>
+                <option value="constant-descending">定数：从高到低</option>
+                <option value="constant-ascending">定数：从低到高</option>
+                <option value="rating-descending">Rating：从高到低</option>
+                <option value="rating-ascending">Rating：从低到高</option>
+                <option value="score-descending">分数：从高到低</option>
+                <option value="score-ascending">分数：从低到高</option>
+              </select>
+            </label>
             <div className="records-filter-actions">
               <button
                 type="button"
@@ -194,22 +210,22 @@ export function RecordsSection({ records, scores, nicknameOverrides, onEdit, onD
               <th scope="col">歌曲</th>
               <th scope="col">难度</th>
               <th scope="col">等级</th>
-              <th scope="col">定数</th>
+              <th scope="col" aria-sort={mode === "catalog" ? sortDirection("constant") : undefined}>定数</th>
               <th scope="col">分类</th>
               <th scope="col">版本</th>
               <th scope="col">来源</th>
-              <th scope="col" className="records-score-heading" aria-sort={mode === "catalog" ? (filters.scoreSort === "default" ? "none" : filters.scoreSort) : undefined}>
+              <th scope="col" className="records-score-heading" aria-sort={mode === "catalog" ? sortDirection("score") : undefined}>
                 {mode === "catalog" ? (
                   <button
                     type="button"
                     className="records-score-sort"
                     aria-label="按分数排序"
-                    title={filters.scoreSort === "default" ? "当前按定数排序；点击按分数从高到低排序" : filters.scoreSort === "descending" ? "当前分数从高到低；点击从低到高排序" : "当前分数从低到高；点击恢复按定数排序"}
+                    title={filters.sort === "score-descending" ? "当前分数从高到低；点击从低到高排序" : filters.sort === "score-ascending" ? "当前分数从低到高；点击恢复按定数从高到低排序" : "点击按分数从高到低排序"}
                     onClick={cycleScoreSort}
-                  >分数 <span aria-hidden="true">{filters.scoreSort === "default" ? "↕" : filters.scoreSort === "descending" ? "↓" : "↑"}</span></button>
+                  >分数 <span aria-hidden="true">{sortDirection("score") === "none" ? "↕" : sortDirection("score") === "descending" ? "↓" : "↑"}</span></button>
                 ) : "分数"}
               </th>
-              <th scope="col">Rating</th>
+              <th scope="col" aria-sort={mode === "catalog" ? sortDirection("rating") : undefined}>Rating</th>
               <th scope="col">操作</th>
             </tr>
           </thead>
@@ -256,7 +272,7 @@ export function RecordsSection({ records, scores, nicknameOverrides, onEdit, onD
         </table>
       </div>
 
-      {mode === "catalog" && <p className="records-source-note">来源按当前最高成绩的归属筛选{filters.source ? "，仅显示所选来源的已游玩谱面" : "；未游玩谱面没有来源"}。</p>}
+      {mode === "catalog" && <p className="records-source-note">来源按当前最高成绩的归属筛选{filters.source ? "，仅显示所选来源的已游玩谱面" : "；未游玩谱面没有来源，排序时置于已游玩谱面之后"}。</p>}
 
       <nav className="records-pagination" aria-label="成绩分页">
         <span className="records-page-status" aria-live="polite">第 {pagination.page} / {pagination.pageCount} 页</span>

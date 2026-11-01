@@ -25,5 +25,36 @@
       "source": "https://info-chunithm.sega.jp/12772/"
     }
   },
-  "constantSupplementPolicy": "优先使用固定上游快照中的已确认定数；用户定数表仅在上游缺失时补充。未知 BPM 以 null、未知物量以 0 保留。"
+  "constantSupplementPolicy": "优先使用固定上游快照中的已确认定数；用户定数表仅在上游缺失时补充。未知 BPM 以 null、未知物量以 0 保留。",
+  "versionAudit": {
+    "checkedAt": "2026-11-01",
+    "policy": "按歌曲首次登场版本关联全部难度；官方曲库核对编号与曲名，固定 OTOGE DB 快照核对版本，官方 Mate 升级公告核实 Linked VERSE 三曲早于 Mate。",
+    "comparedCharts": 1522,
+    "comparedSongs": 1255,
+    "upstreamSnapshot": "https://raw.githubusercontent.com/zvuc/otoge-db/a5b5b3be40659adb16f9aae7079a483946cbfc99/chunithm/data/music-ex.json",
+    "upstreamSha256": "414dac0f55a82ac97198a1075ab2a381dd773bdb6f9ac232a71c8dca68c6ccde",
+    "officialSource": "https://info-chunithm.sega.jp/12026/",
+    "correctedCharts": 7,
+    "corrections": [
+      {
+        "id": "2967",
+        "title": "YOUNITHM",
+        "version": "X-VERSE-X",
+        "previousVersion": "MATE"
+      },
+      {
+        "id": "2999",
+        "title": "Melodiniq",
+        "version": "X-VERSE-X",
+        "previousVersion": "MATE"
+      },
+      {
+        "id": "3000",
+        "title": "Linked Tune",
+        "version": "X-VERSE-X",
+        "previousVersion": "MATE"
+      }
+    ],
+    "remainingDifferences": 0
+  }
 }

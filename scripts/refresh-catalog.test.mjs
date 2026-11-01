@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { refreshCatalog, OCTOBER_SUPPLEMENTS } from './refresh-catalog.mjs';
+import { enrichCatalogMetadata, SONG_VERSION_OVERRIDES } from './catalog-metadata.mjs';
 const official = [...new Map(OCTOBER_SUPPLEMENTS.map(row => [row.id, {
   id: row.id, title: row.title, lev_exp: '12+', lev_mas: '15', catname: 'niconico', image: `${row.id}.jpg`,
 }])).values()];
@@ -57,5 +58,20 @@ describe('date-bound catalogue refresh', () => {
   it('does not invent a debut version when upstream and previous metadata are both missing', () => {
     const row = { id: 'new', title: 'Unknown version', date_added: '20261029', lev_mas_i: '13.1' };
     expect(() => refreshCatalog([], [], [row], [{ ...row, lev_mas: '13', catname: 'ORIGINAL', image: 'new.jpg' }])).toThrow('缺少已确认版本');
+  });
+  it('corrects Linked VERSE debut versions despite existing or incoming Mate metadata and keeps the correction on refresh', () => {
+    const source = SONG_VERSION_OVERRIDES.map(song => ({ ...song, version: 'Mate', date_added: '20260423', lev_exp_i: '14.8', lev_mas_i: '15.5', lev_ult_i: '15.8' }));
+    const songs = source.map(song => ({ ...song, lev_exp: '14+', lev_mas: '15+', lev_ult: '15+', catname: 'ORIGINAL', image: `${song.id}.jpg` }));
+    const stale = source.map(song => ({ ...existing[0], id: song.id, title: song.title, version: 'MATE' }));
+    const result = refreshCatalog(stale, [], source, songs);
+    expect(result.charts).toHaveLength(9);
+    expect(result.charts.every(chart => chart.version === 'X-VERSE-X')).toBe(true);
+    expect(result.charts.every(chart => chart.nickname.join(',') === existing[0].nickname.join(','))).toBe(true);
+    expect(refreshCatalog(result.charts, result.details, source, songs)).toEqual(result);
+    expect(enrichCatalogMetadata(stale, source).catalog.every(chart => chart.version === 'X-VERSE-X')).toBe(true);
+  });
+  it('checks the title before applying a version override by official ID', () => {
+    const source = [{ id: '2967', title: 'Another song', version: 'Mate', lev_mas_i: '15.5' }];
+    expect(() => refreshCatalog([], [], source, [{ ...source[0], lev_mas: '15+', catname: 'ORIGINAL', image: 'new.jpg' }])).toThrow('编号与曲名不匹配');
   });
 });
