@@ -365,15 +365,8 @@ try {
     assert.equal(emptyAjDownloads, 0);
   } finally { page.off('download', countEmptyAjDownload); }
   mark('scores without AJ cannot generate an AJ B30 preview or download');
-  const toggle = page.locator('.b30-preview-toggle');
-  assert.equal(await toggle.getAttribute('aria-expanded'), 'false');
-  await toggle.click();
-  assert.equal(await page.locator('.b30-card').count(), 30);
-  assert.equal(await page.locator('.b30-grid').evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length), 3);
-  assert(await page.locator('.b30-card .score-card-lamp').filter({ hasText: /^FULL COMBO$/ }).count() > 0);
-  assert.equal(await page.locator('.b30-card .score-card-lamp').filter({ hasText: /^ABSOLUTE$/ }).count(), 1);
-  assert.equal(await page.locator('.b30-card .score-card-source').count(), 30);
-  await toggle.click();
+  assert.equal(await page.locator('.b30-preview-toggle, #b30-image-preview, .b30-grid, .b30-card').count(), 0);
+  assert.equal(await page.locator('.b30-analysis').count(), 1);
   await edit(page, 1_001_000);
   await page.reload(); await page.locator('.account-toolbar').waitFor(); await score(page, 1_001_000, 'manual');
   mark('manual score, achievements and source survive refresh; legacy migration does not repeat');
@@ -483,16 +476,14 @@ try {
   assert.equal(Object.keys((await state(mobile)).scores).length, 50);
   assert.equal((await state(mobile)).nicknameOverrides['3055'][0], '个人测试别名');
   assert.equal(await mobile.evaluate(key => localStorage.getItem(key), STORAGE_KEY), null);
-  await mobile.locator('.b30-preview-toggle').click();
   for (const width of [320, 390, 768]) {
     await mobile.setViewportSize({ width, height: 844 });
-    assert.equal(await mobile.locator('.b30-grid').evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length), 3);
-    assert.equal(await mobile.locator('.b30-card').count(), 30);
+    assert.equal(await mobile.locator('.b30-preview-toggle, #b30-image-preview, .b30-grid, .b30-card').count(), 0);
+    assert.equal(await mobile.locator('.b30-analysis').count(), 1);
     assert(await mobile.locator('.record-table').evaluate(element => element.scrollWidth <= element.clientWidth));
     assert.equal(await mobile.locator('.record-table tbody tr').first().evaluate(element => getComputedStyle(element).display), 'grid');
   }
   await mobile.setViewportSize({ width: 390, height: 844 });
-  await mobile.locator('.b30-preview-toggle').click();
   assert.equal(await mobile.getByLabel('导出昵称', { exact: true }).inputValue(), exportNickname);
   mark('a second user cannot read the nickname, while the same account on a fresh mobile context restores it from MySQL');
   const mobileConstants = mobile.locator('.constant-table-section');
@@ -531,7 +522,7 @@ try {
   await mobileRecords.getByRole('button', { name: '收起筛选', exact: true }).click();
   await mobileRecords.getByRole('button', { name: 'Rating 排名', exact: true }).click();
   for (const name of ['导出 B30 图片', '导出 B30 + 候选20 图片', '导出 AJ B30 图片', '导出 B50 图片']) await exportPng(mobile, name);
-  mark('touch viewport keeps 3×10 B30, readable score cards and collapsed filters; regular, AJ B30 and B50 PNGs save after an explicit tap without reporting unconfirmed success');
+  mark('touch viewport omits the B30 card preview while keeping the chart, readable records and collapsed filters; regular, AJ B30 and B50 PNGs save after an explicit tap without reporting unconfirmed success');
   await mobile.locator('.source-tools-toggle').click();
   const mobileManager = managers.get('root')!;
   for (const connection of mobileManager.state.values()) if (connection.source !== 'lxns') connection.bindingMode = 'companion';

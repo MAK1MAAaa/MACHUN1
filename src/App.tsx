@@ -17,7 +17,6 @@ import { createFullBackup, downloadFullBackup } from "./core/backup";
 import { SourceSyncControls, useSourceSync } from "./components/SourceSyncControls";
 import { RecordsSection } from "./components/RecordsSection";
 import { ScoreBadges } from "./components/ScoreBadges";
-import { B30ScoreCard } from "./components/B30ScoreCard";
 import { ConstantTableSection } from "./components/ConstantTableSection";
 import {
   SCORE_SOURCE_LABELS,
@@ -139,7 +138,6 @@ function App({ account, initial, initialNotice }: AppProps) {
   const [editing, setEditing] = useState<{ key: string; title: string; difficulty: string; score: string; isNew: boolean } | null>(null);
   const [editError, setEditError] = useState<string | null>(null);
   const editDialogRef = useRef<HTMLDialogElement>(null);
-  const [b30ImagesOpen, setB30ImagesOpen] = useState(false);
   const [localToolsOpen, setLocalToolsOpen] = useState(false);
   const [sourceToolsOpen, setSourceToolsOpen] = useState(false);
   const [exportingImage, setExportingImage] = useState(false);
@@ -643,22 +641,6 @@ function App({ account, initial, initialNotice }: AppProps) {
               </div>
             </div>
           </div>
-          <button type="button" className="b30-preview-toggle" aria-expanded={b30ImagesOpen} aria-controls="b30-image-preview" onClick={() => setB30ImagesOpen((open) => !open)}>
-            {b30ImagesOpen ? "收起 B30 图片" : "展开 B30 图片"}
-          </button>
-          {b30ImagesOpen && <div id="b30-image-preview" className="b30-table-scroll">
-            <div className="b30-grid">
-              {Array.from({ length: B30_SIZE }, (_, index) => {
-                const record = b30[index];
-                return <B30ScoreCard
-                  key={record ? chartKey(record) : `empty-${index}`}
-                  record={record}
-                  rank={index + 1}
-                  coverUrl={record ? catalogByKey.get(chartKey(record))?.coverUrl ?? "" : ""}
-                />;
-              })}
-            </div>
-          </div>}
         </section>
 
         <RecordsSection
