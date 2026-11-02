@@ -1,10 +1,74 @@
 {
-  "date": "2026-10-08",
-  "upstreamCommit": "f84ccd71bb9152a3afa81a93f58c4caeeaa45d77",
+  "date": "2026-11-01",
+  "upstreamCommit": "a5b5b3be40659adb16f9aae7079a483946cbfc99",
   "official": "https://chunithm.sega.jp/storage/json/music.json",
-  "officialAnnouncements": ["https://info-chunithm.sega.jp/12719/", "https://info-chunithm.sega.jp/12754/"],
+  "officialAnnouncements": [
+    "https://info-chunithm.sega.jp/12719/",
+    "https://info-chunithm.sega.jp/12754/",
+    "https://info-chunithm.sega.jp/12764/",
+    "https://info-chunithm.sega.jp/12772/",
+    "https://info-chunithm.sega.jp/13029/",
+    "https://info-chunithm.sega.jp/13037/"
+  ],
   "upstream": "https://github.com/zvuc/otoge-db",
-  "upstreamSnapshot": "https://raw.githubusercontent.com/zvuc/otoge-db/f84ccd71bb9152a3afa81a93f58c4caeeaa45d77/chunithm/data/music-ex.json",
+  "upstreamSnapshot": "https://raw.githubusercontent.com/zvuc/otoge-db/a5b5b3be40659adb16f9aae7079a483946cbfc99/chunithm/data/music-ex.json",
   "constantSupplement": "用户提供的 10/8 Mate ep. IV 定数表",
-  "supplementSha256": "119293dd3e361778bf94f2c90dd1f792714a17f7a703bd1b9bfa5ca8a5acddcb"
+  "supplementSha256": "119293dd3e361778bf94f2c90dd1f792714a17f7a703bd1b9bfa5ca8a5acddcb",
+  "upstreamCommittedAt": "2026-10-30T04:41:19Z",
+  "upstreamSha256": "414dac0f55a82ac97198a1075ab2a381dd773bdb6f9ac232a71c8dca68c6ccde",
+  "officialSnapshot": "https://raw.githubusercontent.com/zvuc/otoge-db/a5b5b3be40659adb16f9aae7079a483946cbfc99/chunithm/data/music.json",
+  "officialSnapshotSha256": "7e22130791d8833734870bfab6a4d0aa4dee9ed692a5c958a0bc152a8930cbac",
+  "officialLiveCheckedAt": "2026-11-01",
+  "chartReleaseDates": {
+    "2175:ULT": {
+      "date": "2026-10-22",
+      "source": "https://info-chunithm.sega.jp/12772/"
+    },
+    "2317:ULT": {
+      "date": "2026-09-25",
+      "source": "https://info-chunithm.sega.jp/12719/"
+    }
+  },
+  "constantSupplementPolicy": "优先使用固定上游快照中的已确认定数；用户定数表仅在上游缺失时补充。未知 BPM 以 null、未知物量以 0 保留。",
+  "versionAudit": {
+    "checkedAt": "2026-11-01",
+    "policy": "按歌曲首次登场版本关联全部难度；官方曲库核对编号与曲名，固定 OTOGE DB 快照核对版本，官方 Mate 升级公告核实 Linked VERSE 三曲早于 Mate。",
+    "comparedCharts": 1522,
+    "comparedSongs": 1255,
+    "upstreamSnapshot": "https://raw.githubusercontent.com/zvuc/otoge-db/a5b5b3be40659adb16f9aae7079a483946cbfc99/chunithm/data/music-ex.json",
+    "upstreamSha256": "414dac0f55a82ac97198a1075ab2a381dd773bdb6f9ac232a71c8dca68c6ccde",
+    "officialSource": "https://info-chunithm.sega.jp/12026/",
+    "correctedCharts": 7,
+    "corrections": [
+      {
+        "id": "2967",
+        "title": "YOUNITHM",
+        "version": "X-VERSE-X",
+        "previousVersion": "MATE"
+      },
+      {
+        "id": "2999",
+        "title": "Melodiniq",
+        "version": "X-VERSE-X",
+        "previousVersion": "MATE"
+      },
+      {
+        "id": "3000",
+        "title": "Linked Tune",
+        "version": "X-VERSE-X",
+        "previousVersion": "MATE"
+      }
+    ],
+    "remainingDifferences": 0
+  },
+  "releaseDateMetadata": {
+    "charts": 1522,
+    "dated": 1522,
+    "chartDates": 2,
+    "songDates": 1520,
+    "preservedDates": 0,
+    "unknownDates": 0,
+    "upstreamSha256": "414dac0f55a82ac97198a1075ab2a381dd773bdb6f9ac232a71c8dca68c6ccde",
+    "policy": "明确的谱面上线日期优先；未提供时按歌曲首次上线日期排序。上游 date_updated 仅表示元数据更新，不作为上线日期。缺失来源时保留有效旧日期，其余未知以 null 保留。"
+  }
 }

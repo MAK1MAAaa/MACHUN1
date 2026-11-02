@@ -9,6 +9,7 @@ import type {
 import { calculateRating } from "./rating";
 import { readScoreAchievements } from "./scoreAchievements";
 import { upsertHighScore } from "./storage";
+import { downloadBlob } from "./fileDelivery";
 
 export function createFullBackup(state: LocalState, catalogVersion: string) {
   return { schemaVersion: 2, catalogVersion, exportedAt: new Date().toISOString(),
@@ -16,10 +17,7 @@ export function createFullBackup(state: LocalState, catalogVersion: string) {
 }
 
 export function downloadFullBackup(backup: ReturnType<typeof createFullBackup>): void {
-  const url = URL.createObjectURL(new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" }));
-  const link = document.createElement("a");
-  link.href = url; link.download = "machun1-backup.json"; link.click();
-  URL.revokeObjectURL(url);
+  downloadBlob(new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" }), "machun1-backup.json");
 }
 
 function normalizeAliases(aliases: unknown): string[] {

@@ -1,0 +1,6 @@
+.score-card-demo { width: min(1480px, calc(100% - 48px)); padding: 32px 0 48px; margin: 0 auto; }
+.score-card-demo-heading { margin-bottom: 24px; }
+.score-card-demo-heading > span { color: #47725d; font-size: 12px; font-weight: 800; letter-spacing: .08em; }
+.score-card-demo-heading h1 { color: #2e403b; font-size: 28px; margin: 8px 0; }
+.score-card-demo-heading p { color: #607568; font-size: 14px; line-height: 1.6; margin: 0; }
+@media (max-width: 660px) { .score-card-demo { width: calc(100% - 24px); padding-top: 20px; } }

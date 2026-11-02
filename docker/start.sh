@@ -66,9 +66,9 @@ try {
   const mysql = await import('mysql2/promise');
   connection = await mysql.createConnection({ uri: process.env.DATABASE_URL, connectTimeout: 5000 });
   const [users] = await connection.execute('SELECT username FROM users WHERE username=?', ['root']);
-  const [migrations] = await connection.execute('SELECT name FROM _machun_migrations WHERE name IN (?,?)', ['0001_accounts', '0002_source_binding_tasks']);
-  if (!users.length || migrations.length !== 2) throw new Error('schema unavailable');
-  console.log('MySQL 连接、root 用户及两项迁移检查通过。');
+  const [migrations] = await connection.execute('SELECT name FROM _machun_migrations WHERE name IN (?,?,?,?)', ['0001_accounts', '0002_source_binding_tasks', '0003_score_clear_status', '0004_export_nickname']);
+  if (!users.length || migrations.length !== 4) throw new Error('schema unavailable');
+  console.log('MySQL 连接、root 用户及四项迁移检查通过。');
 } catch {
   console.error('MySQL 连接或表结构检查失败，请检查现有数据库容器、网络和连接密码；未修改数据库。');
   process.exitCode = 1;

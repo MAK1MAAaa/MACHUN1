@@ -1,7 +1,7 @@
 import catalogData from "../data/catalog.json";
 import type { CatalogChart, Difficulty } from "../types";
 
-export let CATALOG_DATE = "2026-10-08";
+export let CATALOG_DATE = "2026-11-01";
 export let CATALOG_VERSION = `Mate-${CATALOG_DATE}-13plus`;
 
 function isDifficulty(value: unknown): value is Difficulty {

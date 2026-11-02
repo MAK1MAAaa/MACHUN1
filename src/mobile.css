@@ -1,7 +1,7 @@
 .source-sync-actions { flex-wrap: wrap; }
 
 @media (max-width: 1100px) {
-  .b30-grid { min-width: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .b30-grid { min-width: 0; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 @media (max-width: 660px) {
   input, select, textarea { font-size: 16px; }
@@ -14,7 +14,7 @@
   .source-actions button, .source-actions a { min-height: 44px; }
   .source-sync-actions button { flex: 1 1 auto; }
   .source-sync-history { flex-wrap: wrap; }
-  .b30-grid { grid-template-columns: minmax(0, 1fr); }
+  .b30-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .b30-table-scroll { padding: 10px; }
   .b30-export-actions { flex-wrap: wrap; }
   .b30-export-actions button { min-height: 44px; }

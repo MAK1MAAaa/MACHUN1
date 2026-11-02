@@ -6,3 +6,9 @@
 .score-badges .score-combo-ajc { color: #6442a0; border-color: #bfa3dd; background: linear-gradient(110deg, #ffe8d2, #ede3ff, #e0f3fd); }
 .score-badges .score-chain-fchain, .score-badges .score-chain-platinum { color: #43677c; border-color: #9abbcf; background: #e4f2fa; }
 .score-badges .score-chain-gold { color: #87611c; border-color: #d3b269; background: #fff1bf; }
+.score-badges .score-clear-failed { color: #666b75; border-color: #b8bec8; background: #f2f3f5; }
+.score-badges .score-clear-clear { color: #336846; border-color: #85b796; background: #e7f5eb; }
+.score-badges .score-clear-hard { color: #a33639; border-color: #d98b8d; background: #ffeaeb; }
+.score-badges .score-clear-brave { color: #75509d; border-color: #b89cd3; background: #f3eaff; }
+.score-badges .score-clear-absolute { color: #256885; border-color: #81b7ce; background: #e4f5fc; }
+.score-badges .score-clear-catastrophy { color: #8b6415; border-color: #c5a253; background: #fff1c7; }

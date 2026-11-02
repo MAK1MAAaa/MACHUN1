@@ -8,14 +8,17 @@ import {
 import type { CatalogChart, ScoreSource, SingleRating } from "./types";
 import { B30_SIZE, chartKey, compareRatings, getB30, getB30Summary, getB30Axis } from "./core/b30";
 import { CATALOG_DATE, CATALOG_VERSION, catalog, catalogByKey } from "./core/catalog";
-import { createB30Export, createB30CandidatesExport, downloadB30Json, downloadB30Png } from "./core/b30Export";
-import { formatScore } from "./core/rating";
+import { createB30Export, createB30CandidatesExport, createAjB30Export, createB50Export, downloadB30Json, generateB30Png } from "./core/b30Export";
+import { createDownloadResource, type DownloadResource } from "./core/fileDelivery";
+import { ImageExportDialog } from "./components/ImageExportDialog";
 import type { Account, WorkspaceSnapshot } from "./accountTypes";
 import { useAccountWorkspace } from "./components/useAccountWorkspace";
 import { createFullBackup, downloadFullBackup } from "./core/backup";
 import { SourceSyncControls, useSourceSync } from "./components/SourceSyncControls";
 import { RecordsSection } from "./components/RecordsSection";
 import { ScoreBadges } from "./components/ScoreBadges";
+import { B30ScoreCard } from "./components/B30ScoreCard";
+import { ConstantTableSection } from "./components/ConstantTableSection";
 import {
   SCORE_SOURCE_LABELS,
   type ExternalScoreSource,
@@ -110,20 +113,6 @@ const difficultyLabel: Record<CatalogChart["difficulty"], string> = {
   ULT: "ULTIMA",
 };
 
-function CoverImage({ src, className = "" }: { src: string; className?: string }) {
-  return (
-    <span className={`cover-image ${className}`} aria-hidden="true">
-      <img
-        src={src}
-        alt=""
-        crossOrigin="anonymous"
-        loading="lazy"
-        onError={(event) => { event.currentTarget.style.opacity = "0"; }}
-      />
-    </span>
-  );
-}
-
 function SourceTag({ source }: { source: ScoreSource }) {
   return <span className={`score-source ${source}`}>{SCORE_SOURCE_LABELS[source]}</span>;
 }
@@ -143,6 +132,9 @@ interface AppProps {
 function App({ account, initial, initialNotice }: AppProps) {
   const workspace = useAccountWorkspace(initial);
   const localState = workspace.snapshot.state;
+  const [exportNickname, setExportNickname] = useState(initial.exportNickname);
+  const savedExportNickname = workspace.snapshot.exportNickname;
+  const nicknameTooLong = Array.from(exportNickname.trim()).length > 32;
   const [notice, setNotice] = useState<Notice | null>(initialNotice ? { kind: "warning", text: initialNotice } : null);
   const [editing, setEditing] = useState<{ key: string; title: string; difficulty: string; score: string; isNew: boolean } | null>(null);
   const [editError, setEditError] = useState<string | null>(null);
@@ -151,6 +143,9 @@ function App({ account, initial, initialNotice }: AppProps) {
   const [localToolsOpen, setLocalToolsOpen] = useState(false);
   const [sourceToolsOpen, setSourceToolsOpen] = useState(false);
   const [exportingImage, setExportingImage] = useState(false);
+  const [imageExport, setImageExport] = useState<{ file: DownloadResource; label: string; missingCovers: number } | null>(null);
+  const imageExportRef = useRef<DownloadResource | null>(null);
+  const imageGeneration = useRef({ version: 0, running: false });
   const [pendingSource, setPendingSource] = useState<{ source: ExternalScoreSource; mergeOptions?: SourceMergeOptions } | null>(null);
   const [nationalRepairEnabled, setNationalRepairEnabled] = useState(false);
   const [helpSource, setHelpSource] = useState<ExternalScoreSource | null>(null);
@@ -166,10 +161,33 @@ function App({ account, initial, initialNotice }: AppProps) {
   const nationalRepairBusy = Boolean(sourceSync.pending.lxns)
     || sourceSync.connections.lxns.status === "syncing" || sourceSync.connections.lxns.status === "binding";
 
+  useEffect(() => { setExportNickname(savedExportNickname); }, [savedExportNickname]);
+
+  const saveExportNickname = async () => {
+    if (workspace.busy || nicknameTooLong) return;
+    try {
+      const result = await workspace.action({ type: "export-nickname", nickname: exportNickname });
+      setNotice({ kind: "success", text: result.notice ?? "导出昵称已保存。" });
+    } catch { /* Keep the draft and show the workspace save error. */ }
+  };
+
   useEffect(() => {
     if (editing && !editDialogRef.current?.open) editDialogRef.current?.showModal();
     if (!editing) editDialogRef.current?.close();
   }, [editing]);
+
+  useEffect(() => () => {
+    imageGeneration.current.version++;
+    imageGeneration.current.running = false;
+    imageExportRef.current?.dispose();
+    imageExportRef.current = null;
+  }, []);
+
+  const closeImageExport = () => {
+    imageExportRef.current?.dispose();
+    imageExportRef.current = null;
+    setImageExport(null);
+  };
 
   useEffect(() => {
     if (!notice) return;
@@ -230,30 +248,48 @@ function App({ account, initial, initialNotice }: AppProps) {
     }
   };
 
-  const exportB30Image = async (withCandidates = false) => {
-    if (exportingImage) return;
+  const exportB30Image = async (mode: "b30" | "candidates" | "aj" | "b50" = "b30") => {
+    if (imageGeneration.current.running) return;
+    imageGeneration.current.running = true;
+    const version = ++imageGeneration.current.version;
     setExportingImage(true);
-    const imageLabel = withCandidates ? "B30 + 候选20" : "B30";
-    setNotice({ kind: "success", text: "正在加载曲绘并生成 B30 图片" });
+    const imageLabel = mode === "b50" ? "B50" : mode === "aj" ? "AJ B30" : mode === "candidates" ? "B30 + 候选20" : "B30";
+    setNotice({ kind: "success", text: `正在加载曲绘并生成 ${imageLabel} 图片` });
     try {
-      const result = await downloadB30Png(
-        withCandidates
-          ? createB30CandidatesExport(records, catalogByKey, CATALOG_VERSION)
-          : createB30Export(records, catalogByKey, CATALOG_VERSION),
-      );
+      const data = mode === "b50"
+        ? createB50Export(records, catalogByKey, CATALOG_VERSION)
+        : mode === "aj"
+          ? createAjB30Export(records, catalogByKey, CATALOG_VERSION)
+          : mode === "candidates"
+            ? createB30CandidatesExport(records, catalogByKey, CATALOG_VERSION)
+            : createB30Export(records, catalogByKey, CATALOG_VERSION);
+      if (mode === "aj" && data.summary.filled === 0) {
+        setNotice({ kind: "warning", text: "暂无 AJ 或 AJC 成绩，无法生成 AJ B30 图片。" });
+        return;
+      }
+      const result = await generateB30Png(data, { nickname: savedExportNickname || account.username });
+      if (version !== imageGeneration.current.version) return;
+      const file = createDownloadResource(result.blob, result.filename);
+      imageExportRef.current?.dispose();
+      imageExportRef.current = file;
+      setImageExport({ file, label: imageLabel, missingCovers: result.missingCovers });
       setNotice({
         kind: result.missingCovers > 0 ? "warning" : "success",
         text: result.missingCovers > 0
-          ? `${imageLabel} 图片已导出，${result.missingCovers} 张曲绘加载失败并使用占位图`
-          : `${imageLabel} PNG 图片已导出`,
+          ? `${imageLabel} 图片已生成，${result.missingCovers} 张曲绘使用占位图`
+          : `${imageLabel} 图片已生成，可在预览中保存`,
       });
     } catch (error) {
+      if (version !== imageGeneration.current.version) return;
       setNotice({
         kind: "error",
-        text: error instanceof Error ? error.message : "B30 图片导出失败",
+        text: error instanceof Error ? error.message : `${imageLabel} 图片导出失败`,
       });
     } finally {
-      setExportingImage(false);
+      if (version === imageGeneration.current.version) {
+        imageGeneration.current.running = false;
+        setExportingImage(false);
+      }
     }
   };
 
@@ -564,12 +600,28 @@ function App({ account, initial, initialNotice }: AppProps) {
                 <button type="button" className="primary" onClick={() => exportB30Image()} disabled={exportingImage}>
                   {exportingImage ? "正在生成图片" : "导出 B30 图片"}
                 </button>
-                <button type="button" onClick={() => exportB30Image(true)} disabled={exportingImage}>
+                <button type="button" onClick={() => exportB30Image("candidates")} disabled={exportingImage}>
                   导出 B30 + 候选20 图片
+                </button>
+                <button type="button" onClick={() => exportB30Image("aj")} disabled={exportingImage}
+                  title="仅统计 AJ / AJC 谱面，按单曲 Rating 取前 30">
+                  导出 AJ B30 图片
+                </button>
+                <button type="button" onClick={() => exportB30Image("b50")} disabled={exportingImage}
+                  title="MATE 曲目取 NEW 20，此前版本取 OLD 30，平均 Rating 固定除以 50">
+                  导出 B50 图片
                 </button>
               </div>
             </div>
           </div>
+          <form className="b30-export-settings" onSubmit={(event) => { event.preventDefault(); void saveExportNickname(); }}>
+            <label htmlFor="export-nickname">导出昵称</label>
+            <input id="export-nickname" value={exportNickname} onChange={(event) => setExportNickname(event.target.value)}
+              placeholder={account.username} maxLength={64} disabled={workspace.busy}
+              aria-describedby="export-nickname-hint" aria-invalid={nicknameTooLong || undefined} />
+            <button type="submit" disabled={workspace.busy || nicknameTooLong || exportNickname.trim() === savedExportNickname}>保存昵称</button>
+            <span id="export-nickname-hint">{nicknameTooLong ? "昵称最多 32 个字符。" : "保存后显示在所有分表图片左上角，留空使用登录用户名。"}</span>
+          </form>
           <div className="b30-analysis" aria-label="B30 Rating 柱状分析">
             <div className="b30-analysis-heading">
               <div>
@@ -649,35 +701,12 @@ function App({ account, initial, initialNotice }: AppProps) {
             <div className="b30-grid">
               {Array.from({ length: B30_SIZE }, (_, index) => {
                 const record = b30[index];
-                return record ? (
-                  <article className={`b30-card ${record.difficulty.toLowerCase()}`} key={chartKey(record)}>
-                    <div className="card-rank">#{String(index + 1).padStart(2, "0")}</div>
-                    <CoverImage
-                      src={catalogByKey.get(chartKey(record))?.coverUrl ?? ""}
-                      className="card-cover"
-                    />
-                    <div className="card-content">
-                      <div className="card-title">
-                        <div className="card-chart-meta">
-                          <span>{difficultyLabel[record.difficulty]}</span>
-                          <span>定数 <strong>{record.constant.toFixed(1)}</strong></span>
-                          <SourceTag source={record.source} />
-                        </div>
-                        <h3 title={record.title}>{record.title}</h3>
-                        <ScoreBadges record={record} />
-                      </div>
-                      <div className="card-stats">
-                        <div><span>分数</span><strong>{formatScore(record.score)}</strong></div>
-                        <div><span>单曲 RATING</span><strong>{record.rating.toFixed(4)}</strong></div>
-                      </div>
-                    </div>
-                  </article>
-                ) : (
-                  <article className="b30-card empty" key={`empty-${index}`}>
-                    <div className="card-rank">#{String(index + 1).padStart(2, "0")}</div>
-                    <div className="empty-mark">EMPTY SLOT</div>
-                  </article>
-                );
+                return <B30ScoreCard
+                  key={record ? chartKey(record) : `empty-${index}`}
+                  record={record}
+                  rank={index + 1}
+                  coverUrl={record ? catalogByKey.get(chartKey(record))?.coverUrl ?? "" : ""}
+                />;
               })}
             </div>
           </div>}
@@ -695,12 +724,20 @@ function App({ account, initial, initialNotice }: AppProps) {
           onDelete={deleteRecord}
           onAliases={async (id, aliases) => { await workspace.action({ type: "aliases", id, aliases }); }}
         />
+        <ConstantTableSection scores={localState.scores} />
       </main>
 
       <footer>
         <span>UNOFFICIAL FAN TOOL</span>
         <p>曲库与曲绘 URL 参考 OTOGE DB 社区数据。本工具与 SEGA CORPORATION 无关。</p>
       </footer>
+
+      {imageExport && <ImageExportDialog
+        file={imageExport.file}
+        label={imageExport.label}
+        missingCovers={imageExport.missingCovers}
+        onClose={closeImageExport}
+      />}
 
       <dialog ref={editDialogRef} className="modal score-edit-dialog" aria-labelledby="score-edit-title" onCancel={() => setEditing(null)}>
         {editing && <form onSubmit={async (event) => {

@@ -147,6 +147,16 @@ describe("Otogame browser provider", () => {
       .toEqual(["page=1", "page=2", "page=1"]);
   });
 
+  it("preserves the strongest explicit clear lamp across duplicate historical plays", async () => {
+    const row = play("Clear lamp", 200, 3, 1_005_000);
+    const { session } = setup((path) => path.startsWith("game/") ? pageReply([
+      { ...row, clear: "hard", private_field: "not-returned" },
+      { ...row, clear: "absolute" },
+    ], 1, 2) : undefined);
+    const result = await collectChanges(session);
+    expect(result.payload).toEqual([{ music: { name: "Clear lamp" }, difficulty: 3, score: 1_005_000, clear: "absolute" }]);
+  });
+
   it("rejects a later history page failure instead of returning collected scores", async () => {
     const { session, fetch } = setup((path) => {
       if (!path.startsWith("game/")) return;

@@ -9,9 +9,9 @@ describe("LXNS backend adapter", () => {
   it("verifies the bound identity and only reads score fields", async () => {
     const fetcher = vi.fn()
       .mockResolvedValueOnce(reply({ friend_code: 123, name: "玩家" }))
-      .mockResolvedValueOnce(reply([{ id: 1, level_index: 3, score: 1_000_000, secret: "not-returned" }]));
+      .mockResolvedValueOnce(reply([{ id: 1, level_index: 3, score: 1_000_000, clear: "absolute", secret: "not-returned" }]));
     const result = await new LxnsProvider(fetcher).fetchScores("token", { id: "123", label: "玩家" });
-    expect(result).toEqual([{ id: 1, level_index: 3, score: 1_000_000, play_time: undefined, upload_time: undefined }]);
+    expect(result).toEqual([{ id: 1, level_index: 3, score: 1_000_000, clear: "absolute", play_time: undefined, upload_time: undefined }]);
     expect(fetcher.mock.calls[1][1]).toMatchObject({ redirect: "error", headers: { "X-User-Token": "token" } });
   });
 

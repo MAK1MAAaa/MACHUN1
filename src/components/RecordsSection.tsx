@@ -5,12 +5,16 @@ import { formatScore } from "../core/rating";
 import { getSongCharts } from "../core/songDetails";
 import {
   buildRecordsRows,
+  clearUnavailableRecordConstant,
+  cycleRecordsSort,
   EMPTY_RECORDS_FILTERS,
+  getAvailableChartConstants,
   getChartLevel,
   getRecordsFilterOptions,
   paginateRecords,
   RECORDS_PAGE_SIZE,
   type RecordsFilters,
+  type RecordsSortField,
   type RecordsViewMode,
 } from "../core/recordsView";
 import { SCORE_SOURCE_LABELS } from "../core/sources";
@@ -33,6 +37,7 @@ export function RecordsSection({ records, scores, nicknameOverrides, onEdit, onD
   const [mode, setMode] = useState<RecordsViewMode>("rating");
   const [filters, setFilters] = useState<RecordsFilters>({ ...EMPTY_RECORDS_FILTERS });
   const [requestedPage, setRequestedPage] = useState(1);
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
   const [selectedChart, setSelectedChart] = useState<CatalogChart | null>(null);
   const selectedSongCharts = useMemo(() => selectedChart ? getSongCharts(selectedChart.id) : [], [selectedChart]);
   const selectedAliases = useMemo(() => selectedChart
@@ -41,29 +46,32 @@ export function RecordsSection({ records, scores, nicknameOverrides, onEdit, onD
       ...(nicknameOverrides[selectedChart.id] ?? []),
     ].map((alias) => alias.trim()).filter(Boolean))]
     : [], [selectedChart, nicknameOverrides]);
-  const options = useMemo(() => getRecordsFilterOptions(catalog), []);
+  const options = useMemo(() => getRecordsFilterOptions(catalog), [catalog]);
   const constantOptions = useMemo(
-    () => options.constants.filter((constant) => !filters.level || getChartLevel(Number(constant)) === filters.level),
-    [options.constants, filters.level],
+    () => getAvailableChartConstants(catalog, filters),
+    [catalog, filters.difficulty, filters.level, filters.genre, filters.version],
   );
   const rows = useMemo(
     () => buildRecordsRows(catalog, records, scores, nicknameOverrides, mode, filters),
     [records, scores, nicknameOverrides, mode, filters],
   );
   const pagination = paginateRecords(rows, requestedPage);
+  const activeFilterCount = [filters.difficulty, filters.level, filters.constant, filters.genre, filters.version, filters.source]
+    .filter(Boolean).length + Number(filters.includeUnplayed)
+    + Number(filters.sorts.length !== 1 || filters.sorts[0] !== EMPTY_RECORDS_FILTERS.sorts[0]);
   useEffect(() => {
     // Deleting the last row on a page should return to the remaining last page.
     setRequestedPage((page) => Math.min(page, pagination.pageCount));
   }, [pagination.pageCount]);
 
+  useEffect(() => {
+    if (!filters.constant || constantOptions.includes(filters.constant)) return;
+    setFilters(current => clearUnavailableRecordConstant(catalog, current));
+    setRequestedPage(1);
+  }, [constantOptions, filters.constant]);
+
   function changeFilter<Key extends keyof RecordsFilters>(key: Key, value: RecordsFilters[Key]) {
-    setFilters((current) => {
-      const next = { ...current, [key]: value };
-      if (key === "level" && next.level && next.constant && getChartLevel(Number(next.constant)) !== next.level) {
-        next.constant = "";
-      }
-      return next;
-    });
+    setFilters(current => clearUnavailableRecordConstant(catalog, { ...current, [key]: value }));
     setRequestedPage(1);
   }
 
@@ -72,8 +80,29 @@ export function RecordsSection({ records, scores, nicknameOverrides, onEdit, onD
     setRequestedPage(1);
   }
 
-  function cycleScoreSort() {
-    changeFilter("scoreSort", filters.scoreSort === "default" ? "descending" : filters.scoreSort === "descending" ? "ascending" : "default");
+  function sortIndex(field: RecordsSortField): number {
+    return filters.sorts.findIndex(sort => sort.startsWith(`${field}-`));
+  }
+
+  function primarySortDirection(field: RecordsSortField): "ascending" | "descending" | undefined {
+    if (mode !== "catalog" || sortIndex(field) !== 0) return undefined;
+    return filters.sorts[0].endsWith("ascending") ? "ascending" : "descending";
+  }
+
+  function renderSortButton(field: RecordsSortField, label: string) {
+    const index = sortIndex(field);
+    const direction = index < 0 ? "none" : filters.sorts[index].endsWith("ascending") ? "ascending" : "descending";
+    const description = direction === "none" ? "未启用；点击设为第一优先并降序排列"
+      : `当前${direction === "descending" ? "降序" : "升序"}，第 ${index + 1} 优先；点击${direction === "descending" ? "改为升序" : "关闭此项排序"}`;
+    return <button
+      type="button"
+      className="records-column-sort"
+      aria-label={`按${label}排序`}
+      aria-pressed={index >= 0}
+      aria-description={description}
+      title={description}
+      onClick={() => changeFilter("sorts", cycleRecordsSort(filters.sorts, field))}
+    >{label}<span aria-hidden="true">{direction === "none" ? "↕" : direction === "descending" ? "↓" : "↑"}</span>{index >= 0 && <sup aria-hidden="true">{index + 1}</sup>}</button>;
   }
 
   return (
@@ -105,61 +134,80 @@ export function RecordsSection({ records, scores, nicknameOverrides, onEdit, onD
           />
         </label>
         {mode === "catalog" && <>
-          <label className="records-filter">
-            <span>难度</span>
-            <select aria-label="难度" value={filters.difficulty} onChange={(event) => changeFilter("difficulty", event.target.value as RecordsFilters["difficulty"])}>
-              <option value="">全部难度</option>
-              {DIFFICULTIES.map((difficulty) => <option key={difficulty} value={difficulty}>{difficulty}</option>)}
-            </select>
-          </label>
-          <label className="records-filter">
-            <span>等级</span>
-            <select aria-label="等级" value={filters.level} onChange={(event) => changeFilter("level", event.target.value)}>
-              <option value="">全部等级</option>
-              {options.levels.map((level) => <option key={level} value={level}>{level}</option>)}
-            </select>
-          </label>
-          <label className="records-filter">
-            <span>定数</span>
-            <select aria-label="定数" value={filters.constant} onChange={(event) => changeFilter("constant", event.target.value)}>
-              <option value="">全部定数</option>
-              {constantOptions.map((constant) => <option key={constant} value={constant}>{constant}</option>)}
-            </select>
-          </label>
-          <label className="records-filter records-genre-filter">
-            <span>分类</span>
-            <select aria-label="分类" value={filters.genre} onChange={(event) => changeFilter("genre", event.target.value)}>
-              <option value="">全部分类</option>
-              {options.genres.map((genre) => <option key={genre} value={genre}>{genre}</option>)}
-            </select>
-          </label>
-          <label className="records-filter records-version-filter">
-            <span>版本</span>
-            <select aria-label="版本" value={filters.version} onChange={(event) => changeFilter("version", event.target.value)}>
-              <option value="">全部版本</option>
-              {options.versions.map((version) => <option key={version} value={version}>{version}</option>)}
-            </select>
-          </label>
-          <label className="records-filter records-source-filter">
-            <span>来源</span>
-            <select aria-label="成绩来源" value={filters.source} onChange={(event) => changeFilter("source", event.target.value as RecordsFilters["source"])}>
-              <option value="">全部来源</option>
-              {SCORE_SOURCES.map((source) => <option key={source} value={source}>{SCORE_SOURCE_LABELS[source]}</option>)}
-            </select>
-          </label>
-          <div className="records-filter-actions">
-            <button
-              type="button"
-              className="records-unplayed-toggle"
-              aria-pressed={filters.includeUnplayed}
-              disabled={filters.source !== ""}
-              title={filters.source ? "选择全部来源后可显示未游玩谱面" : undefined}
-              onClick={() => changeFilter("includeUnplayed", !filters.includeUnplayed)}
-            >显示未游玩谱面</button>
-            <button type="button" className="records-reset" onClick={() => { setFilters({ ...EMPTY_RECORDS_FILTERS }); setRequestedPage(1); }}>清除筛选</button>
+          <button
+            type="button"
+            className="records-filter-toggle"
+            aria-label={filtersExpanded ? "收起筛选" : "展开筛选"}
+            aria-description={activeFilterCount > 0 ? `已启用 ${activeFilterCount} 项筛选或排序` : undefined}
+            aria-expanded={filtersExpanded}
+            aria-controls="records-advanced-filters"
+            onClick={() => setFiltersExpanded((current) => !current)}
+          >{filtersExpanded ? "收起筛选" : "展开筛选"}{activeFilterCount > 0 && <span className="records-filter-count">{activeFilterCount}</span>}</button>
+          <div id="records-advanced-filters" className={`records-advanced-filters${filtersExpanded ? " is-expanded" : ""}`}>
+            <label className="records-filter">
+              <span>难度</span>
+              <select aria-label="难度" value={filters.difficulty} onChange={(event) => changeFilter("difficulty", event.target.value as RecordsFilters["difficulty"])}>
+                <option value="">全部难度</option>
+                {DIFFICULTIES.map((difficulty) => <option key={difficulty} value={difficulty}>{difficulty}</option>)}
+              </select>
+            </label>
+            <label className="records-filter">
+              <span>等级</span>
+              <select aria-label="等级" value={filters.level} onChange={(event) => changeFilter("level", event.target.value)}>
+                <option value="">全部等级</option>
+                {options.levels.map((level) => <option key={level} value={level}>{level}</option>)}
+              </select>
+            </label>
+            <label className="records-filter">
+              <span>定数</span>
+              <select aria-label="定数" value={filters.constant} onChange={(event) => changeFilter("constant", event.target.value)}>
+                <option value="">全部定数</option>
+                {constantOptions.map((constant) => <option key={constant} value={constant}>{constant}</option>)}
+              </select>
+            </label>
+            <label className="records-filter records-genre-filter">
+              <span>分类</span>
+              <select aria-label="分类" value={filters.genre} onChange={(event) => changeFilter("genre", event.target.value)}>
+                <option value="">全部分类</option>
+                {options.genres.map((genre) => <option key={genre} value={genre}>{genre}</option>)}
+              </select>
+            </label>
+            <label className="records-filter records-version-filter">
+              <span>版本</span>
+              <select aria-label="版本" value={filters.version} onChange={(event) => changeFilter("version", event.target.value)}>
+                <option value="">全部版本</option>
+                {options.versions.map((version) => <option key={version} value={version}>{version}</option>)}
+              </select>
+            </label>
+            <label className="records-filter records-source-filter">
+              <span>来源</span>
+              <select aria-label="成绩来源" value={filters.source} onChange={(event) => changeFilter("source", event.target.value as RecordsFilters["source"])}>
+                <option value="">全部来源</option>
+                {SCORE_SOURCES.map((source) => <option key={source} value={source}>{SCORE_SOURCE_LABELS[source]}</option>)}
+              </select>
+            </label>
+            <div className="records-filter-actions">
+              <button
+                type="button"
+                className="records-unplayed-toggle"
+                aria-pressed={filters.includeUnplayed}
+                disabled={filters.source !== ""}
+                title={filters.source ? "选择全部来源后可显示未游玩谱面" : undefined}
+                onClick={() => changeFilter("includeUnplayed", !filters.includeUnplayed)}
+              >显示未游玩谱面</button>
+              <button type="button" className="records-reset" onClick={() => { setFilters({ ...EMPTY_RECORDS_FILTERS }); setRequestedPage(1); }}>清除筛选</button>
+            </div>
           </div>
         </>}
       </div>
+      {mode === "catalog" && <>
+        <p className="records-sort-help">点击列名切换降序、升序、关闭；数字越小越优先，新启用的列优先。全部关闭时按定数降序。</p>
+        <div className="records-mobile-sort" role="group" aria-label="多列排序">
+          {renderSortButton("constant", "定数")}
+          {renderSortButton("score", "分数")}
+          {renderSortButton("rating", "Rating")}
+        </div>
+      </>}
       <div className="record-table-wrap">
         <table className={`record-table records-${mode}-table`}>
           <caption className="records-sr-only">{mode === "rating" ? "按 Rating 排序的已有成绩" : "按曲库条件筛选的谱面"}</caption>
@@ -182,30 +230,20 @@ export function RecordsSection({ records, scores, nicknameOverrides, onEdit, onD
               <th scope="col">歌曲</th>
               <th scope="col">难度</th>
               <th scope="col">等级</th>
-              <th scope="col">定数</th>
+              <th scope="col" className="records-sort-heading" aria-sort={primarySortDirection("constant")}>{mode === "catalog" ? renderSortButton("constant", "定数") : "定数"}</th>
               <th scope="col">分类</th>
               <th scope="col">版本</th>
               <th scope="col">来源</th>
-              <th scope="col" aria-sort={mode === "catalog" ? (filters.scoreSort === "default" ? "none" : filters.scoreSort) : undefined}>
-                {mode === "catalog" ? (
-                  <button
-                    type="button"
-                    className="records-score-sort"
-                    aria-label="按分数排序"
-                    title={filters.scoreSort === "default" ? "当前按定数排序；点击按分数从高到低排序" : filters.scoreSort === "descending" ? "当前分数从高到低；点击从低到高排序" : "当前分数从低到高；点击恢复按定数排序"}
-                    onClick={cycleScoreSort}
-                  >分数 <span aria-hidden="true">{filters.scoreSort === "default" ? "↕" : filters.scoreSort === "descending" ? "↓" : "↑"}</span></button>
-                ) : "分数"}
-              </th>
-              <th scope="col">Rating</th>
+              <th scope="col" className="records-sort-heading" aria-sort={primarySortDirection("score")}>{mode === "catalog" ? renderSortButton("score", "分数") : "分数"}</th>
+              <th scope="col" className="records-sort-heading" aria-sort={primarySortDirection("rating")}>{mode === "catalog" ? renderSortButton("rating", "Rating") : "Rating"}</th>
               <th scope="col">操作</th>
             </tr>
           </thead>
           <tbody>
             {pagination.rows.map(({ chart, record, rank }) => (
               <tr key={chartKey(chart)}>
-                {mode === "rating" && <td><span className={rank !== null && rank <= 30 ? "in-b30" : ""}>#{rank}</span></td>}
-                <td>
+                {mode === "rating" && <td className="records-rank-cell" data-label="排名"><span className={rank !== null && rank <= 30 ? "in-b30" : ""}>#{rank}</span></td>}
+                <td className="records-song-cell">
                   <div className="record-song-cell">
                     <span className="cover-image record-cover" aria-hidden="true">
                       <img src={chart.coverUrl} alt="" crossOrigin="anonymous" loading="lazy" onError={(event) => { event.currentTarget.style.opacity = "0"; }} />
@@ -223,15 +261,15 @@ export function RecordsSection({ records, scores, nicknameOverrides, onEdit, onD
                     </span>
                   </div>
                 </td>
-                <td><span className={`diff-tag ${chart.difficulty.toLowerCase()}`}>{chart.difficulty}</span></td>
-                <td>{getChartLevel(chart.constant)}</td>
-                <td>{chart.constant.toFixed(1)}</td>
-                <td className="records-metadata-cell">{chart.genre}</td>
-                <td className="records-metadata-cell">{chart.version}</td>
-                <td>{record ? <span className={`score-source ${record.source}`}>{SCORE_SOURCE_LABELS[record.source]}</span> : <span className="records-unplayed">未游玩</span>}</td>
-                <td className="records-score-cell">{record ? <>{formatScore(record.score)}<ScoreBadges record={record} /></> : "—"}</td>
-                <td>{record ? <strong className="rating-cell">{record.rating.toFixed(4)}</strong> : "—"}</td>
-                <td>
+                <td className="records-difficulty-cell" data-label="难度"><span className={`diff-tag ${chart.difficulty.toLowerCase()}`}>{chart.difficulty}</span></td>
+                <td className="records-level-cell" data-label="等级">{getChartLevel(chart.constant)}</td>
+                <td className="records-constant-cell" data-label="定数">{chart.constant.toFixed(1)}</td>
+                <td className="records-metadata-cell records-genre-cell" data-label="分类">{chart.genre}</td>
+                <td className="records-metadata-cell records-version-cell" data-label="版本">{chart.version}</td>
+                <td className="records-source-cell" data-label="来源">{record ? <span className={`score-source ${record.source}`}>{SCORE_SOURCE_LABELS[record.source]}</span> : <span className="records-unplayed">未游玩</span>}</td>
+                <td className="records-score-cell" data-label="分数">{record ? <><span className="records-score-value">{formatScore(record.score)}</span><ScoreBadges record={record} /></> : "—"}</td>
+                <td className="records-rating-cell" data-label="Rating">{record ? <strong className="rating-cell">{record.rating.toFixed(4)}</strong> : "—"}</td>
+                <td className="records-actions-cell">
                   <div className="row-actions">
                     <button type="button" disabled={disabled} onClick={() => onEdit(chart, record)}>{record ? "修改分数" : "录入分数"}</button>
                     {record && <button type="button" className="delete" disabled={disabled} onClick={() => onDelete(record)}>删除</button>}
@@ -244,7 +282,7 @@ export function RecordsSection({ records, scores, nicknameOverrides, onEdit, onD
         </table>
       </div>
 
-      {mode === "catalog" && <p className="records-source-note">来源按当前最高成绩的归属筛选{filters.source ? "，仅显示所选来源的已游玩谱面" : "；未游玩谱面没有来源"}。</p>}
+      {mode === "catalog" && <p className="records-source-note">来源按当前最高成绩的归属筛选{filters.source ? "，仅显示所选来源的已游玩谱面" : "；未游玩谱面没有来源，排序时置于已游玩谱面之后"}。</p>}
 
       <nav className="records-pagination" aria-label="成绩分页">
         <span className="records-page-status" aria-live="polite">第 {pagination.page} / {pagination.pageCount} 页</span>

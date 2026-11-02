@@ -16,7 +16,7 @@ sudo bash @PACKAGE_DIRECTORY@/start.sh
 
 ## 当前服务器预设
 
-使用已有 `1panel-network` 和 `1Panel-mysql-3Wrt:3306/machun1`。正式库需已有两项迁移和 root 用户；本包不会创建空库、修改数据库密码或重置成绩。端口为 `1650:1650`，安全组需允许 TCP 1650。
+使用已有 `1panel-network` 和 `1Panel-mysql-3Wrt:3306/machun1`。正式库需已有四项迁移和 root 用户；已有前三项迁移时，升级前须由管理员使用管理连接执行项目中的 `db/migrations/0004_export_nickname.sql`，为每个工作区保存导出昵称。本包只读检查迁移状态，不自动执行 DDL，不会创建空库、修改数据库密码或重置成绩。端口为 `1650:1650`，安全组需允许 TCP 1650。
 
 如旧容器已占用 1650，先在 1Panel 停止旧容器，再运行脚本；脚本不会停止其他项目。编排项目名固定为 `machun1`，重复执行用于更新该项目，保留命名卷，不删除旧卷。
 

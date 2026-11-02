@@ -146,7 +146,7 @@ export function upsertHighScore(state: LocalState, record: SingleRating): Upsert
   const existing = state.scores[key];
   const achievements = mergeScoreAchievements(existing ?? {}, record);
   if (existing && existing.score >= record.score) {
-    if (achievements.combo === existing.combo && achievements.fullChain === existing.fullChain) return "rejected";
+    if (achievements.combo === existing.combo && achievements.fullChain === existing.fullChain && achievements.clear === existing.clear) return "rejected";
     state.scores[key] = { ...existing, ...achievements };
     return "updated";
   }

@@ -97,6 +97,11 @@ describe("Rin browser provider", () => {
     expect(mock.fetch.mock.calls[1]?.[0]).toBe("https://portal.naominet.live/api/game/chuni/v2/export?aimeId=12345678");
   });
 
+  it("preserves explicit clear metadata while excluding unrelated portal fields", async () => {
+    const mock = session([response(me()), response({ userMusicDetailList: [{ ...score, isSuccess: true, privateField: "not-returned" }] })]);
+    await expect(rinProvider.fetchScores(mock.value, identity)).resolves.toEqual({ userMusicDetailList: [{ ...score, clear: "clear" }] });
+  });
+
   it("rechecks remote identity when the export needs a refreshed token", async () => {
     const mock = session([response(me()), response(null, 401),
       response({ status: { code: 92001 }, data: { accessToken: "renewed" } }),

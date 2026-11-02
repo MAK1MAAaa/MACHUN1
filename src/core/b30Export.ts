@@ -1,8 +1,11 @@
-import type { CatalogChart, ComboStatus, Difficulty, FullChainStatus, ScoreAchievements, ScoreSource, SingleRating } from "../types";
+import type { CatalogChart, ClearStatus, ComboStatus, Difficulty, FullChainStatus, ScoreAchievements, ScoreSource, SingleRating } from "../types";
 import { B30_SIZE, chartKey, compareRatings, getB30 } from "./b30";
 import { SCORE_SOURCE_LABELS } from "./sources";
 import { scoreGrade } from "./rating";
-import { CHAIN_LABELS, COMBO_LABELS, mergeScoreAchievements } from "./scoreAchievements";
+import { CHAIN_LABELS, CLEAR_LABELS, COMBO_DESCRIPTIONS, mergeScoreAchievements } from "./scoreAchievements";
+import { downloadBlob } from "./fileDelivery";
+import { drawMateLogo, loadMateLogo } from "./exportBrand";
+import { GAME_VERSION_ORDER } from "./recordsView";
 
 export interface B30ExportSlot extends ScoreAchievements {
   rank: number;
@@ -26,6 +29,73 @@ export interface B30ExportV3 {
     average: number;
   };
   b30: Array<B30ExportSlot | null>;
+}
+
+export interface AjB30Export extends Omit<B30ExportV3, "type"> {
+  type: "machun1-aj-b30";
+}
+
+export interface B50Export {
+  schemaVersion: 3;
+  type: "machun1-b50";
+  catalogVersion: string;
+  exportedAt: string;
+  summary: {
+    filled: number;
+    average: number;
+    oldFilled: number;
+    newFilled: number;
+    oldAverage: number;
+    newAverage: number;
+  };
+  old30: Array<B30ExportSlot | null>;
+  new20: Array<B30ExportSlot | null>;
+}
+
+const B50_OLD_VERSIONS = new Set<string>(GAME_VERSION_ORDER.slice(0, GAME_VERSION_ORDER.indexOf("MATE")));
+
+export function createB50Export(
+  scores: Iterable<SingleRating>,
+  charts: Map<string, CatalogChart>,
+  catalogVersion: string,
+  exportedAt = new Date().toISOString(),
+): B50Export {
+  const known = new Map<string, SingleRating>();
+  for (const record of scores) {
+    const key = chartKey(record);
+    const version = charts.get(key)?.version.normalize("NFKC").trim().toUpperCase();
+    // An absent chart or unknown/future version cannot establish an OLD/NEW boundary.
+    if (!version || (version !== "MATE" && !B50_OLD_VERSIONS.has(version))) continue;
+    const previous = known.get(key);
+    if (!previous) known.set(key, record);
+    else {
+      const best = compareRatings(record, previous) < 0 ? record : previous;
+      known.set(key, { ...best, ...mergeScoreAchievements(previous, record) });
+    }
+  }
+  const old: SingleRating[] = [];
+  const fresh: SingleRating[] = [];
+  for (const record of known.values()) {
+    const version = charts.get(chartKey(record))!.version.normalize("NFKC").trim().toUpperCase();
+    (version === "MATE" ? fresh : old).push(record);
+  }
+  const oldRanked = old.sort(compareRatings).slice(0, 30);
+  const newRanked = fresh.sort(compareRatings).slice(0, 20);
+  const slots = (records: SingleRating[], count: number): Array<B30ExportSlot | null> => Array.from({ length: count }, (_, index) => {
+    const record = records[index];
+    return record ? { rank: index + 1, id: record.id, title: record.title, difficulty: record.difficulty,
+      constant: record.constant, score: record.score, rating: record.rating,
+      coverUrl: charts.get(chartKey(record))!.coverUrl, source: record.source,
+      ...mergeScoreAchievements(record, {}) } : null;
+  });
+  const oldTotal = oldRanked.reduce((sum, record) => sum + record.rating, 0);
+  const newTotal = newRanked.reduce((sum, record) => sum + record.rating, 0);
+  return {
+    schemaVersion: 3, type: "machun1-b50", catalogVersion, exportedAt,
+    summary: { filled: oldRanked.length + newRanked.length, average: (oldTotal + newTotal) / 50,
+      oldFilled: oldRanked.length, newFilled: newRanked.length, oldAverage: oldTotal / 30, newAverage: newTotal / 20 },
+    old30: slots(oldRanked, 30), new20: slots(newRanked, 20),
+  };
 }
 
 export function createB30Export(
@@ -66,18 +136,14 @@ export function createB30Export(
   };
 }
 
-function triggerDownload(blob: Blob, filename: string): void {
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = filename;
-  document.body.append(anchor);
-  try {
-    anchor.click();
-  } finally {
-    anchor.remove();
-    window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
-  }
+export function createAjB30Export(
+  scores: Iterable<SingleRating>,
+  charts: Map<string, CatalogChart>,
+  catalogVersion: string,
+  exportedAt = new Date().toISOString(),
+): AjB30Export {
+  const ajScores = Array.from(scores).filter((record) => record.combo === "aj" || record.combo === "ajc");
+  return { ...createB30Export(ajScores, charts, catalogVersion, exportedAt), type: "machun1-aj-b30" };
 }
 
 export interface B30CandidatesExport extends B30ExportV3 {
@@ -117,6 +183,7 @@ interface OtoB30Record {
   score: number;
   full_combo?: "fullcombo" | "alljustice" | "alljusticecritical";
   full_chain?: "fchain" | "fullchain2" | "fullchain";
+  clear?: ClearStatus;
 }
 
 const EXPORTED_COMBO: Record<ComboStatus, NonNullable<OtoB30Record["full_combo"]>> = {
@@ -146,6 +213,7 @@ export function createOtoB30Export(scores: Iterable<SingleRating>, withCandidate
     score: record.score,
     ...(record.combo ? { full_combo: EXPORTED_COMBO[record.combo] } : {}),
     ...(record.fullChain ? { full_chain: EXPORTED_CHAIN[record.fullChain] } : {}),
+    ...(record.clear ? { clear: record.clear } : {}),
   });
   return {
     code: 0,
@@ -160,19 +228,13 @@ export function createOtoB30Export(scores: Iterable<SingleRating>, withCandidate
 
 export function downloadB30Json(scores: Iterable<SingleRating>, withCandidates = false): void {
   const blob = new Blob([JSON.stringify(createOtoB30Export(scores, withCandidates), null, 2)], { type: "application/json" });
-  triggerDownload(blob, withCandidates ? "b30-candidates20.json" : "b30.json");
+  downloadBlob(blob, withCandidates ? "b30-candidates20.json" : "b30.json");
 }
 
 const DIFFICULTY_COLORS: Record<Difficulty, string> = {
-  EXP: "#ef4454",
-  MAS: "#a989ed",
-  ULT: "#050506",
-};
-
-const DIFFICULTY_TINTS: Record<Difficulty, string> = {
-  EXP: "rgba(239, 68, 84, 0.24)",
-  MAS: "rgba(169, 137, 237, 0.32)",
-  ULT: "rgba(5, 5, 6, 0.16)",
+  EXP: "#dd2636",
+  MAS: "#8b4bb7",
+  ULT: "#26212e",
 };
 
 const DIFFICULTY_LABELS: Record<Difficulty, string> = {
@@ -298,6 +360,50 @@ function drawCover(
   context.restore();
 }
 
+function drawCardBadge(
+  context: CanvasRenderingContext2D,
+  label: string,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  color: string,
+  border: string,
+  background: string,
+  rainbow = false,
+): void {
+  roundedRect(context, x, y, width, height, 2);
+  if (rainbow) {
+    const shimmer = context.createLinearGradient(x, y, x + width, y + height);
+    for (const [offset, fill] of [[0, "#e5f9ee"], [0.3, "#fff1ba"], [0.6, "#eee1ff"], [1, "#dcf2ff"]] as const) {
+      shimmer.addColorStop(offset, fill);
+    }
+    context.fillStyle = shimmer;
+  } else context.fillStyle = background;
+  context.fill();
+  context.lineWidth = 1.5;
+  context.strokeStyle = border;
+  context.stroke();
+  let size = 14;
+  do {
+    context.font = `900 ${size}px Inter, "Noto Sans SC", "PingFang SC", sans-serif`;
+    if (context.measureText(label).width <= width - 12) break;
+    size--;
+  } while (size > 8);
+  context.fillStyle = color;
+  context.textAlign = "center";
+  context.fillText(label, x + width / 2, y + (height + size * 0.72) / 2);
+}
+
+const CLEAR_BADGE_COLORS: Record<ClearStatus, { text: string; border: string; background: string }> = {
+  failed: { text: "#666b75", border: "#b8bec8", background: "#f2f3f5" },
+  clear: { text: "#336846", border: "#85b796", background: "#e7f5eb" },
+  hard: { text: "#a33639", border: "#d98b8d", background: "#ffeaeb" },
+  brave: { text: "#75509d", border: "#b89cd3", background: "#f3eaff" },
+  absolute: { text: "#256885", border: "#81b7ce", background: "#e4f5fc" },
+  catastrophy: { text: "#8b6415", border: "#c5a253", background: "#fff1c7" },
+};
+
 function drawFilledCard(
   context: CanvasRenderingContext2D,
   slot: B30ExportSlot,
@@ -307,91 +413,72 @@ function drawFilledCard(
   width: number,
   height: number,
 ): void {
-  const accent = DIFFICULTY_COLORS[slot.difficulty];
-  roundedRect(context, x, y, width, height, 10);
+  context.save();
+  roundedRect(context, x, y, width, height, 4);
+  context.clip();
+  context.fillStyle = DIFFICULTY_COLORS[slot.difficulty];
+  context.fillRect(x, y, width, height);
   context.fillStyle = "#ffffff";
+  context.fillRect(x, y + height - 39, width, 39);
+
+  const sourceLabel = SCORE_SOURCE_LABELS[slot.source];
+  context.font = '800 10px Inter, "PingFang SC", sans-serif';
+  const sourceWidth = context.measureText(sourceLabel).width + 16;
+  roundedRect(context, x + 8, y + 6, sourceWidth, 18, 3);
+  context.fillStyle = "rgba(0, 0, 0, 0.28)";
   context.fill();
-  context.fillStyle = DIFFICULTY_TINTS[slot.difficulty];
-  context.fill();
-  context.strokeStyle = "rgba(32, 42, 60, 0.10)";
+  context.textAlign = "left";
+  context.fillStyle = "#ffffff";
+  context.fillText(sourceLabel, x + 16, y + 19);
+  if (slot.fullChain) {
+    context.font = '800 10px Inter, "PingFang SC", sans-serif';
+    context.fillText(CHAIN_LABELS[slot.fullChain], x + sourceWidth + 24, y + 19);
+  }
+  context.font = '900 15px ui-monospace, "SFMono-Regular", monospace';
+  context.textAlign = "right";
+  context.fillText(`#${String(slot.rank).padStart(2, "0")}`, x + width - 10, y + 20);
+
+  const coverSize = height - 42;
+  context.fillStyle = "#ffffff";
+  context.fillRect(x + 8, y + 30, coverSize + 4, coverSize + 4);
+  drawCover(context, image, x + 10, y + 32, coverSize);
+  const contentX = x + coverSize + 24;
+  const contentWidth = width - coverSize - 36;
+  context.textAlign = "left";
+  context.fillStyle = "#ffffff";
+  context.font = '800 20px Inter, "Noto Sans SC", "PingFang SC", sans-serif';
+  context.fillText(titleLines(context, slot.title, contentWidth, 1)[0] ?? "", contentX, y + 54);
+  const score = slot.score.toLocaleString("en-US");
+  let scoreSize = 40;
+  do {
+    context.font = `900 ${scoreSize}px ui-monospace, "SFMono-Regular", monospace`;
+    if (context.measureText(score).width <= contentWidth) break;
+    scoreSize--;
+  } while (scoreSize > 28);
+  context.fillText(score, contentX, y + 104);
+  context.font = '800 13px Inter, "PingFang SC", sans-serif';
+  context.fillText(`${DIFFICULTY_LABELS[slot.difficulty]} ${slot.constant.toFixed(1)}`, contentX, y + 133);
+  context.font = '800 12px ui-monospace, "SFMono-Regular", monospace';
+  context.textAlign = "right";
+  context.fillText(`Rating: ${slot.rating.toFixed(4)}`, x + width - 12, y + 133);
+
+  const leftWidth = Math.floor((contentWidth - 8) * 0.62);
+  const badgeY = y + height - 31;
+  const lampLabel = slot.combo ? COMBO_DESCRIPTIONS[slot.combo] : slot.clear ? CLEAR_LABELS[slot.clear] : "—";
+  const lampColor = slot.combo
+    ? slot.combo === "fc"
+      ? { text: "#246842", border: "#81bd99", background: "#e2f5e6" }
+      : { text: "#80571a", border: "#c4aa68", background: "#fff2c9" }
+    : slot.clear ? CLEAR_BADGE_COLORS[slot.clear] : { text: "#6f7780", border: "#c9cfd4", background: "#f3f5f7" };
+  drawCardBadge(context, lampLabel, contentX, badgeY, leftWidth, 23,
+    lampColor.text, lampColor.border, lampColor.background, slot.combo === "aj" || slot.combo === "ajc");
+  drawCardBadge(context, scoreGrade(slot.score), contentX + leftWidth + 8, badgeY, contentWidth - leftWidth - 8, 23,
+    "#334f67", "#88a3b5", "#eef5f8", slot.score >= 1_000_000);
+  context.restore();
+  roundedRect(context, x, y, width, height, 4);
+  context.strokeStyle = "rgba(32, 42, 60, 0.18)";
   context.lineWidth = 1;
   context.stroke();
-
-  context.fillStyle = accent;
-  roundedRect(context, x, y, 5, height, 3);
-  context.fill();
-  if (slot.difficulty === "ULT") {
-    context.fillStyle = "#737b87";
-    context.fillRect(x + 5, y, 1, height);
-  }
-
-  const coverSize = height - 24;
-  drawCover(context, image, x + 14, y + 12, coverSize);
-
-  context.fillStyle = "rgba(5, 8, 13, 0.88)";
-  roundedRect(context, x + 20, y + 18, 42, 24, 6);
-  context.fill();
-  context.fillStyle = "#ffffff";
-  context.font = '800 13px ui-monospace, "SFMono-Regular", monospace';
-  context.textAlign = "center";
-  context.fillText(`#${String(slot.rank).padStart(2, "0")}`, x + 41, y + 35);
-
-  const contentX = x + coverSize + 30;
-  const contentWidth = width - coverSize - 44;
-  context.textAlign = "left";
-  context.font = '800 12px Inter, "PingFang SC", sans-serif';
-  const difficultyLabel = DIFFICULTY_LABELS[slot.difficulty];
-  const labelWidth = context.measureText(difficultyLabel).width + 16;
-  roundedRect(context, contentX, y + 9, labelWidth, 22, 5);
-  context.fillStyle = accent;
-  context.fill();
-  if (slot.difficulty === "ULT") {
-    context.strokeStyle = "#737b87";
-    context.stroke();
-  }
-  context.fillStyle = slot.difficulty === "ULT" ? "#f5f6f8" : "#080b12";
-  context.fillText(difficultyLabel, contentX + 8, y + 24);
-  context.fillStyle = "#5c6575";
-  context.fillText(
-    `定数 ${slot.constant.toFixed(1)} · ${SCORE_SOURCE_LABELS[slot.source]}`,
-    contentX + labelWidth + 9,
-    y + 24,
-  );
-
-  context.fillStyle = "#202a3c";
-  context.font = '800 19px Inter, "Noto Sans SC", "PingFang SC", sans-serif';
-  const lines = titleLines(context, slot.title, contentWidth, 2);
-  lines.forEach((line, index) => context.fillText(line, contentX, y + 54 + index * 23));
-
-  const badges = [
-    { label: scoreGrade(slot.score), background: "#fff2c9", color: "#80571a" },
-    ...(slot.combo ? [{ label: COMBO_LABELS[slot.combo], background: slot.combo === "fc" ? "#e2f5e6" : slot.combo === "aj" ? "#ffedcc" : "#ede3ff", color: slot.combo === "fc" ? "#246842" : slot.combo === "aj" ? "#9b5718" : "#6442a0" }] : []),
-    ...(slot.fullChain ? [{ label: CHAIN_LABELS[slot.fullChain], background: slot.fullChain === "gold" ? "#fff1bf" : "#e4f2fa", color: slot.fullChain === "gold" ? "#87611c" : "#43677c" }] : []),
-  ];
-  let badgeX = contentX;
-  context.font = '800 11px Inter, "PingFang SC", sans-serif';
-  for (const badge of badges) {
-    const badgeWidth = context.measureText(badge.label).width + 12;
-    roundedRect(context, badgeX, y + height - 52, badgeWidth, 18, 4);
-    context.fillStyle = badge.background;
-    context.fill();
-    context.fillStyle = badge.color;
-    context.fillText(badge.label, badgeX + 6, y + height - 39);
-    badgeX += badgeWidth + 5;
-  }
-  context.fillStyle = "#667085";
-  context.font = '700 10px Inter, "PingFang SC", sans-serif';
-  context.textAlign = "right";
-  context.fillText("RATING", x + width - 15, y + height - 35);
-
-  context.fillStyle = "#202a3c";
-  context.font = '800 18px ui-monospace, "SFMono-Regular", monospace';
-  context.textAlign = "left";
-  context.fillText(slot.score.toLocaleString("en-US"), contentX, y + height - 13);
-  context.fillStyle = "#202a3c";
-  context.font = '900 20px ui-monospace, "SFMono-Regular", monospace';
-  context.textAlign = "right";
-  context.fillText(slot.rating.toFixed(4), x + width - 15, y + height - 13);
 }
 
 function drawEmptyCard(
@@ -402,7 +489,7 @@ function drawEmptyCard(
   width: number,
   height: number,
 ): void {
-  roundedRect(context, x, y, width, height, 10);
+  roundedRect(context, x, y, width, height, 4);
   context.fillStyle = "rgba(255, 255, 255, 0.65)";
   context.fill();
   context.strokeStyle = "#d7dde5";
@@ -411,19 +498,48 @@ function drawEmptyCard(
   context.setLineDash([]);
   context.fillStyle = "#6f90a5";
   context.font = '800 13px ui-monospace, "SFMono-Regular", monospace';
-  context.textAlign = "left";
-  context.fillText(`#${String(rank).padStart(2, "0")}`, x + 16, y + 25);
+  context.textAlign = "right";
+  context.fillText(`#${String(rank).padStart(2, "0")}`, x + width - 10, y + 20);
   context.fillStyle = "#9099a8";
   context.font = '800 13px Inter, "PingFang SC", sans-serif';
   context.textAlign = "center";
   context.fillText("EMPTY SLOT", x + width / 2, y + height / 2 + 5);
 }
 
-export async function downloadB30Png(data: B30ExportV3 | B30CandidatesExport): Promise<{ missingCovers: number }> {
-  await document.fonts?.ready;
+export interface GeneratedB30Png {
+  blob: Blob;
+  filename: string;
+  missingCovers: number;
+}
+
+export interface B30PngOptions {
+  nickname?: string;
+}
+
+function exportNickname(context: CanvasRenderingContext2D, value: string | undefined, maxWidth: number): string {
+  const nickname = value?.replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim() || "神秘游客";
+  if (context.measureText(nickname).width <= maxWidth) return nickname;
+  const characters = Array.from(nickname);
+  while (characters.length && context.measureText(`${characters.join("")}…`).width > maxWidth) characters.pop();
+  return `${characters.join("")}…`;
+}
+
+async function waitForExportFonts(): Promise<void> {
+  if (!document.fonts) return;
+  await new Promise<void>((resolve) => {
+    const timeout = window.setTimeout(resolve, 3_000);
+    const finish = () => { window.clearTimeout(timeout); resolve(); };
+    document.fonts.ready.then(finish, finish);
+  });
+}
+
+export async function generateB30Png(data: B30ExportV3 | B30CandidatesExport | AjB30Export | B50Export, options: B30PngOptions = {}): Promise<GeneratedB30Png> {
+  await waitForExportFonts();
   const canvas = document.createElement("canvas");
   const withCandidates = "candidates" in data;
-  const slots = withCandidates ? [...data.b30, ...data.candidates] : data.b30;
+  const isB50 = data.type === "machun1-b50";
+  const isAj = data.type === "machun1-aj-b30";
+  const slots = isB50 ? [...data.old30, ...data.new20] : withCandidates ? [...data.b30, ...data.candidates] : data.b30;
   const columns = 5;
   const rows = Math.ceil(slots.length / columns);
   const width = 2360;
@@ -431,47 +547,116 @@ export async function downloadB30Png(data: B30ExportV3 | B30CandidatesExport): P
   const columnGap = 14;
   const rowGap = 12;
   const headerHeight = 132;
-  const cardHeight = 148;
+  const cardHeight = 188;
   const cardWidth = (width - margin * 2 - columnGap * (columns - 1)) / columns;
-  const candidateGap = withCandidates ? 32 : 0;
-  const height = headerHeight + cardHeight * rows + rowGap * (rows - 1) + margin + candidateGap;
+  const candidateGap = withCandidates ? 64 : 0;
+  const b50SectionHeight = 48;
+  const b50OldTop = headerHeight + b50SectionHeight;
+  const b50NewHeading = b50OldTop + cardHeight * 6 + rowGap * 5 + 24;
+  const b50NewTop = b50NewHeading + b50SectionHeight;
+  const height = isB50 ? b50NewTop + cardHeight * 4 + rowGap * 3 + margin
+    : headerHeight + cardHeight * rows + rowGap * (rows - 1) + margin + candidateGap;
   canvas.width = width;
   canvas.height = height;
 
   const context = canvas.getContext("2d");
   if (!context) throw new Error("当前浏览器不支持 Canvas 图片导出");
-  const covers = await loadCoverImages(
-    slots.flatMap((slot) => (slot?.coverUrl ? [slot.coverUrl] : [])),
-  );
+  const [covers, logo] = await Promise.all([
+    loadCoverImages(slots.flatMap((slot) => (slot?.coverUrl ? [slot.coverUrl] : []))),
+    loadMateLogo(),
+  ]);
 
   context.fillStyle = "#f5f6f8";
   context.fillRect(0, 0, width, height);
   context.textAlign = "left";
   context.fillStyle = "#202a3c";
+  const logoWidth = drawMateLogo(context, logo, margin, 20, 84);
+  const nicknameX = margin + logoWidth + 28;
+  const title = isB50 ? "B50" : isAj ? "AJ B30" : withCandidates ? "B30 + C20" : "B30";
+  const average = data.summary.average.toFixed(4);
   context.font = '900 48px Inter, "PingFang SC", sans-serif';
-  context.fillText("B30", margin, 85);
-  context.textAlign = "right";
+  const titleAndGapWidth = context.measureText(`${title}  `).width;
   context.font = '900 52px ui-monospace, "SFMono-Regular", monospace';
-  context.fillText(data.summary.average.toFixed(4), width - margin, 85);
+  const averageWidth = context.measureText(average).width;
+  context.font = '800 44px Inter, "Noto Sans SC", "PingFang SC", sans-serif';
+  const nickname = exportNickname(context, options.nickname, width - margin - nicknameX - 32 - titleAndGapWidth - averageWidth);
+  context.fillText(nickname, nicknameX, 85);
+  const titleX = nicknameX + context.measureText(nickname).width + 32;
+  context.font = '900 48px Inter, "PingFang SC", sans-serif';
+  context.fillText(title, titleX, 85);
+  const ratingX = titleX + titleAndGapWidth;
+  context.font = '900 52px ui-monospace, "SFMono-Regular", monospace';
+  context.fillText(average, ratingX, 85);
+
+  if (isB50) {
+    const sectionHeading = (label: string, average: number, y: number) => {
+      context.save();
+      context.strokeStyle = "#bdcbbf"; context.lineWidth = 2;
+      context.beginPath(); context.moveTo(margin, y + 1); context.lineTo(width - margin, y + 1); context.stroke();
+      context.textAlign = "left"; context.fillStyle = "#36513e";
+      context.font = '900 30px Inter, "PingFang SC", sans-serif';
+      context.fillText(label, margin, y + 34);
+      const averageX = margin + context.measureText(label).width + 20;
+      context.font = '800 30px ui-monospace, "SFMono-Regular", monospace';
+      context.fillStyle = "#3e5d49"; context.fillText(average.toFixed(4), averageX, y + 34);
+      context.restore();
+    };
+    sectionHeading("OLD 30", data.summary.oldAverage, headerHeight);
+    sectionHeading("NEW 20", data.summary.newAverage, b50NewHeading);
+  } else if (withCandidates) {
+    const separatorY = headerHeight + (B30_SIZE / columns) * (cardHeight + rowGap) - rowGap + (rowGap + candidateGap) / 2;
+    const label = "C20 · B31–B50";
+    context.font = '800 16px Inter, "PingFang SC", sans-serif';
+    const labelGap = context.measureText(label).width / 2 + 24;
+    context.strokeStyle = "#bdcbbf";
+    context.lineWidth = 2;
+    context.beginPath();
+    context.moveTo(margin, separatorY);
+    context.lineTo(width / 2 - labelGap, separatorY);
+    context.moveTo(width / 2 + labelGap, separatorY);
+    context.lineTo(width - margin, separatorY);
+    context.stroke();
+    context.fillStyle = "#59715f";
+    context.textAlign = "center";
+    context.fillText(label, width / 2, separatorY + 6);
+  }
 
   slots.forEach((slot, index) => {
     const column = index % columns;
     const row = Math.floor(index / columns);
     const x = margin + column * (cardWidth + columnGap);
-    const y = headerHeight + row * (cardHeight + rowGap) + (index >= B30_SIZE ? candidateGap : 0);
+    const y = isB50 ? index < 30
+      ? b50OldTop + row * (cardHeight + rowGap)
+      : b50NewTop + Math.floor((index - 30) / columns) * (cardHeight + rowGap)
+      : headerHeight + row * (cardHeight + rowGap) + (index >= B30_SIZE ? candidateGap : 0);
     if (slot) drawFilledCard(context, slot, covers.get(slot.coverUrl), x, y, cardWidth, cardHeight);
-    else drawEmptyCard(context, index + 1, x, y, cardWidth, cardHeight);
+    else drawEmptyCard(context, isB50 && index >= 30 ? index - 30 + 1 : index + 1, x, y, cardWidth, cardHeight);
   });
 
-  const blob = await new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob((result) => {
-      if (result) resolve(result);
-      else reject(new Error("B30 图片生成失败"));
-    }, "image/png");
-  });
-  triggerDownload(blob, `machun1-b30${withCandidates ? "-candidates20" : ""}-${data.exportedAt.slice(0, 10)}.png`);
+  try {
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      const timeout = window.setTimeout(() => reject(new Error(`${isB50 ? "B50" : "B30"} 图片生成超时，请重试。`)), 30_000);
+      try {
+        canvas.toBlob((result) => {
+          window.clearTimeout(timeout);
+          if (result) resolve(result);
+          else reject(new Error(`${isB50 ? "B50" : "B30"} 图片生成失败`));
+        }, "image/png");
+      } catch (error) {
+        window.clearTimeout(timeout);
+        reject(error);
+      }
+    });
 
-  return {
-    missingCovers: [...covers.values()].filter((image) => image === null).length,
-  };
+    return {
+      blob,
+      filename: isB50 ? `machun1-b50-${data.exportedAt.slice(0, 10)}.png`
+        : `machun1-${isAj ? "aj-" : ""}b30${withCandidates ? "-candidates20" : ""}-${data.exportedAt.slice(0, 10)}.png`,
+      missingCovers: [...covers.values()].filter((image) => image === null).length,
+    };
+  } finally {
+    // Release the large backing buffer after encoding, including failed exports.
+    canvas.width = 0;
+    canvas.height = 0;
+  }
 }

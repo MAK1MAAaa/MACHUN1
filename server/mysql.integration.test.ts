@@ -34,7 +34,7 @@ describe.skipIf(!enabled)('isolated MySQL persistence and accounts', () => {
   let repository: WorkspaceRepository;
   const first = catalog[0]; const key = `${first.id}:${first.difficulty}`;
   const record = (score: number, source: SingleRating['source'] = 'rin'): SingleRating => ({ ...first,
-    score, source, rating: 999, updatedAt: '2026-10-08T10:00:00.000Z', combo: 'aj', fullChain: 'platinum' });
+    score, source, rating: 999, updatedAt: '2026-10-08T10:00:00.000Z', combo: 'aj', fullChain: 'platinum', clear: 'absolute' });
   const sync = (score: number, source: SyncResult['source'] = 'rin'): SyncResult => ({ source, records: [record(score, source)],
     report: { parsedScores: 1, importedScores: 1, updatedScores: 0, skippedScores: 0, unknownCharts: 0, invalidEntries: 0 },
     connection: { source, bound: true, status: 'ready', identity: { id: 'fixture', label: '测试' }, lastAttemptAt: null, lastSuccessAt: null, error: null } });
@@ -136,6 +136,31 @@ describe.skipIf(!enabled)('isolated MySQL persistence and accounts', () => {
     const image = createB30Export(Object.values(snapshot.state.scores), catalogByKey, 'test');
     expect(image).toBeDefined();
   });
+  it('persists independent clear lamps, preserves them across repeated migration and isolates owners', async () => {
+    await fixture.db.insert(users).values({ username: 'clear-owner', pwd: hashPassword('clear-pwd') });
+    await repository.action('clear-owner', { type: 'manual', key, score: '1009000' });
+    expect((await repository.get('clear-owner')).state.scores[key]).not.toHaveProperty('clear');
+    const result = sync(1_008_000, 'lxns');
+    await repository.mergeSync('clear-owner', result, {});
+    expect((await repository.get('clear-owner')).state.scores[key]).toMatchObject({ score: 1_009_000, source: 'manual', clear: 'absolute' });
+    result.records[0] = { ...result.records[0], clear: 'catastrophy', score: 1_007_000 };
+    await repository.mergeSync('clear-owner', result, {});
+    await fixture.admin.query(fixture.migration);
+    const current = await repository.get('clear-owner');
+    expect(current.state.scores[key]).toMatchObject({ score: 1_009_000, source: 'manual', clear: 'catastrophy' });
+    const [column] = await fixture.admin.query("SHOW COLUMNS FROM machun1.scores LIKE 'clear_status'");
+    expect((column as { Null: string; Default: unknown }[])[0]).toMatchObject({ Null: 'YES', Default: null });
+    const [migration] = await fixture.admin.query("SELECT name FROM machun1._machun_migrations WHERE name='0003_score_clear_status'");
+    expect(migration).toHaveLength(1);
+    const backup = createFullBackup(current.state, 'test');
+    await repository.action('clear-owner', { type: 'clear' });
+    await repository.action('clear-owner', { type: 'backup', mode: 'replace', raw: JSON.stringify(backup) });
+    await repository.action('clear-owner', { type: 'manual', key, score: '900000' });
+    expect((await repository.get('clear-owner')).state.scores[key]).toMatchObject({ score: 900_000, source: 'manual', clear: 'catastrophy' });
+    expect((await repository.get('alice')).state.scores[key]).toBeUndefined();
+    await repository.action('clear-owner', { type: 'delete', key });
+    expect((await repository.get('clear-owner')).state.scores[key]).toBeUndefined();
+  });
   it('isolates scores and personal aliases and clears only the active workspace, including obsolete rows', async () => {
     await repository.action('alice', { type: 'manual', key, score: '999000' });
     await repository.action('alice', { type: 'aliases', id: first.id, aliases: [' Only Alice ', 'only alice'] });
@@ -147,6 +172,55 @@ describe.skipIf(!enabled)('isolated MySQL persistence and accounts', () => {
     await repository.action('alice', { type: 'clear' });
     expect(await fixture.db.select().from(scores).where(eq(scores.username, 'alice'))).toEqual([]);
     expect(Object.keys((await repository.get('root')).state.scores)).toHaveLength(8);
+  });
+  it('persists export nicknames per user without resetting them on clear, imports, synchronization or migrations', async () => {
+    await fixture.db.insert(users).values({ username: 'nickname-owner', pwd: hashPassword('nickname-pwd') });
+    const rootBefore = await repository.get('root');
+    const initial = await repository.get('nickname-owner');
+    expect(initial.exportNickname).toBe('');
+    const saved = await repository.action('nickname-owner', { type: 'export-nickname', nickname: '  分表玩家 🎵  ' });
+    expect(saved).toMatchObject({ exportNickname: '分表玩家 🎵', revision: initial.revision + 1, state: EMPTY_STATE });
+    expect((await repository.get('nickname-owner')).exportNickname).toBe('分表玩家 🎵');
+    await repository.action('nickname-owner', { type: 'manual', key, score: '1000000' });
+    const backup = createFullBackup((await repository.get('nickname-owner')).state, 'nickname-test');
+    await repository.action('nickname-owner', { type: 'clear' });
+    expect((await repository.get('nickname-owner')).exportNickname).toBe('分表玩家 🎵');
+    await repository.action('nickname-owner', { type: 'backup', mode: 'replace', raw: JSON.stringify(backup) });
+    const imported = await repository.action('nickname-owner', { type: 'import', source: 'rin', filename: 'scores.json', raw: JSON.stringify([{ id: first.id, difficulty: first.difficulty, score: 1001000 }]) });
+    expect(imported.exportNickname).toBe('分表玩家 🎵');
+    expect(imported.state.scores[key].score).toBe(1_001_000);
+    await repository.mergeSync('nickname-owner', sync(1_005_000), {});
+    await fixture.admin.query(fixture.migration);
+    const restored = await new WorkspaceRepository(fixture.db).get('nickname-owner');
+    expect(restored.exportNickname).toBe('分表玩家 🎵');
+    expect(restored.state.scores[key].score).toBe(1_005_000);
+    expect(await repository.get('root')).toEqual(rootBefore);
+    const [columns] = await fixture.admin.query("SHOW COLUMNS FROM machun1.workspaces LIKE 'export_nickname'");
+    expect((columns as { Null: string; Default: unknown }[])[0]).toMatchObject({ Null: 'NO', Default: '' });
+    const [migration] = await fixture.admin.query("SELECT name FROM machun1._machun_migrations WHERE name='0004_export_nickname'");
+    expect(migration).toHaveLength(1);
+  });
+  it('validates nickname Unicode length and keeps invalid updates atomic', async () => {
+    const fullLength = '🎵'.repeat(32);
+    await repository.action('nickname-owner', { type: 'export-nickname', nickname: fullLength });
+    const before = await repository.get('nickname-owner');
+    for (const nickname of [undefined, null, 123, '🎵'.repeat(33), 'player\nname', 'player\u0000name']) {
+      await expect(repository.action('nickname-owner', { type: 'export-nickname', nickname })).rejects.toMatchObject({ code: 'INVALID_REQUEST', status: 400 });
+      expect(await repository.get('nickname-owner')).toEqual(before);
+    }
+    expect(before.exportNickname).toBe(fullLength);
+    expect((await repository.action('nickname-owner', { type: 'export-nickname', nickname: '  ' })).exportNickname).toBe('');
+  });
+  it('retains export nicknames while score and synchronization writes run concurrently', async () => {
+    await Promise.all([
+      repository.action('nickname-owner', { type: 'export-nickname', nickname: '并发设置' }),
+      repository.action('nickname-owner', { type: 'manual', key, score: '1001000' }),
+      repository.mergeSync('nickname-owner', sync(1_008_000), {}),
+    ]);
+    const current = await repository.get('nickname-owner');
+    expect(current.exportNickname).toBe('并发设置');
+    expect(current.state.scores[key]).toBeDefined();
+    expect((await repository.get('alice')).exportNickname).toBe('');
   });
   it('stores bindings, tokens, browser directories and Otogame checkpoints by username', async () => {
     const a = new MysqlSourceStore(fixture.db, 'root', directory); const b = new MysqlSourceStore(fixture.db, 'alice', directory);
@@ -160,6 +234,7 @@ describe.skipIf(!enabled)('isolated MySQL persistence and accounts', () => {
     expect((await a.load('lxns')).binding?.token).toBe('fixture-root-private');
     expect((await b.load('lxns')).binding?.token).toBe('fixture-alice-private');
     expect((await b.load('otogame')).binding).toBeNull();
+    expect((await a.load('otogame')).otogameCache?.records[0].clear).toBe('absolute');
     expect(a.profilePath(profile)).not.toBe(b.profilePath(profile));
     const provider = {} as BrowserProvider;
     const manager = new SourceManager({ store: a, providers: { rin: provider, munet: provider, otogame: provider } });

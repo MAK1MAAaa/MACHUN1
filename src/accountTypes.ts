@@ -5,11 +5,12 @@ import type { SongChartDetail } from './core/songDetails';
 
 export interface Account { username: string }
 export interface CatalogSnapshot { date: string; version: string; charts: CatalogChart[]; details: SongChartDetail[] }
-export interface WorkspaceSnapshot { state: LocalState; revision: number; legacyMigrated: boolean }
+export interface WorkspaceSnapshot { state: LocalState; revision: number; legacyMigrated: boolean; exportNickname: string }
 export type WorkspaceAction =
   | { type: 'manual'; key: string; score: string }
   | { type: 'delete'; key: string }
   | { type: 'clear' }
+  | { type: 'export-nickname'; nickname: string }
   | { type: 'aliases'; id: string; aliases: string[] }
   | { type: 'import'; source: string; raw: string; filename: string; mergeOptions?: SourceMergeOptions }
   | { type: 'backup'; raw: string; mode: 'merge' | 'replace' };

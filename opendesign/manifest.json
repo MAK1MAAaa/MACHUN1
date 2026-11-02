@@ -1,0 +1,84 @@
+{
+  "generated": "2026-11-01T12:22:44.238Z",
+  "sections": [
+    {
+      "id": "mockups",
+      "label": "Mockups",
+      "groups": [
+        {
+          "slug": "mobile-workspace",
+          "files": [
+            {
+              "label": "index.html",
+              "path": "mockups/mobile-workspace/index.html"
+            }
+          ]
+        },
+        {
+          "slug": "score-card-refresh",
+          "files": [
+            {
+              "label": "index.html",
+              "path": "mockups/score-card-refresh/index.html"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "design-systems",
+      "label": "Design Systems",
+      "groups": [
+        {
+          "slug": "machun-workspace",
+          "files": [
+            {
+              "label": "brand/style-notes.md",
+              "path": "design-systems/machun-workspace/brand/style-notes.md"
+            },
+            {
+              "label": "brand/voice-and-tone.md",
+              "path": "design-systems/machun-workspace/brand/voice-and-tone.md"
+            },
+            {
+              "label": "README.md",
+              "path": "design-systems/machun-workspace/README.md"
+            },
+            {
+              "label": "SKILL.md",
+              "path": "design-systems/machun-workspace/SKILL.md"
+            },
+            {
+              "label": "tokens/colors_and_type.css",
+              "path": "design-systems/machun-workspace/tokens/colors_and_type.css"
+            },
+            {
+              "label": "ui-kit-workspace/components/Field.jsx",
+              "path": "design-systems/machun-workspace/ui-kit-workspace/components/Field.jsx"
+            },
+            {
+              "label": "ui-kit-workspace/components/Panel.jsx",
+              "path": "design-systems/machun-workspace/ui-kit-workspace/components/Panel.jsx"
+            },
+            {
+              "label": "ui-kit-workspace/components/RecordRow.jsx",
+              "path": "design-systems/machun-workspace/ui-kit-workspace/components/RecordRow.jsx"
+            },
+            {
+              "label": "ui-kit-workspace/components/ScoreBadges.jsx",
+              "path": "design-systems/machun-workspace/ui-kit-workspace/components/ScoreBadges.jsx"
+            },
+            {
+              "label": "ui-kit-workspace/index.html",
+              "path": "design-systems/machun-workspace/ui-kit-workspace/index.html"
+            },
+            {
+              "label": "ui-kit-workspace/showcase.css",
+              "path": "design-systems/machun-workspace/ui-kit-workspace/showcase.css"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -34,12 +34,14 @@ export const workspaces = mysqlTable('workspaces', {
   revision: int('revision', { unsigned: true }).notNull().default(0),
   legacyMigrated: boolean('legacy_migrated').notNull().default(false),
   sourcesMigrated: boolean('sources_migrated').notNull().default(false),
+  exportNickname: varchar('export_nickname', { length: 64 }).notNull().default(''),
 });
 export const scores = mysqlTable('scores', {
   username: varchar('username', { length: 64 }).notNull().references(() => users.username),
   songId: varchar('song_id', { length: 64 }).notNull(), difficulty: mysqlEnum('difficulty', ['EXP', 'MAS', 'ULT']).$type<Difficulty>().notNull(),
   score: int('score', { unsigned: true }).notNull(), source: mysqlEnum('source', ['manual', 'rin', 'otogame', 'lxns', 'munet']).notNull(),
   combo: mysqlEnum('combo', ['fc', 'aj', 'ajc']), fullChain: mysqlEnum('full_chain', ['fchain', 'gold', 'platinum']),
+  clear: mysqlEnum('clear_status', ['failed', 'clear', 'hard', 'brave', 'absolute', 'catastrophy']),
   updatedAt: varchar('updated_at', { length: 64 }).notNull(),
 }, table => [primaryKey({ columns: [table.username, table.songId, table.difficulty] })]);
 export const personalAliases = mysqlTable('personal_aliases', {

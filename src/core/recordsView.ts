@@ -5,8 +5,28 @@ import type { CatalogChart, Difficulty, ScoreSource, SingleRating } from "../typ
 
 export const RECORDS_PAGE_SIZE = 10;
 
+// Catalog version names follow Japanese release chronology, including major revisions.
+export const GAME_VERSION_ORDER = [
+  "CHUNITHM", "PLUS", "AIR", "AIR PLUS", "STAR", "STAR PLUS",
+  "AMAZON", "AMAZON PLUS", "CRYSTAL", "CRYSTAL PLUS", "PARADISE", "PARADISE LOST",
+  "NEW", "NEW PLUS", "SUN", "SUN PLUS", "LUMINOUS", "LUMINOUS PLUS",
+  "VERSE", "X-VERSE", "X-VERSE-X", "MATE",
+] as const;
+const gameVersionRanks = new Map<string, number>(GAME_VERSION_ORDER.map((version, index) => [version, index]));
+
+function compareGameVersions(left: string, right: string): number {
+  const leftRank = gameVersionRanks.get(left.normalize("NFKC").trim().toUpperCase()) ?? GAME_VERSION_ORDER.length;
+  const rightRank = gameVersionRanks.get(right.normalize("NFKC").trim().toUpperCase()) ?? GAME_VERSION_ORDER.length;
+  return leftRank - rightRank
+    || left.localeCompare(right, "en")
+    || (left < right ? -1 : left > right ? 1 : 0);
+}
+
 export type RecordsViewMode = "rating" | "catalog";
-export type RecordsScoreSort = "default" | "descending" | "ascending";
+export type RecordsSort = "constant-descending" | "constant-ascending"
+  | "rating-descending" | "rating-ascending"
+  | "score-descending" | "score-ascending";
+export type RecordsSortField = "constant" | "rating" | "score";
 
 export interface RecordsFilters {
   query: string;
@@ -17,7 +37,7 @@ export interface RecordsFilters {
   version: string;
   includeUnplayed: boolean;
   source: ScoreSource | "";
-  scoreSort: RecordsScoreSort;
+  sorts: RecordsSort[];
 }
 
 export const EMPTY_RECORDS_FILTERS: RecordsFilters = {
@@ -29,8 +49,16 @@ export const EMPTY_RECORDS_FILTERS: RecordsFilters = {
   version: "",
   includeUnplayed: false,
   source: "",
-  scoreSort: "default",
+  sorts: ["constant-descending"],
 };
+
+/** Newly enabled columns take priority; changing a direction preserves its place. */
+export function cycleRecordsSort(sorts: readonly RecordsSort[], field: RecordsSortField): RecordsSort[] {
+  const current = sorts.find(sort => sort.startsWith(`${field}-`));
+  if (!current) return [`${field}-descending`, ...sorts];
+  if (current.endsWith("descending")) return sorts.map<RecordsSort>(sort => sort === current ? `${field}-ascending` : sort);
+  return sorts.filter(sort => sort !== current);
+}
 
 export interface RecordsRow {
   chart: CatalogChart;
@@ -55,8 +83,26 @@ export function getRecordsFilterOptions(charts: readonly CatalogChart[]): {
       Number.parseInt(left) - Number.parseInt(right) || Number(left.endsWith("+")) - Number(right.endsWith("+"))),
     constants: [...new Set(charts.map((chart) => chart.constant.toFixed(1)))].sort((left, right) => Number(left) - Number(right)),
     genres: [...new Set(charts.map((chart) => chart.genre))].sort((left, right) => left.localeCompare(right, "en")),
-    versions: [...new Set(charts.map((chart) => chart.version))].sort((left, right) => left.localeCompare(right, "en")),
+    versions: [...new Set(charts.map((chart) => chart.version))].sort(compareGameVersions),
   };
+}
+
+/** The constant itself is excluded so choosing one value cannot hide the others. */
+export function getAvailableChartConstants(
+  charts: readonly CatalogChart[],
+  filters: Pick<RecordsFilters, "difficulty" | "level" | "genre" | "version">,
+): string[] {
+  return [...new Set(charts
+    .filter(chart => (!filters.difficulty || chart.difficulty === filters.difficulty)
+      && (!filters.level || getChartLevel(chart.constant) === filters.level)
+      && (!filters.genre || chart.genre === filters.genre)
+      && (!filters.version || chart.version === filters.version))
+    .map(chart => chart.constant.toFixed(1)))].sort((left, right) => Number(left) - Number(right));
+}
+
+export function clearUnavailableRecordConstant(charts: readonly CatalogChart[], filters: RecordsFilters): RecordsFilters {
+  return filters.constant && !getAvailableChartConstants(charts, filters).includes(filters.constant)
+    ? { ...filters, constant: "" } : filters;
 }
 
 function matchesSearch(row: RecordsRow, query: string, nicknameOverrides: Record<string, string[]>): boolean {
@@ -70,12 +116,16 @@ function matchesSearch(row: RecordsRow, query: string, nicknameOverrides: Record
   return normalizeSearchText(text).includes(query);
 }
 
-function compareCatalogRows(left: RecordsRow, right: RecordsRow, scoreSort: RecordsScoreSort): number {
+function compareCatalogRows(left: RecordsRow, right: RecordsRow, sorts: readonly RecordsSort[]): number {
   // A missing score is not a zero score and always follows played charts.
   if (Boolean(left.record) !== Boolean(right.record)) return left.record ? -1 : 1;
-  if (scoreSort !== "default" && left.record && right.record) {
-    const scoreDifference = left.record.score - right.record.score;
-    if (scoreDifference) return scoreSort === "ascending" ? scoreDifference : -scoreDifference;
+  for (const sort of sorts) {
+    const difference = sort.startsWith("constant-")
+      ? left.chart.constant - right.chart.constant
+      : left.record && right.record
+        ? sort.startsWith("rating-") ? left.record.rating - right.record.rating : left.record.score - right.record.score
+        : 0;
+    if (difference) return sort.endsWith("ascending") ? difference : -difference;
   }
   return right.chart.constant - left.chart.constant
     || left.chart.title.localeCompare(right.chart.title, "zh-CN")
@@ -113,7 +163,7 @@ export function buildRecordsRows(
       ? row.record?.source === filters.source
       : filters.includeUnplayed || row.record !== undefined)
       && matchesSearch(row, query, nicknameOverrides))
-    .sort((left, right) => compareCatalogRows(left, right, filters.scoreSort));
+    .sort((left, right) => compareCatalogRows(left, right, filters.sorts));
 }
 
 export function paginateRecords(rows: readonly RecordsRow[], requestedPage: number): {

@@ -3,7 +3,10 @@ import { SCORE_SOURCES, type CatalogChart, type Difficulty, type SingleRating } 
 import { chartKey } from "./b30";
 import {
   buildRecordsRows,
+  clearUnavailableRecordConstant,
+  cycleRecordsSort,
   EMPTY_RECORDS_FILTERS,
+  getAvailableChartConstants,
   getRecordsFilterOptions,
   getChartLevel,
   paginateRecords,
@@ -37,6 +40,73 @@ function rows(
 }
 
 describe("record browsing", () => {
+  it("offers only constants that exist under difficulty, level, genre and version without selecting a hidden gap", () => {
+    const charts = [
+      chart("mas", { constant: 15.7 }),
+      chart("ult-low", { difficulty: "ULT", constant: 15.8 }),
+      chart("ult-high", { difficulty: "ULT", constant: 16 }),
+      chart("ult-genre", { difficulty: "ULT", constant: 15.6, genre: "VARIETY" }),
+      chart("ult-version", { difficulty: "ULT", constant: 15.5, version: "AIR" }),
+      chart("exp", { difficulty: "EXP", constant: 14.9 }),
+    ];
+    expect(getAvailableChartConstants(charts, { ...EMPTY_RECORDS_FILTERS, difficulty: "ULT" }))
+      .toEqual(["15.5", "15.6", "15.8", "16.0"]);
+    const selectedUlt: RecordsFilters = { ...EMPTY_RECORDS_FILTERS, difficulty: "ULT", constant: "15.8", query: "no match", source: "rin" };
+    expect(getAvailableChartConstants(charts, selectedUlt)).toEqual(["15.5", "15.6", "15.8", "16.0"]);
+    const filters: RecordsFilters = { ...EMPTY_RECORDS_FILTERS, difficulty: "ULT", level: "15+", genre: "ORIGINAL", version: "NEW", constant: "15.9" };
+    expect(getAvailableChartConstants(charts, filters)).toEqual(["15.8"]);
+    expect(getAvailableChartConstants(charts, { ...filters, constant: "15.8" } as RecordsFilters)).toEqual(["15.8"]);
+    expect(getAvailableChartConstants(charts, { ...filters, difficulty: "EXP" })).toEqual([]);
+    expect(getAvailableChartConstants(charts, { ...filters, difficulty: "MAS" })).toEqual(["15.7"]);
+  });
+
+  it("clears an unavailable constant after any catalog condition changes and preserves valid selections and other filters", () => {
+    const charts = [chart("mas", { constant: 15.7 }), chart("exp", { difficulty: "EXP", constant: 14.9 })];
+    const filters: RecordsFilters = { ...EMPTY_RECORDS_FILTERS, constant: "15.7", query: "alias", source: "rin", includeUnplayed: true, sorts: ["score-ascending"] };
+    expect(clearUnavailableRecordConstant(charts, filters)).toBe(filters);
+    expect(clearUnavailableRecordConstant(charts, { ...filters, difficulty: "EXP" })).toEqual({ ...filters, difficulty: "EXP", constant: "" });
+    for (const extra of [{ level: "14+" }, { genre: "VARIETY" }, { version: "AIR" }]) {
+      expect(clearUnavailableRecordConstant(charts, { ...filters, ...extra })).toEqual({ ...filters, ...extra, constant: "" });
+    }
+    const cleared = clearUnavailableRecordConstant(charts, { ...filters, difficulty: "EXP" });
+    expect(clearUnavailableRecordConstant(charts, { ...cleared, difficulty: "" }).constant).toBe("");
+    expect(clearUnavailableRecordConstant(charts, { ...filters, constant: "15.9" }).constant).toBe("");
+    expect(filters.constant).toBe("15.7");
+  });
+
+  it("cycles each sort independently and retains direction changes at the same priority", () => {
+    const start = [...EMPTY_RECORDS_FILTERS.sorts];
+    const scoreFirst = cycleRecordsSort(start, "score");
+    expect(scoreFirst).toEqual(["score-descending", "constant-descending"]);
+    const allThree = cycleRecordsSort(scoreFirst, "rating");
+    expect(allThree).toEqual(["rating-descending", "score-descending", "constant-descending"]);
+    const constantAscending = cycleRecordsSort(allThree, "constant");
+    expect(constantAscending).toEqual(["rating-descending", "score-descending", "constant-ascending"]);
+    expect(cycleRecordsSort(constantAscending, "constant")).toEqual(["rating-descending", "score-descending"]);
+    expect(cycleRecordsSort(["rating-ascending"], "rating")).toEqual([]);
+    expect(start).toEqual(["constant-descending"]);
+  });
+
+  it("applies three active columns in priority order with conflicting directions before pagination", () => {
+    const charts = Array.from({ length: 12 }, (_, index) => chart(String(index), { constant: index % 2 ? 15 : 14 }));
+    const records = charts.map((item, index) => score(item, index < 6 ? 17 : 16, { score: index % 3 ? 1_000_000 : 1_009_000 }));
+    const filters: Partial<RecordsFilters> = { sorts: ["rating-descending", "score-ascending", "constant-descending"] };
+    const result = rows(charts, records, "catalog", filters);
+    expect(result.map(row => row.chart.id)).toEqual(["1", "5", "2", "4", "3", "0", "11", "7", "10", "8", "9", "6"]);
+    expect(paginateRecords(result, 2).rows.map(row => row.chart.id)).toEqual(["9", "6"]);
+    expect(rows(charts, records, "catalog", { sorts: ["constant-ascending", "rating-descending", "score-ascending"] }).slice(0, 3).map(row => row.chart.id)).toEqual(["2", "4", "0"]);
+  });
+
+  it("uses deterministic ties with all sorts disabled and leaves missing scores after zero scores", () => {
+    const charts = [chart("b", { title: "Same", constant: 14 }), chart("a", { title: "Same", constant: 14 }), chart("unplayed", { constant: 16 })];
+    const records = charts.slice(0, 2).map(item => score(item, 0, { score: 0 }));
+    for (const sorts of [[], ["score-ascending", "rating-ascending", "constant-ascending"]] as RecordsFilters["sorts"][]) {
+      const result = rows(charts, records, "catalog", { sorts, includeUnplayed: true });
+      expect(result.map(row => row.chart.id)).toEqual(["a", "b", "unplayed"]);
+      expect(rows([...charts].reverse(), [...records].reverse(), "catalog", { sorts, includeUnplayed: true }).map(row => row.chart.id)).toEqual(["a", "b", "unplayed"]);
+    }
+  });
+
   it("sorts rating records and preserves their global rank through search and pagination", () => {
     const charts = Array.from({ length: 25 }, (_, index) => chart(String(index)));
     const records = charts.map((item, index) => score(item, 18 - index / 100));
@@ -53,7 +123,7 @@ describe("record browsing", () => {
   it("keeps rating mode restricted to played catalog charts regardless of catalog filters", () => {
     const charts = [chart("played"), chart("unplayed")];
     const records = [score(charts[0], 16), score(chart("deleted-from-catalog"), 19)];
-    expect(rows(charts, records, "rating", { includeUnplayed: true, difficulty: "ULT", level: "13", genre: "VARIETY", source: "rin", scoreSort: "ascending" }).map((row) => row.chart.id)).toEqual(["played"]);
+    expect(rows(charts, records, "rating", { includeUnplayed: true, difficulty: "ULT", level: "13", genre: "VARIETY", source: "rin", sorts: ["score-ascending"] }).map((row) => row.chart.id)).toEqual(["played"]);
   });
 
   it.each(SCORE_SOURCES)("filters current highest records by source %s, even with unplayed charts enabled", (source) => {
@@ -74,26 +144,56 @@ describe("record browsing", () => {
   it("sorts catalog scores in both directions, places unplayed charts last, and keeps a zero score", () => {
     const charts = [chart("zero", { constant: 13 }), chart("high", { constant: 14 }), chart("middle", { constant: 15 }), chart("unplayed", { constant: 16 })];
     const records = [score(charts[0], 0, { score: 0 }), score(charts[1], 14, { score: 1_009_000 }), score(charts[2], 15, { score: 1_000_000 })];
-    expect(rows(charts, records, "catalog", { includeUnplayed: true, scoreSort: "descending" }).map((row) => row.chart.id)).toEqual(["high", "middle", "zero", "unplayed"]);
-    expect(rows(charts, records, "catalog", { includeUnplayed: true, scoreSort: "ascending" }).map((row) => row.chart.id)).toEqual(["zero", "middle", "high", "unplayed"]);
-    expect(rows(charts, records, "catalog", { includeUnplayed: true, scoreSort: "default" }).map((row) => row.chart.id)).toEqual(["middle", "high", "zero", "unplayed"]);
+    expect(rows(charts, records, "catalog", { includeUnplayed: true, sorts: ["score-descending"] }).map((row) => row.chart.id)).toEqual(["high", "middle", "zero", "unplayed"]);
+    expect(rows(charts, records, "catalog", { includeUnplayed: true, sorts: ["score-ascending"] }).map((row) => row.chart.id)).toEqual(["zero", "middle", "high", "unplayed"]);
+    expect(rows(charts, records, "catalog", { includeUnplayed: true, sorts: ["constant-descending"] }).map((row) => row.chart.id)).toEqual(["middle", "high", "zero", "unplayed"]);
     expect(records.map((record) => record.id)).toEqual(["zero", "high", "middle"]);
   });
 
   it("breaks equal score ties deterministically using constant, title, and chart key", () => {
     const charts = [chart("2", { title: "Alpha", constant: 14 }), chart("z", { title: "Zulu", constant: 14 }), chart("high-constant", { constant: 15 }), chart("1", { title: "Alpha", constant: 14 })];
     const records = charts.map((item) => score(item, 16));
-    for (const scoreSort of ["ascending", "descending"] as const) {
-      const result = rows(charts, records, "catalog", { scoreSort }).map((row) => row.chart.id);
+    for (const sort of ["score-ascending", "score-descending"] as const) {
+      const result = rows(charts, records, "catalog", { sorts: [sort] }).map((row) => row.chart.id);
       expect(result).toEqual(["high-constant", "1", "2", "z"]);
-      expect(rows([...charts].reverse(), [...records].reverse(), "catalog", { scoreSort }).map((row) => row.chart.id)).toEqual(result);
+      expect(rows([...charts].reverse(), [...records].reverse(), "catalog", { sorts: [sort] }).map((row) => row.chart.id)).toEqual(result);
+    }
+  });
+
+  it.each(["constant-ascending", "constant-descending"] as const)("sorts filtered constants with %s before paginating and leaves unplayed charts last", (sort) => {
+    const charts = Array.from({ length: 13 }, (_, index) => chart(String(index), { constant: 13 + index / 10 }));
+    const records = charts.slice(0, 12).map((item, index) => score(item, 18 - index / 10));
+    const result = rows(charts, records, "catalog", { includeUnplayed: true, difficulty: "MAS", sorts: [sort] });
+    const expectedPlayed = sort === "constant-ascending" ? records.map((record) => record.id) : records.map((record) => record.id).reverse();
+    expect(result.map((row) => row.chart.id)).toEqual([...expectedPlayed, "12"]);
+    expect(paginateRecords(result, 2).rows.map((row) => row.chart.id)).toEqual([...expectedPlayed.slice(10), "12"]);
+    expect(rows(charts, records, "catalog", { level: "13+", sorts: [sort] }).map((row) => row.chart.constant))
+      .toEqual(sort === "constant-ascending" ? [13.5, 13.6, 13.7, 13.8, 13.9] : [13.9, 13.8, 13.7, 13.6, 13.5]);
+  });
+
+  it.each(["rating-ascending", "rating-descending"] as const)("sorts actual Rating with %s, preserving zero ratings and keeping unplayed charts last", (sort) => {
+    const charts = [chart("zero", { constant: 16 }), chart("high", { constant: 13 }), chart("middle", { constant: 15 }), chart("unplayed", { constant: 16.5 })];
+    const records = [score(charts[0], 0, { score: 0 }), score(charts[1], 17), score(charts[2], 16)];
+    const result = rows(charts, records, "catalog", { includeUnplayed: true, sorts: [sort] });
+    expect(result.map((row) => row.chart.id)).toEqual(sort === "rating-ascending" ? ["zero", "middle", "high", "unplayed"] : ["high", "middle", "zero", "unplayed"]);
+    expect(rows(charts, records, "rating", { sorts: [sort] }).map((row) => row.chart.id)).toEqual(["high", "middle", "zero"]);
+    expect(records.map((record) => record.id)).toEqual(["zero", "high", "middle"]);
+  });
+
+  it("uses constant, title and chart key to resolve equal Ratings when score sorting is disabled", () => {
+    const charts = [chart("low-score", { constant: 15 }), chart("low-constant", { constant: 13 }), chart("high-constant", { constant: 14 })];
+    const records = charts.map((item) => score(item, 16, { score: item.id === "low-score" ? 990_000 : 1_000_000 }));
+    for (const sort of ["rating-ascending", "rating-descending"] as const) {
+      const expected = ["low-score", "high-constant", "low-constant"];
+      expect(rows(charts, records, "catalog", { sorts: [sort] }).map((row) => row.chart.id)).toEqual(expected);
+      expect(rows([...charts].reverse(), [...records].reverse(), "catalog", { sorts: [sort] }).map((row) => row.chart.id)).toEqual(expected);
     }
   });
 
   it("keeps Rating mode in rating order after catalog score sorting and source filtering", () => {
     const charts = [chart("first"), chart("second")];
     const records = [score(charts[0], 18, { score: 950_000, source: "rin" }), score(charts[1], 16, { score: 1_010_000, source: "lxns" })];
-    expect(rows(charts, records, "rating", { source: "lxns", scoreSort: "descending" }).map((row) => row.chart.id)).toEqual(["first", "second"]);
+    expect(rows(charts, records, "rating", { source: "lxns", sorts: ["score-descending"] }).map((row) => row.chart.id)).toEqual(["first", "second"]);
   });
 
   it("combines difficulty, precise constant, genre, and version filters", () => {
@@ -172,6 +272,30 @@ describe("record browsing", () => {
     expect(options.levels).toEqual(["14+", "15"]);
     expect(options.genres).toEqual(["ORIGINAL", "VARIETY"]);
     expect(options.versions).toEqual(["AIR PLUS", "NEW"]);
+  });
+
+  it("orders version options by Japanese game release rather than alphabetically", () => {
+    const versions = [
+      "CHUNITHM", "PLUS", "AIR", "AIR PLUS", "STAR", "STAR PLUS",
+      "AMAZON", "AMAZON PLUS", "CRYSTAL", "CRYSTAL PLUS", "PARADISE", "PARADISE LOST",
+      "NEW", "NEW PLUS", "SUN", "SUN PLUS", "LUMINOUS", "LUMINOUS PLUS",
+      "VERSE", "X-VERSE", "X-VERSE-X", "MATE",
+    ];
+    const charts = [...versions].reverse().map((version, index) => chart(String(index), { version }));
+    expect(getRecordsFilterOptions(charts).versions).toEqual(versions);
+    expect(getRecordsFilterOptions([...charts.slice(8), ...charts.slice(0, 8)]).versions).toEqual(versions);
+    expect(charts.map((item) => item.version)).toEqual([...versions].reverse());
+  });
+
+  it("places unknown versions last deterministically and preserves exact filtering values", () => {
+    const charts = ["Zulu Future", "MATE", "Alpha Future", "New", "AIR", "Alpha Future"]
+      .map((version, index) => chart(String(index), { version }));
+    const expected = ["AIR", "New", "MATE", "Alpha Future", "Zulu Future"];
+    expect(getRecordsFilterOptions(charts).versions).toEqual(expected);
+    expect(getRecordsFilterOptions([...charts].reverse()).versions).toEqual(expected);
+    expect(rows(charts, [], "catalog", { version: "New", includeUnplayed: true }).map((row) => row.chart.id)).toEqual(["3"]);
+    expect(rows(charts, [], "catalog", { version: "NEW", includeUnplayed: true })).toEqual([]);
+    expect(getRecordsFilterOptions([]).versions).toEqual([]);
   });
 
   it("clamps out-of-range pages and keeps an empty result at page one", () => {

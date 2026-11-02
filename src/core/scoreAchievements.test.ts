@@ -2,10 +2,11 @@ import { describe, expect, it } from "vitest";
 import { catalog, catalogByKey } from "./catalog";
 import { chartKey } from "./b30";
 import { scoreGrade } from "./rating";
-import { mergeScoreAchievements, readScoreAchievements } from "./scoreAchievements";
+import { CLEAR_LABELS, mergeScoreAchievements, readScoreAchievements } from "./scoreAchievements";
 import { importSourcePayload } from "./sources";
 import { correctScore, EMPTY_STATE, parseLocalState, upsertHighScore } from "./storage";
 import { createB30Export, createB30CandidatesExport, createOtoB30Export } from "./b30Export";
+import { createFullBackup, importBackup } from "./backup";
 import { mergeSyncResult } from "./sync";
 import { safeMusicDetails } from "../../server/providers/browserHttp";
 import type { LocalState, SingleRating } from "../types";
@@ -30,6 +31,16 @@ describe("score achievements", () => {
     [{ full_chain: "fullchain" }, { fullChain: "platinum" }],
     [{ isFullChain: true }, { fullChain: "fchain" }],
     [{ isFullCombo: false, full_combo: "invalid", fullChain: 99 }, {}],
+    [{ clear: "absolute" }, { clear: "absolute" }],
+    [{ clear_status: "CATASTROPHY" }, { clear: "catastrophy" }],
+    [{ clearType: " BRAVE " }, { clear: "brave" }],
+    [{ clear_type: "HARD", isSuccess: true }, { clear: "hard" }],
+    [{ clear: "FAILED", isClear: true }, { clear: "clear" }],
+    [{ isClear: false }, { clear: "failed" }],
+    [{ isSuccess: "FALSE" }, { clear: "failed" }],
+    [{ isSuccess: 1 }, { clear: "clear" }],
+    [{ clear: true }, { clear: "clear" }],
+    [{ clear: "unknown", clear_status: 4, clearMax: 5, clearType: true }, {}],
   ])("normalizes supported source metadata %j", (input, expected) => {
     expect(readScoreAchievements(input)).toEqual(expected);
   });
@@ -47,6 +58,63 @@ describe("score achievements", () => {
       .toEqual({ combo: "ajc", fullChain: "platinum" });
   });
 
+  it("keeps the best clear lamp independently of combo, chain, score and source", () => {
+    const lamps = ["failed", "clear", "hard", "brave", "absolute", "catastrophy"] as const;
+    for (let index = 0; index < lamps.length; index++) {
+      const clear = lamps[index];
+      expect(CLEAR_LABELS[clear]).toBe(clear.toUpperCase());
+      for (const weaker of lamps.slice(0, index + 1)) {
+        expect(mergeScoreAchievements({ clear, combo: "fc" }, { clear: weaker, combo: "aj" }))
+          .toEqual({ clear, combo: "aj" });
+        expect(mergeScoreAchievements({ clear: weaker }, { clear })).toEqual({ clear });
+      }
+    }
+    expect(mergeScoreAchievements({ clear: "absolute" }, {})).toEqual({ clear: "absolute" });
+    expect(readScoreAchievements({}, 1_009_999)).not.toHaveProperty("clear");
+    expect(readScoreAchievements({ combo: "aj" })).not.toHaveProperty("clear");
+  });
+
+  it.each(["rin", "munet", "otogame", "lxns"] as const)("preserves explicit clear metadata while importing %s", (source) => {
+    const native = { musicId: chart.id, level, scoreMax: 1_007_000, clear: "absolute" };
+    const payload = source === "munet" ? { gameId: "SDHD", userMusicDetailList: [native] }
+      : source === "rin" ? { userMusicDetailList: [native] }
+      : source === "lxns" ? [{ id: chart.id, level_index: level, score: 1_007_000, clear: "absolute" }]
+      : [{ music: { name: chart.title }, difficulty: level, score: 1_007_000, clear: "absolute" }];
+    expect(importSourcePayload(payload, source, EMPTY_STATE, catalogByKey).state.scores[key])
+      .toMatchObject({ source, score: 1_007_000, clear: "absolute" });
+  });
+
+  it("merges equal and lower-score clear improvements, preserves manual edits and round-trips backups", () => {
+    const state = structuredClone(EMPTY_STATE);
+    upsertHighScore(state, { ...makeRecord(1_009_000), clear: "hard" });
+    expect(upsertHighScore(state, { ...makeRecord(1_009_000), source: "lxns", clear: "absolute" })).toBe("updated");
+    expect(upsertHighScore(state, { ...makeRecord(1_008_000), source: "otogame", clear: "catastrophy" })).toBe("updated");
+    expect(state.scores[key]).toMatchObject({ score: 1_009_000, source: "rin", clear: "catastrophy" });
+    expect(upsertHighScore(state, { ...makeRecord(1_008_000), clear: "failed" })).toBe("rejected");
+    expect(upsertHighScore(state, makeRecord(1_009_500))).toBe("updated");
+    expect(state.scores[key]).toMatchObject({ score: 1_009_500, clear: "catastrophy" });
+    const edited = correctScore(state, key, "900000");
+    expect(edited.scores[key]).toMatchObject({ score: 900_000, source: "manual", clear: "catastrophy" });
+    expect(parseLocalState(JSON.stringify(edited))).toEqual(edited);
+    const backup = createFullBackup(edited, "test");
+    expect(importBackup(JSON.stringify(backup), EMPTY_STATE, catalogByKey, "replace").state).toEqual(edited);
+    const exported = createOtoB30Export([edited.scores[key]]);
+    expect(exported.data.base_rating_list[0]).toMatchObject({ clear: "catastrophy" });
+    expect(importSourcePayload(exported, "otogame", EMPTY_STATE, catalogByKey).state.scores[key]).toMatchObject({ clear: "catastrophy" });
+  });
+
+  it("keeps unknown legacy clear data unknown and preserves country replacement rules", () => {
+    const state = { ...structuredClone(EMPTY_STATE), scores: { [key]: makeRecord(1_008_000) } };
+    expect(parseLocalState(JSON.stringify(state)).scores[key]).not.toHaveProperty("clear");
+    state.scores[key] = { ...makeRecord(1_009_000), source: "lxns", clear: "hard" };
+    const payload = { userMusicDetailList: [{ musicId: chart.id, level, scoreMax: 1_008_000, clear: "catastrophy" }] };
+    expect(importSourcePayload(payload, "munet", state, catalogByKey).state).toEqual(state);
+    state.scores[key] = { ...makeRecord(1_009_000), source: "munet", clear: "catastrophy" };
+    const repaired = importSourcePayload([{ id: chart.id, level_index: level, score: 1_000_000, clear: "hard" }],
+      "lxns", state, catalogByKey, undefined, { overwriteMunet: true });
+    expect(repaired.state.scores[key]).toMatchObject({ score: 1_000_000, source: "lxns", clear: "hard" });
+  });
+
   it.each(["rin", "munet", "otogame", "lxns"] as const)("retains metadata while importing %s", (source) => {
     const native = { musicId: chart.id, level, scoreMax: 1_009_000, isAllJustice: true };
     const payload = source === "munet" ? { gameId: "SDHD", userMusicDetailList: [native] }
@@ -60,9 +128,9 @@ describe("score achievements", () => {
   it("whitelists portal export metadata while excluding account and other raw fields", () => {
     const result = safeMusicDetails({
       userData: { token: "synthetic-private-token" },
-      userMusicDetailList: [{ musicId: chart.id, level, scoreMax: 1_009_000, isFullCombo: true, privateField: "private" }],
+      userMusicDetailList: [{ musicId: chart.id, level, scoreMax: 1_009_000, isFullCombo: true, clear: "absolute", privateField: "private" }],
     }, false);
-    expect(result).toEqual({ userMusicDetailList: [{ musicId: chart.id, level, scoreMax: 1_009_000, combo: "fc" }] });
+    expect(result).toEqual({ userMusicDetailList: [{ musicId: chart.id, level, scoreMax: 1_009_000, combo: "fc", clear: "absolute" }] });
   });
 
   it("merges lower-score achievements without replacing the best score or source", () => {
@@ -97,14 +165,14 @@ describe("score achievements", () => {
   });
 
   it("merges a delayed sync into the latest edited state while retaining lamps", () => {
-    const record = { ...makeRecord(1_009_000), combo: "aj" as const };
+    const record = { ...makeRecord(1_009_000), combo: "aj" as const, clear: "absolute" as const };
     const current = { ...structuredClone(EMPTY_STATE), scores: { [key]: { ...makeRecord(1_009_500), source: "manual" as const } } };
     const result: SyncResult = {
       source: "rin", records: [record],
       report: { parsedScores: 1, importedScores: 1, updatedScores: 0, skippedScores: 0, unknownCharts: 0, invalidEntries: 0 },
       connection: { source: "rin", status: "ready", bound: true, identity: null, lastAttemptAt: null, lastSuccessAt: null, error: null },
     };
-    expect(mergeSyncResult(current, result).state.scores[key]).toMatchObject({ score: 1_009_500, source: "manual", combo: "aj" });
+    expect(mergeSyncResult(current, result).state.scores[key]).toMatchObject({ score: 1_009_500, source: "manual", combo: "aj", clear: "absolute" });
     expect(current.scores[key]).not.toHaveProperty("combo");
   });
 

@@ -16,7 +16,7 @@
       "flick": 216
     },
     "genre": "ORIGINAL",
-    "version": "MATE"
+    "version": "X-VERSE-X"
   },
   {
     "id": "2967",
@@ -35,7 +35,7 @@
       "flick": 77
     },
     "genre": "ORIGINAL",
-    "version": "MATE"
+    "version": "X-VERSE-X"
   },
   {
     "id": "2802",
@@ -360,7 +360,7 @@
       "flick": 238
     },
     "genre": "ORIGINAL",
-    "version": "MATE"
+    "version": "X-VERSE-X"
   },
   {
     "id": "2968",
@@ -740,7 +740,7 @@
       "flick": 137
     },
     "genre": "ORIGINAL",
-    "version": "MATE"
+    "version": "X-VERSE-X"
   },
   {
     "id": "2140",
@@ -5569,7 +5569,7 @@
       "flick": 0
     },
     "genre": "ORIGINAL",
-    "version": "MATE"
+    "version": "X-VERSE-X"
   },
   {
     "id": "2351",
@@ -7167,7 +7167,7 @@
       "flick": 0
     },
     "genre": "ORIGINAL",
-    "version": "MATE"
+    "version": "X-VERSE-X"
   },
   {
     "id": "2427",
@@ -18420,11 +18420,11 @@
     "bpm": 170,
     "notes": {
       "total": 2700,
-      "tap": 0,
-      "hold": 0,
-      "slide": 0,
-      "air": 0,
-      "flick": 0
+      "tap": 1432,
+      "hold": 86,
+      "slide": 501,
+      "air": 493,
+      "flick": 188
     },
     "genre": "ORIGINAL",
     "version": "MATE"
@@ -18493,14 +18493,14 @@
     "constant": 14.6,
     "nickname": [],
     "coverUrl": "https://otoge-db.net/chunithm/jacket/9c09ad3ceda20c0a.jpg",
-    "bpm": null,
+    "bpm": 148,
     "notes": {
       "total": 1881,
-      "tap": 0,
-      "hold": 0,
-      "slide": 0,
-      "air": 0,
-      "flick": 0
+      "tap": 1021,
+      "hold": 38,
+      "slide": 307,
+      "air": 365,
+      "flick": 150
     },
     "genre": "ORIGINAL",
     "version": "MATE"
@@ -18550,14 +18550,14 @@
     "constant": 14.5,
     "nickname": [],
     "coverUrl": "https://otoge-db.net/chunithm/jacket/27ba6e5202aefb62.jpg",
-    "bpm": null,
+    "bpm": 220,
     "notes": {
       "total": 2452,
-      "tap": 0,
-      "hold": 0,
-      "slide": 0,
-      "air": 0,
-      "flick": 0
+      "tap": 1156,
+      "hold": 332,
+      "slide": 513,
+      "air": 396,
+      "flick": 55
     },
     "genre": "ORIGINAL",
     "version": "MATE"
@@ -18607,14 +18607,14 @@
     "constant": 14.2,
     "nickname": [],
     "coverUrl": "https://otoge-db.net/chunithm/jacket/cea4a5cb576a26d7.jpg",
-    "bpm": null,
+    "bpm": 155,
     "notes": {
       "total": 990,
-      "tap": 0,
-      "hold": 0,
-      "slide": 0,
-      "air": 0,
-      "flick": 0
+      "tap": 606,
+      "hold": 93,
+      "slide": 129,
+      "air": 83,
+      "flick": 79
     },
     "genre": "POPS & ANIME",
     "version": "MATE"
@@ -18629,11 +18629,11 @@
     "bpm": 170,
     "notes": {
       "total": 1708,
-      "tap": 0,
-      "hold": 0,
-      "slide": 0,
-      "air": 0,
-      "flick": 0
+      "tap": 966,
+      "hold": 182,
+      "slide": 314,
+      "air": 202,
+      "flick": 44
     },
     "genre": "ORIGINAL",
     "version": "MATE"
@@ -25772,7 +25772,7 @@
     "difficulty": "MAS",
     "constant": 13.5,
     "genre": "ORIGINAL",
-    "version": "MATE",
+    "version": "X-VERSE-X",
     "nickname": [],
     "coverUrl": "https://otoge-db.net/chunithm/jacket/5052ee354585736d.jpg",
     "bpm": 136,
@@ -33134,14 +33134,14 @@
     "version": "MATE",
     "nickname": [],
     "coverUrl": "https://otoge-db.net/chunithm/jacket/fb5e60d62c7d88e7.jpg",
-    "bpm": null,
+    "bpm": 135,
     "notes": {
-      "total": 0,
-      "tap": 0,
-      "hold": 0,
-      "slide": 0,
-      "air": 0,
-      "flick": 0
+      "total": 1535,
+      "tap": 640,
+      "hold": 161,
+      "slide": 243,
+      "air": 383,
+      "flick": 108
     }
   },
   {
@@ -33153,14 +33153,14 @@
     "version": "MATE",
     "nickname": [],
     "coverUrl": "https://otoge-db.net/chunithm/jacket/8202b8274c1feed0.jpg",
-    "bpm": null,
+    "bpm": 190,
     "notes": {
-      "total": 0,
-      "tap": 0,
-      "hold": 0,
-      "slide": 0,
-      "air": 0,
-      "flick": 0
+      "total": 1777,
+      "tap": 920,
+      "hold": 110,
+      "slide": 473,
+      "air": 221,
+      "flick": 53
     }
   },
   {
@@ -33172,14 +33172,14 @@
     "version": "MATE",
     "nickname": [],
     "coverUrl": "https://otoge-db.net/chunithm/jacket/6d4e076edbf2b46e.jpg",
-    "bpm": null,
+    "bpm": 168,
     "notes": {
-      "total": 0,
-      "tap": 0,
-      "hold": 0,
-      "slide": 0,
-      "air": 0,
-      "flick": 0
+      "total": 2281,
+      "tap": 1459,
+      "hold": 168,
+      "slide": 250,
+      "air": 272,
+      "flick": 132
     }
   },
   {
@@ -33191,14 +33191,14 @@
     "version": "MATE",
     "nickname": [],
     "coverUrl": "https://otoge-db.net/chunithm/jacket/6c07589177bbb0f8.jpg",
-    "bpm": null,
+    "bpm": 164,
     "notes": {
-      "total": 0,
-      "tap": 0,
-      "hold": 0,
-      "slide": 0,
-      "air": 0,
-      "flick": 0
+      "total": 1668,
+      "tap": 853,
+      "hold": 74,
+      "slide": 312,
+      "air": 354,
+      "flick": 75
     }
   },
   {
@@ -33210,6 +33210,196 @@
     "version": "MATE",
     "nickname": [],
     "coverUrl": "https://otoge-db.net/chunithm/jacket/1ae2db00c32c728b.jpg",
+    "bpm": 210,
+    "notes": {
+      "total": 2630,
+      "tap": 1490,
+      "hold": 155,
+      "slide": 406,
+      "air": 382,
+      "flick": 197
+    }
+  },
+  {
+    "id": "2175",
+    "title": "シル・ヴ・プレジデント",
+    "difficulty": "ULT",
+    "constant": 14.5,
+    "genre": "POPS & ANIME",
+    "version": "NEW PLUS",
+    "nickname": [],
+    "coverUrl": "https://otoge-db.net/chunithm/jacket/8c4f3ce152d53cfe.jpg",
+    "bpm": 176,
+    "notes": {
+      "total": 0,
+      "tap": 0,
+      "hold": 0,
+      "slide": 0,
+      "air": 0,
+      "flick": 0
+    }
+  },
+  {
+    "id": "3074",
+    "title": "Metaverse Do Be Like This",
+    "difficulty": "EXP",
+    "constant": 13.6,
+    "genre": "VARIETY",
+    "version": "MATE",
+    "nickname": [],
+    "coverUrl": "https://otoge-db.net/chunithm/jacket/e0895c3d12b8017f.jpg",
+    "bpm": 180,
+    "notes": {
+      "total": 0,
+      "tap": 0,
+      "hold": 0,
+      "slide": 0,
+      "air": 0,
+      "flick": 0
+    }
+  },
+  {
+    "id": "3074",
+    "title": "Metaverse Do Be Like This",
+    "difficulty": "MAS",
+    "constant": 14.9,
+    "genre": "VARIETY",
+    "version": "MATE",
+    "nickname": [],
+    "coverUrl": "https://otoge-db.net/chunithm/jacket/e0895c3d12b8017f.jpg",
+    "bpm": 180,
+    "notes": {
+      "total": 2076,
+      "tap": 1139,
+      "hold": 95,
+      "slide": 464,
+      "air": 217,
+      "flick": 161
+    }
+  },
+  {
+    "id": "3067",
+    "title": "さっきゅんライト（2025）",
+    "difficulty": "MAS",
+    "constant": 13.9,
+    "genre": "東方Project",
+    "version": "MATE",
+    "nickname": [],
+    "coverUrl": "https://otoge-db.net/chunithm/jacket/555cd99cbf7241a9.jpg",
+    "bpm": 246,
+    "notes": {
+      "total": 1659,
+      "tap": 914,
+      "hold": 45,
+      "slide": 393,
+      "air": 232,
+      "flick": 75
+    }
+  },
+  {
+    "id": "3073",
+    "title": "Dark Falchion",
+    "difficulty": "EXP",
+    "constant": 13.3,
+    "genre": "VARIETY",
+    "version": "MATE",
+    "nickname": [],
+    "coverUrl": "https://otoge-db.net/chunithm/jacket/f06ac44bd47da88c.jpg",
+    "bpm": 180,
+    "notes": {
+      "total": 0,
+      "tap": 0,
+      "hold": 0,
+      "slide": 0,
+      "air": 0,
+      "flick": 0
+    }
+  },
+  {
+    "id": "3073",
+    "title": "Dark Falchion",
+    "difficulty": "MAS",
+    "constant": 15,
+    "genre": "VARIETY",
+    "version": "MATE",
+    "nickname": [],
+    "coverUrl": "https://otoge-db.net/chunithm/jacket/f06ac44bd47da88c.jpg",
+    "bpm": 180,
+    "notes": {
+      "total": 2387,
+      "tap": 1352,
+      "hold": 111,
+      "slide": 510,
+      "air": 325,
+      "flick": 89
+    }
+  },
+  {
+    "id": "3068",
+    "title": "物凄い狂っとるフランちゃんが物凄いうた",
+    "difficulty": "MAS",
+    "constant": 14.1,
+    "genre": "東方Project",
+    "version": "MATE",
+    "nickname": [],
+    "coverUrl": "https://otoge-db.net/chunithm/jacket/b080e086e37326b1.jpg",
+    "bpm": 170,
+    "notes": {
+      "total": 1880,
+      "tap": 956,
+      "hold": 143,
+      "slide": 222,
+      "air": 485,
+      "flick": 74
+    }
+  },
+  {
+    "id": "3069",
+    "title": "狂命",
+    "difficulty": "EXP",
+    "constant": 13.5,
+    "genre": "ORIGINAL",
+    "version": "MATE",
+    "nickname": [],
+    "coverUrl": "https://otoge-db.net/chunithm/jacket/5f167154120c68ed.jpg",
+    "bpm": null,
+    "notes": {
+      "total": 1629,
+      "tap": 831,
+      "hold": 188,
+      "slide": 439,
+      "air": 171,
+      "flick": 0
+    }
+  },
+  {
+    "id": "3069",
+    "title": "狂命",
+    "difficulty": "MAS",
+    "constant": 15.2,
+    "genre": "ORIGINAL",
+    "version": "MATE",
+    "nickname": [],
+    "coverUrl": "https://otoge-db.net/chunithm/jacket/5f167154120c68ed.jpg",
+    "bpm": null,
+    "notes": {
+      "total": 2452,
+      "tap": 1296,
+      "hold": 228,
+      "slide": 427,
+      "air": 352,
+      "flick": 150
+    }
+  },
+  {
+    "id": "3071",
+    "title": "Amusing Flavor",
+    "difficulty": "MAS",
+    "constant": 14.4,
+    "genre": "POPS & ANIME",
+    "version": "MATE",
+    "nickname": [],
+    "coverUrl": "https://otoge-db.net/chunithm/jacket/2da688b835c957b0.jpg",
     "bpm": null,
     "notes": {
       "total": 0,
@@ -33218,6 +33408,101 @@
       "slide": 0,
       "air": 0,
       "flick": 0
+    }
+  },
+  {
+    "id": "3070",
+    "title": "ふたりのスタートボタン",
+    "difficulty": "MAS",
+    "constant": 13,
+    "genre": "POPS & ANIME",
+    "version": "MATE",
+    "nickname": [],
+    "coverUrl": "https://otoge-db.net/chunithm/jacket/dc16c5b06bee8803.jpg",
+    "bpm": null,
+    "notes": {
+      "total": 0,
+      "tap": 0,
+      "hold": 0,
+      "slide": 0,
+      "air": 0,
+      "flick": 0
+    }
+  },
+  {
+    "id": "3065",
+    "title": "P-KATSU",
+    "difficulty": "MAS",
+    "constant": 13.1,
+    "genre": "POPS & ANIME",
+    "version": "MATE",
+    "nickname": [],
+    "coverUrl": "https://otoge-db.net/chunithm/jacket/3ffbcba18598abf6.jpg",
+    "bpm": 140,
+    "notes": {
+      "total": 1629,
+      "tap": 760,
+      "hold": 97,
+      "slide": 329,
+      "air": 336,
+      "flick": 107
+    }
+  },
+  {
+    "id": "3072",
+    "title": "ぴるぐライド!",
+    "difficulty": "MAS",
+    "constant": 14.2,
+    "genre": "VARIETY",
+    "version": "MATE",
+    "nickname": [],
+    "coverUrl": "https://otoge-db.net/chunithm/jacket/2877b4d46acb4d1b.jpg",
+    "bpm": 153,
+    "notes": {
+      "total": 1658,
+      "tap": 938,
+      "hold": 81,
+      "slide": 248,
+      "air": 297,
+      "flick": 94
+    }
+  },
+  {
+    "id": "3066",
+    "title": "天天天国地獄国 (feat. ななひら & P丸様。)",
+    "difficulty": "MAS",
+    "constant": 13.3,
+    "genre": "POPS & ANIME",
+    "version": "MATE",
+    "nickname": [],
+    "coverUrl": "https://otoge-db.net/chunithm/jacket/d7918752c4fe334c.jpg",
+    "bpm": 140,
+    "notes": {
+      "total": 1594,
+      "tap": 740,
+      "hold": 178,
+      "slide": 328,
+      "air": 300,
+      "flick": 48
+    }
+  },
+  {
+    "id": "3075",
+    "title": "HYPER SAMPLER",
+    "difficulty": "MAS",
+    "constant": 14.2,
+    "genre": "VARIETY",
+    "version": "MATE",
+    "nickname": [],
+    "coverUrl": "https://otoge-db.net/chunithm/jacket/c205a724e66e906c.jpg",
+    "bpm": 160,
+    "notes": {
+      "total": 1660,
+      "tap": 854,
+      "hold": 135,
+      "slide": 226,
+      "air": 364,
+      "flick": 81
     }
   }
 ]

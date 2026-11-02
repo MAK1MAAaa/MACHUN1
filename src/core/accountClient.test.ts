@@ -4,13 +4,13 @@ import { EMPTY_STATE } from './storage';
 afterEach(() => vi.unstubAllGlobals());
 describe('account API client', () => {
   it('keeps the latest workspace when concurrent responses arrive out of order', () => {
-    const current = { state: structuredClone(EMPTY_STATE), revision: 4, legacyMigrated: true };
+    const current = { state: structuredClone(EMPTY_STATE), revision: 4, legacyMigrated: true, exportNickname: '当前昵称' };
     const older = { ...current, revision: 3 };
     expect(newerWorkspace(current, older)).toBe(current);
-    expect(newerWorkspace(current, { ...current, revision: 5 }).revision).toBe(5);
+    expect(newerWorkspace(current, { ...current, revision: 5, exportNickname: '新昵称' })).toMatchObject({ revision: 5, exportNickname: '新昵称' });
   });
   it('sends same-origin JSON actions without an arbitrary user identity', async () => {
-    const fetcher = vi.fn(async () => Response.json({ revision: 2, state: EMPTY_STATE, legacyMigrated: false }));
+    const fetcher = vi.fn(async () => Response.json({ revision: 2, state: EMPTY_STATE, legacyMigrated: false, exportNickname: '' }));
     vi.stubGlobal('fetch', fetcher);
     await accountClient.action({ type: 'manual', key: '1:MAS', score: '1000000' });
     expect(fetcher).toHaveBeenCalledWith('/api/workspace/actions', expect.objectContaining({ method: 'POST', credentials: 'same-origin',
