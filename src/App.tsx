@@ -22,7 +22,6 @@ import {
   SCORE_SOURCE_LABELS,
   type ExternalScoreSource,
   type SourceImportReport,
-  type SourceMergeOptions,
 } from "./core/sources";
 
 type NoticeKind = "success" | "warning" | "error";
@@ -96,8 +95,7 @@ const SOURCE_HELP: Record<ExternalScoreSource, SourceHelpContent> = {
       "下载 chunithm-scores.csv 后，回到本工具点击“选择落雪 CSV / JSON”并选择该文件。",
       "API 方法：在落雪账号详情中生成个人 API 密钥，它不是开发者 API Key。",
       "将个人 API Token 粘贴到输入框，点击“保存 Token”，绑定成功后输入框会清空。",
-      "点击“同步成绩”；以后无需再次输入 Token，默认只合并更高分。",
-      "若曾将国服成绩误导入 MuNET，可启用“国服覆盖 MuNET”后重新同步或导入国服文件。同谱面的 MuNET 记录会被国服记录替换，同分和较低分也可修正；其他来源仍按最高分合并，未匹配的 MuNET 记录保留。",
+      "点击“同步成绩”；以后无需再次输入 Token，只合并更高分。",
     ],
     format: "支持 chunithm-scores.csv 的 id、level_index、score、upload_time 列，以及落雪标准 success/code/data JSON。仅保留定数 13.0 以上谱面。",
     caution: "Token 由本地后台保存，不写入浏览器成绩存储或导出文件；解绑会清除本机保存的 Token。",
@@ -118,8 +116,7 @@ function SourceTag({ source }: { source: ScoreSource }) {
 
 function sourceReportText(report: SourceImportReport): string {
   const changed = report.importedScores + report.updatedScores;
-  const corrected = report.replacedMunetScores ? `，其中覆盖 MuNET ${report.replacedMunetScores} 条` : "";
-  return `已写入 ${changed} 条（新增 ${report.importedScores}、更新 ${report.updatedScores}）${corrected}，跳过 ${report.skippedScores + report.unknownCharts + report.invalidEntries} 条`;
+  return `已写入 ${changed} 条（新增 ${report.importedScores}、更新 ${report.updatedScores}），跳过 ${report.skippedScores + report.unknownCharts + report.invalidEntries} 条`;
 }
 
 interface AppProps {
@@ -143,8 +140,7 @@ function App({ account, initial, initialNotice }: AppProps) {
   const [imageExport, setImageExport] = useState<{ file: DownloadResource; label: string; missingCovers: number } | null>(null);
   const imageExportRef = useRef<DownloadResource | null>(null);
   const imageGeneration = useRef({ version: 0, running: false });
-  const [pendingSource, setPendingSource] = useState<{ source: ExternalScoreSource; mergeOptions?: SourceMergeOptions } | null>(null);
-  const [nationalRepairEnabled, setNationalRepairEnabled] = useState(false);
+  const [pendingSource, setPendingSource] = useState<ExternalScoreSource | null>(null);
   const [helpSource, setHelpSource] = useState<ExternalScoreSource | null>(null);
   const sourceFileInputRef = useRef<HTMLInputElement>(null);
   const backupInputRef = useRef<HTMLInputElement>(null);
@@ -154,8 +150,6 @@ function App({ account, initial, initialNotice }: AppProps) {
     setNotice({ kind: result.report.invalidEntries + result.report.unknownCharts > 0 ? "warning" : "success",
       text: `${SCORE_SOURCE_LABELS[result.source]}同步完成：${sourceReportText(result.report)}` });
   });
-  const nationalRepairBusy = Boolean(sourceSync.pending.lxns)
-    || sourceSync.connections.lxns.status === "syncing" || sourceSync.connections.lxns.status === "binding";
 
   useEffect(() => { setExportNickname(savedExportNickname); }, [savedExportNickname]);
 
@@ -285,7 +279,7 @@ function App({ account, initial, initialNotice }: AppProps) {
   };
 
   const openSourceImport = (source: ExternalScoreSource) => {
-    setPendingSource({ source, mergeOptions: source === "lxns" && nationalRepairEnabled ? { overwriteMunet: true } : undefined });
+    setPendingSource(source);
     sourceFileInputRef.current?.click();
   };
 
@@ -293,14 +287,14 @@ function App({ account, initial, initialNotice }: AppProps) {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file || !pendingSource) return;
-    const { source, mergeOptions } = pendingSource;
+    const source = pendingSource;
     if (file.size > 10 * 1024 * 1024) {
       setNotice({ kind: "error", text: "导入文件不能超过 10 MB" });
       return;
     }
     try {
       const raw = await file.text();
-      const result = await workspace.action({ type: "import", source, raw, filename: file.name, mergeOptions });
+      const result = await workspace.action({ type: "import", source, raw, filename: file.name });
       setNotice({ kind: result.report && result.report.invalidEntries + result.report.unknownCharts > 0 ? "warning" : "success",
         text: result.report ? `${SCORE_SOURCE_LABELS[source]}导入完成：${sourceReportText(result.report)}` : result.notice ?? "导入完成" });
     } catch (error) {
@@ -375,6 +369,7 @@ function App({ account, initial, initialNotice }: AppProps) {
           <button
             type="button"
             className="source-tools-toggle"
+            aria-label={sourceToolsOpen ? "收起成绩来源" : "展开成绩来源"}
             aria-expanded={sourceToolsOpen}
             aria-controls="source-tools-content"
             onClick={() => setSourceToolsOpen((open) => !open)}
@@ -384,17 +379,14 @@ function App({ account, initial, initialNotice }: AppProps) {
               <strong>成绩来源</strong>
               <small>Rin服 / 大饼 / 国服 · 落雪 / MuNET</small>
             </span>
-            <span>{sourceToolsOpen ? "完全折叠" : "展开来源"}<i aria-hidden="true">{sourceToolsOpen ? "−" : "+"}</i></span>
+            <span className="source-tools-indicator" aria-hidden="true">
+              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="m5 7.5 5 5 5-5" />
+              </svg>
+            </span>
           </button>
 
-          {sourceToolsOpen && <div className="source-section" id="source-tools-content">
-            <div className="section-heading">
-              <div>
-                <span className="section-index">02</span>
-                <h2>服务器成绩同步</h2>
-              </div>
-              <p>只合并更高分；定数与 Rating 始终按当前离线曲库重算</p>
-            </div>
+          {sourceToolsOpen && <div className="source-tools-content" id="source-tools-content">
             {sourceSync.serviceError && <div className="source-service-error" role="alert">
               <p>{sourceSync.serviceError}</p>
               <button type="button" onClick={() => { void sourceSync.refresh(); }}>重新连接</button>
@@ -402,10 +394,7 @@ function App({ account, initial, initialNotice }: AppProps) {
             <div className="source-grid">
             <article className="source-card munet">
               <div className="source-card-heading">
-                <div>
-                  <span className="source-badge">CHUNITHM SAVE DATA</span>
-                  <h3>MuNET</h3>
-                </div>
+                <h3>MuNET</h3>
                 <div className="source-card-tools">
                   <SourceTag source="munet" />
                   <button
@@ -417,9 +406,7 @@ function App({ account, initial, initialNotice }: AppProps) {
                   >?</button>
                 </div>
               </div>
-              <p>在独立窗口登录 MuNET，本机后台记住会话；点击同步以更新谱面最高分。</p>
               <SourceSyncControls source="munet" controller={sourceSync} />
-              <p className="source-sync-note">MuNET 分数严格高于已有国服成绩时才会覆盖；同分和较低分保留国服成绩及来源。</p>
               <div className="source-actions">
                 <button type="button" className="source-import-button" onClick={() => openSourceImport("munet")}>选择 MuNET JSON 文件</button>
               </div>
@@ -427,10 +414,7 @@ function App({ account, initial, initialNotice }: AppProps) {
 
             <article className="source-card rin">
               <div className="source-card-heading">
-                <div>
-                  <span className="source-badge">BEMANICN</span>
-                  <h3>Rin服</h3>
-                </div>
+                <h3>Rin服</h3>
                 <div className="source-card-tools">
                   <SourceTag source="rin" />
                   <button
@@ -442,7 +426,6 @@ function App({ account, initial, initialNotice }: AppProps) {
                   >?</button>
                 </div>
               </div>
-              <p>登录 Rin 后绑定当前卡片，后续按该卡同步完整谱面最高分记录。</p>
               <SourceSyncControls source="rin" controller={sourceSync} />
               <div className="source-actions">
                 <button type="button" className="source-import-button" onClick={() => openSourceImport("rin")}>选择 Rin JSON 文件</button>
@@ -452,10 +435,7 @@ function App({ account, initial, initialNotice }: AppProps) {
 
             <article className="source-card otogame">
               <div className="source-card-heading">
-                <div>
-                  <span className="source-badge">BEMANICN</span>
-                  <h3>大饼</h3>
-                </div>
+                <h3>大饼</h3>
                 <div className="source-card-tools">
                   <SourceTag source="otogame" />
                   <button
@@ -467,7 +447,6 @@ function App({ account, initial, initialNotice }: AppProps) {
                   >?</button>
                 </div>
               </div>
-              <p>读取绑定主卡的游玩历史，提取 EXP／MAS／ULT 最高分并关联当前离线曲库。</p>
               <SourceSyncControls source="otogame" controller={sourceSync} />
               <div className="source-actions">
                 <button type="button" className="source-import-button" onClick={() => openSourceImport("otogame")}>选择大饼 JSON 文件</button>
@@ -477,10 +456,7 @@ function App({ account, initial, initialNotice }: AppProps) {
 
             <article className="source-card lxns">
               <div className="source-card-heading">
-                <div>
-                  <span className="source-badge">PERSONAL API</span>
-                  <h3>国服 · 落雪</h3>
-                </div>
+                <h3>国服 · 落雪</h3>
                 <div className="source-card-tools">
                   <SourceTag source="lxns" />
                   <button
@@ -492,16 +468,7 @@ function App({ account, initial, initialNotice }: AppProps) {
                   >?</button>
                 </div>
               </div>
-              <p>首次保存个人 API Token 到本机后台，以后可直接同步，也可离线导入成绩文件。</p>
-              <div className="source-repair-controls">
-                <button type="button" className="source-repair-toggle" aria-pressed={nationalRepairEnabled} disabled={nationalRepairBusy} onClick={() => setNationalRepairEnabled((enabled) => !enabled)}>
-                  国服覆盖 MuNET
-                </button>
-                <p className="source-sync-note">{nationalRepairEnabled
-                  ? "已启用：国服同步或文件导入将替换同谱面的 MuNET 记录，同分和较低分也会覆盖。其他来源仍按最高分合并，未匹配的 MuNET 记录保留。"
-                  : "曾把国服成绩误导入 MuNET 时，可启用此模式后重新同步或导入国服文件；默认仅合并更高分。"}</p>
-              </div>
-              <SourceSyncControls source="lxns" controller={sourceSync} mergeOptions={nationalRepairEnabled ? { overwriteMunet: true } : undefined} />
+              <SourceSyncControls source="lxns" controller={sourceSync} />
               <div className="source-actions split">
                 <button type="button" className="source-import-button" onClick={() => openSourceImport("lxns")}>选择落雪 CSV / JSON</button>
                 <a href="https://maimai.lxns.net/docs/api/chunithm" target="_blank" rel="noreferrer">API 文档</a>

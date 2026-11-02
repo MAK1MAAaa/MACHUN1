@@ -126,6 +126,21 @@ describe("local HTTP boundary", () => {
     expect(manager.sync).toHaveBeenCalledTimes(1);
   });
 
+  it("rejects removed score override options before contacting a source", async () => {
+    const { send, manager } = await setup();
+    for (const input of [
+      { mergeOptions: { overwriteMunet: true } },
+      { mergeOptions: { overwriteMunet: false } },
+      { mergeOptions: {} },
+      { overwriteMunet: true },
+    ]) {
+      const response = await send("/api/sources/lxns/sync", { method: "POST", headers: writeHeaders, body: JSON.stringify(input) });
+      expect(response.status).toBe(400);
+      expect(JSON.parse(response.text).code).toBe("INVALID_REQUEST");
+    }
+    expect(manager.sync).not.toHaveBeenCalled();
+  });
+
   it("rejects malformed and oversized JSON before running source operations", async () => {
     const { send, manager } = await setup();
     for (const content of ["not-json", "[]"]) {

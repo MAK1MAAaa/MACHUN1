@@ -41,7 +41,7 @@ function lowerScorePayload(source: ExternalScoreSource, score = 1_005_000): unkn
 }
 
 describe("external score sources", () => {
-  it.each([1_000_000, 1_005_000, 1_009_000])("explicit national-server repair replaces matching MuNET scores with %i", (score) => {
+  it.each([1_000_000, 1_005_000, 1_009_000])("only replaces a MuNET score when national-server score %i is higher", (score) => {
     const current = importSourcePayload({ userMusicDetailList: [
       { musicId: 100, level: 3, scoreMax: 1_005_000 },
       { musicId: 100, level: 4, scoreMax: 1_009_000 },
@@ -49,64 +49,59 @@ describe("external score sources", () => {
     current.nicknameOverrides["100"] = ["保留别名"];
     const before = structuredClone(current);
     const payload = [{ id: 100, level_index: 3, score }];
-    const repaired = importSourcePayload(payload, "lxns", current, chartMap, "2026-10-04T00:00:00.000Z", { overwriteMunet: true });
-    expect(repaired.state.scores["100:MAS"]).toMatchObject({ score, source: "lxns", updatedAt: "2026-10-04T00:00:00.000Z" });
-    expect(repaired.state.scores["100:MAS"].rating).toBe(importSourcePayload(payload, "lxns", EMPTY_STATE, chartMap).state.scores["100:MAS"].rating);
-    expect(repaired.state.scores["100:ULT"]).toEqual(before.scores["100:ULT"]);
-    expect(repaired.state.nicknameOverrides).toEqual(before.nicknameOverrides);
-    expect(repaired.report).toMatchObject({ updatedScores: 1, replacedMunetScores: 1, skippedScores: 0 });
+    const merged = importSourcePayload(payload, "lxns", current, chartMap, "2026-10-04T00:00:00.000Z");
+    if (score > 1_005_000) {
+      expect(merged.state.scores["100:MAS"]).toMatchObject({ score, source: "lxns", updatedAt: "2026-10-04T00:00:00.000Z" });
+      expect(merged.state.scores["100:MAS"].rating).toBe(importSourcePayload(payload, "lxns", EMPTY_STATE, chartMap).state.scores["100:MAS"].rating);
+      expect(merged.report).toMatchObject({ updatedScores: 1, skippedScores: 0 });
+    } else {
+      expect(merged.state).toEqual(before);
+      expect(merged.report).toMatchObject({ updatedScores: 0, skippedScores: 1 });
+    }
+    expect(merged.state.scores["100:ULT"]).toEqual(before.scores["100:ULT"]);
+    expect(merged.state.nicknameOverrides).toEqual(before.nicknameOverrides);
     expect(current).toEqual(before);
   });
 
-  it("keeps normal highest-score behavior unless national-server repair is explicitly enabled", () => {
-    const current = importSourcePayload({ userMusicDetailList: [
-      { musicId: 100, level: 3, scoreMax: 1_005_000 },
-    ] }, "munet", EMPTY_STATE, chartMap).state;
-    for (const options of [undefined, { overwriteMunet: false }]) {
-      for (const score of [1_000_000, 1_005_000]) {
-        const merged = importSourcePayload([{ id: 100, level_index: 3, score }], "lxns", current, chartMap, undefined, options);
-        expect(merged.state).toEqual(current);
-        expect(merged.report).toMatchObject({ updatedScores: 0, skippedScores: 1 });
-        expect(merged.report.replacedMunetScores).toBeUndefined();
-      }
-    }
-  });
-
-  it.each(["manual", "rin", "otogame", "lxns"] as const)("repair keeps the highest-score rule for an existing %s record", (source) => {
+  it.each(["manual", "rin", "otogame", "lxns"] as const)("keeps the highest-score rule for an existing %s record", (source) => {
     const current = importSourcePayload([{ id: 100, level_index: 3, score: 1_005_000 }], "rin", EMPTY_STATE, chartMap).state;
     current.scores["100:MAS"].source = source;
     for (const score of [1_000_000, 1_005_000]) {
-      const merged = importSourcePayload([{ id: 100, level_index: 3, score }], "lxns", current, chartMap, undefined, { overwriteMunet: true });
+      const merged = importSourcePayload([{ id: 100, level_index: 3, score }], "lxns", current, chartMap);
       expect(merged.state).toEqual(current);
-      expect(merged.report.replacedMunetScores).toBeUndefined();
     }
-    const raised = importSourcePayload([{ id: 100, level_index: 3, score: 1_009_000 }], "lxns", current, chartMap, undefined, { overwriteMunet: true });
+    const raised = importSourcePayload([{ id: 100, level_index: 3, score: 1_009_000 }], "lxns", current, chartMap);
     expect(raised.state.scores["100:MAS"]).toMatchObject({ score: 1_009_000, source: "lxns" });
     expect(raised.report).toMatchObject({ updatedScores: 1 });
-    expect(raised.report.replacedMunetScores).toBeUndefined();
   });
 
-  it.each(["rin", "otogame", "munet"] as const)("ignores national-server repair for incoming %s data", (source) => {
+  it.each(["rin", "otogame", "munet"] as const)("preserves a higher MuNET score for incoming %s data", (source) => {
     const current = importSourcePayload({ userMusicDetailList: [
       { musicId: 100, level: 3, scoreMax: 1_005_000 },
     ] }, "munet", EMPTY_STATE, chartMap).state;
     const payload = source === "munet"
       ? { userMusicDetailList: [{ musicId: 100, level: 3, scoreMax: 1_000_000 }] }
       : [{ id: 100, level_index: 3, score: 1_000_000 }];
-    const merged = importSourcePayload(payload, source, current, chartMap, undefined, { overwriteMunet: true });
+    const merged = importSourcePayload(payload, source, current, chartMap);
     expect(merged.state).toEqual(current);
-    expect(merged.report.replacedMunetScores).toBeUndefined();
   });
 
-  it.each(["json", "csv"] as const)("repairs from national-server %s files after selecting the highest input per chart", (format) => {
-    const current = importSourcePayload({ userMusicDetailList: [
-      { musicId: 100, level: 3, scoreMax: 1_009_000 },
-    ] }, "munet", EMPTY_STATE, chartMap).state;
+  it.each(["json", "csv"] as const)("merges national-server %s files by the highest input without lowering MuNET scores", (format) => {
     const rows = [{ id: 100, level_index: 3, score: 1_005_000 }, { id: 100, level_index: 3, score: 1_000_000 }];
     const raw = format === "json" ? JSON.stringify(rows) : "id,level_index,score\n100,3,1005000\n100,3,1000000";
-    const merged = importSourceFile(raw, "lxns", current, chartMap, `scores.${format}`, { overwriteMunet: true });
-    expect(merged.state.scores["100:MAS"]).toMatchObject({ score: 1_005_000, source: "lxns" });
-    expect(merged.report).toMatchObject({ parsedScores: 2, updatedScores: 1, replacedMunetScores: 1, skippedScores: 1 });
+    for (const existingScore of [1_000_000, 1_005_000, 1_009_000]) {
+      const current = importSourcePayload({ userMusicDetailList: [
+        { musicId: 100, level: 3, scoreMax: existingScore },
+      ] }, "munet", EMPTY_STATE, chartMap).state;
+      const merged = importSourceFile(raw, "lxns", current, chartMap, `scores.${format}`);
+      if (existingScore < 1_005_000) {
+        expect(merged.state.scores["100:MAS"]).toMatchObject({ score: 1_005_000, source: "lxns" });
+        expect(merged.report).toMatchObject({ parsedScores: 2, updatedScores: 1, skippedScores: 1 });
+      } else {
+        expect(merged.state).toEqual(current);
+        expect(merged.report).toMatchObject({ parsedScores: 2, updatedScores: 0, skippedScores: 2 });
+      }
+    }
   });
 
   it("leaves MuNET data unchanged for failed, invalid, or unmatched national-server input", () => {
@@ -114,16 +109,14 @@ describe("external score sources", () => {
       { musicId: 100, level: 3, scoreMax: 1_009_000 },
     ] }, "munet", EMPTY_STATE, chartMap).state;
     const before = structuredClone(current);
-    const options = { overwriteMunet: true };
-    expect(() => importSourceJson("invalid JSON", "lxns", current, chartMap, options)).toThrow("JSON");
-    expect(() => importSourceFile("id,score\n100,1000000", "lxns", current, chartMap, "scores.csv", options)).toThrow("表头");
+    expect(() => importSourceJson("invalid JSON", "lxns", current, chartMap)).toThrow("JSON");
+    expect(() => importSourceFile("id,score\n100,1000000", "lxns", current, chartMap, "scores.csv")).toThrow("表头");
     const merged = importSourcePayload([
       { id: 999, level_index: 3, score: 1_000_000 },
       { id: 100, level_index: 3, score: -1 },
-    ], "lxns", current, chartMap, undefined, options);
+    ], "lxns", current, chartMap);
     expect(merged.state).toEqual(before);
     expect(merged.report).toMatchObject({ unknownCharts: 1, invalidEntries: 1, updatedScores: 0 });
-    expect(merged.report.replacedMunetScores).toBeUndefined();
     expect(current).toEqual(before);
   });
 

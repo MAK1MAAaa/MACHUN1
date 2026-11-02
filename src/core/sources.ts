@@ -11,10 +11,6 @@ import { mergeScoreAchievements, readScoreAchievements } from "./scoreAchievemen
 
 export type ExternalScoreSource = Exclude<ScoreSource, "manual">;
 
-export interface SourceMergeOptions {
-  overwriteMunet?: boolean;
-}
-
 export const SCORE_SOURCE_LABELS: Record<ScoreSource, string> = {
   manual: "神秘游客",
   rin: "Rin服",
@@ -30,7 +26,6 @@ export interface SourceImportReport {
   skippedScores: number;
   unknownCharts: number;
   invalidEntries: number;
-  replacedMunetScores?: number;
 }
 
 const SCORE_FIELDS = ["score", "score_max", "scoreMax"] as const;
@@ -141,7 +136,6 @@ export function importSourcePayload(
   current: LocalState,
   charts: Map<string, CatalogChart>,
   now = new Date().toISOString(),
-  options: SourceMergeOptions = {},
 ): { state: LocalState; report: SourceImportReport } {
   const candidates: Record<string, unknown>[] = [];
   if (source === "munet") {
@@ -224,13 +218,6 @@ export function importSourcePayload(
       report.skippedScores += 1;
       continue;
     }
-    if (source === "lxns" && options.overwriteMunet && state.scores[key]?.source === "munet") {
-      // Repair only matching records: a MuNET archive can contain scores imported from the national server.
-      state.scores[key] = record;
-      report.updatedScores += 1;
-      report.replacedMunetScores = (report.replacedMunetScores ?? 0) + 1;
-      continue;
-    }
     const result = upsertHighScore(state, record);
     if (result === "created") report.importedScores += 1;
     else if (result === "updated") report.updatedScores += 1;
@@ -245,7 +232,6 @@ export function importSourceJson(
   source: ExternalScoreSource,
   current: LocalState,
   charts: Map<string, CatalogChart>,
-  options: SourceMergeOptions = {},
 ): { state: LocalState; report: SourceImportReport } {
   let payload: unknown;
   try {
@@ -253,7 +239,7 @@ export function importSourceJson(
   } catch {
     throw new Error("导入文件不是有效的 JSON");
   }
-  return importSourcePayload(payload, source, current, charts, undefined, options);
+  return importSourcePayload(payload, source, current, charts);
 }
 
 function parseCsv(raw: string): Record<string, string>[] {
@@ -312,14 +298,13 @@ export function importSourceFile(
   current: LocalState,
   charts: Map<string, CatalogChart>,
   filename: string,
-  options: SourceMergeOptions = {},
 ): { state: LocalState; report: SourceImportReport } {
   const isCsv = filename.toLocaleLowerCase("en-US").endsWith(".csv");
   if (isCsv) {
     if (source !== "lxns") throw new Error("CSV 文件只支持从国服 · 落雪入口导入");
-    return importSourcePayload(parseCsv(raw), source, current, charts, undefined, options);
+    return importSourcePayload(parseCsv(raw), source, current, charts);
   }
-  return importSourceJson(raw, source, current, charts, options);
+  return importSourceJson(raw, source, current, charts);
 }
 
 const LXNS_SCORES_URL = "https://maimai.lxns.net/api/v0/user/chunithm/player/scores";

@@ -1,11 +1,11 @@
 import type { LocalState } from "../types";
 import type { SyncResult } from "../syncTypes";
 import { catalogByKey } from "./catalog";
-import { importSourcePayload, type SourceMergeOptions } from "./sources";
+import { importSourcePayload } from "./sources";
 import { mergeScoreAchievements } from "./scoreAchievements";
 
 /** Merge against the state at response time; never replace it with a request-time snapshot. */
-export function mergeSyncResult(current: LocalState, result: SyncResult, options: SourceMergeOptions = {}) {
+export function mergeSyncResult(current: LocalState, result: SyncResult) {
   const candidates = result.records.map((record) => ({
     musicId: record.id,
     level: record.difficulty,
@@ -16,7 +16,7 @@ export function mergeSyncResult(current: LocalState, result: SyncResult, options
   const payload = result.source === "munet"
     ? { gameId: "SDHD", userMusicDetailList: candidates }
     : candidates;
-  const merged = importSourcePayload(payload, result.source, current, catalogByKey, undefined, options);
+  const merged = importSourcePayload(payload, result.source, current, catalogByKey);
   return {
     state: merged.state,
     report: {
@@ -26,7 +26,6 @@ export function mergeSyncResult(current: LocalState, result: SyncResult, options
       skippedScores: result.report.skippedScores + merged.report.skippedScores,
       unknownCharts: result.report.unknownCharts + merged.report.unknownCharts,
       invalidEntries: result.report.invalidEntries + merged.report.invalidEntries,
-      ...(merged.report.replacedMunetScores === undefined ? {} : { replacedMunetScores: merged.report.replacedMunetScores }),
     },
   };
 }

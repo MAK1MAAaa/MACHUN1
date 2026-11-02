@@ -103,16 +103,16 @@ describe("score achievements", () => {
     expect(importSourcePayload(exported, "otogame", EMPTY_STATE, catalogByKey).state.scores[key]).toMatchObject({ clear: "catastrophy" });
   });
 
-  it("keeps unknown legacy clear data unknown and preserves country replacement rules", () => {
+  it("keeps unknown legacy clear data unknown and preserves the best score across country sources", () => {
     const state = { ...structuredClone(EMPTY_STATE), scores: { [key]: makeRecord(1_008_000) } };
     expect(parseLocalState(JSON.stringify(state)).scores[key]).not.toHaveProperty("clear");
     state.scores[key] = { ...makeRecord(1_009_000), source: "lxns", clear: "hard" };
     const payload = { userMusicDetailList: [{ musicId: chart.id, level, scoreMax: 1_008_000, clear: "catastrophy" }] };
     expect(importSourcePayload(payload, "munet", state, catalogByKey).state).toEqual(state);
     state.scores[key] = { ...makeRecord(1_009_000), source: "munet", clear: "catastrophy" };
-    const repaired = importSourcePayload([{ id: chart.id, level_index: level, score: 1_000_000, clear: "hard" }],
-      "lxns", state, catalogByKey, undefined, { overwriteMunet: true });
-    expect(repaired.state.scores[key]).toMatchObject({ score: 1_000_000, source: "lxns", clear: "hard" });
+    const merged = importSourcePayload([{ id: chart.id, level_index: level, score: 1_000_000, clear: "hard" }],
+      "lxns", state, catalogByKey);
+    expect(merged.state).toEqual(state);
   });
 
   it.each(["rin", "munet", "otogame", "lxns"] as const)("retains metadata while importing %s", (source) => {
@@ -144,14 +144,17 @@ describe("score achievements", () => {
     expect(correctScore(state, key, "990000").scores[key]).toMatchObject({ score: 990_000, source: "manual", combo: "aj" });
   });
 
-  it("preserves national-server guards and resets foreign metadata during explicit repair", () => {
+  it("preserves national-server guards and retains achievements when a higher score changes source", () => {
     const current: LocalState = { ...structuredClone(EMPTY_STATE), scores: { [key]: { ...makeRecord(1_009_000), source: "lxns", combo: "fc" } } };
     const munet = { userMusicDetailList: [{ musicId: chart.id, level, scoreMax: 1_008_000, isAllJustice: true }] };
     expect(importSourcePayload(munet, "munet", current, catalogByKey).state).toEqual(current);
     current.scores[key] = { ...current.scores[key], source: "munet", combo: "ajc" };
-    const repaired = importSourcePayload([{ id: chart.id, level_index: level, score: 1_000_000, full_combo: "fullcombo" }],
-      "lxns", current, catalogByKey, undefined, { overwriteMunet: true });
-    expect(repaired.state.scores[key]).toMatchObject({ score: 1_000_000, source: "lxns", combo: "fc" });
+    const lower = importSourcePayload([{ id: chart.id, level_index: level, score: 1_000_000, full_combo: "fullcombo" }],
+      "lxns", current, catalogByKey);
+    expect(lower.state).toEqual(current);
+    const higher = importSourcePayload([{ id: chart.id, level_index: level, score: 1_009_500, full_combo: "fullcombo" }],
+      "lxns", current, catalogByKey);
+    expect(higher.state.scores[key]).toMatchObject({ score: 1_009_500, source: "lxns", combo: "ajc" });
   });
 
   it("retains achievements in both image datasets and through OTO JSON round trips", () => {
