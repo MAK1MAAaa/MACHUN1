@@ -92,7 +92,7 @@ footer,
 .site-header {
   position: relative;
   display: flex;
-  align-items: flex-end;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 32px;
   padding: 60px 0 36px;
@@ -117,11 +117,6 @@ footer,
 }
 
 .brand-block h1 span { color: var(--cyan); }
-.brand-block p { margin: 18px 0 0; color: var(--muted); font-size: 1rem; }
-.hero-tags { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 20px; }
-.hero-tags span { padding: 6px 9px; border: 1px solid rgba(107, 148, 114, 0.24); border-radius: 999px; background: rgba(107, 148, 114, 0.06); color: #94b9ce; font-size: 0.58rem; font-weight: 800; letter-spacing: 0.12em; }
-.hero-tags span:nth-child(2) { border-color: rgba(143, 166, 134, 0.4); background: rgba(143, 166, 134, 0.1); }
-.hero-tags span:nth-child(3) { border-color: rgba(169, 159, 118, 0.32); background: rgba(169, 159, 118, 0.07); }
 
 .catalog-stamp {
   min-width: 190px;
@@ -612,7 +607,6 @@ footer p { margin: 0; }
 * { scrollbar-color: #a9bca8 #edf2eb; }
 ::selection { color: #243b2d; background: #d4e4cd; }
 .cover-image { background: linear-gradient(145deg, #e3ebe0, #d1ddce); }
-.hero-tags span { color: #60705a; }
 .catalog-stamp { background: rgba(255, 255, 255, 0.55); }
 .summary-card { background: linear-gradient(145deg, rgba(255, 255, 255, 0.82), rgba(232, 240, 226, 0.58)); }
 .summary-card.primary { background: linear-gradient(135deg, rgba(177, 201, 161, 0.38), rgba(255, 255, 255, 0.68)); }
@@ -693,8 +687,6 @@ footer { color: #687b62; }
   .site-header { padding-top: 34px; align-items: flex-start; }
   .catalog-stamp { display: none; }
   .brand-block h1 { font-size: 2.65rem; }
-  .brand-block p { font-size: 0.88rem; line-height: 1.6; }
-  .hero-tags { margin-top: 15px; }
   .summary-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
   .summary-card { min-height: 112px; padding: 15px; }
   .summary-card strong { font-size: 2rem; }
@@ -732,7 +724,6 @@ footer { color: #687b62; }
 
 @media (max-width: 420px) {
   .summary-grid { grid-template-columns: 1fr; }
-  .hero-tags span:nth-child(3) { display: none; }
   .local-tools-toggle b { display: none; }
   .local-tools-toggle > span:first-child { gap: 0; }
   .local-tools-toggle > span:last-child { padding-left: 9px; }
