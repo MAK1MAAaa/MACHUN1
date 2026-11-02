@@ -13,7 +13,7 @@
 
 [快速开始](#quick-start) · [绑定与同步](#sync) · [成绩与导出](#records) · [开发](#development) · [常见问题](#faq)
 
-[Docker Hub](https://hub.docker.com/r/mak1maaaa/machun1) · [1Panel 部署说明](docs/1panel.md) · [曲库来源](src/data/catalog-sources.json)
+[本地运行](docs/local.md) · [Docker Hub](https://hub.docker.com/r/mak1maaaa/machun1) · [1Panel 部署说明](docs/1panel.md) · [曲库来源](src/data/catalog-sources.json)
 
 </div>
 
@@ -59,16 +59,37 @@ docker compose -p machun1 -f compose.hub.yaml up -d
 
 ### 本机运行
 
-已验收的桌面环境为 macOS。建议 Node.js **24.x**，项目指定 pnpm **10.15.0**，数据库使用 MySQL **8.4**。
+已验收的桌面环境为 macOS。使用 Node.js **24.x**、pnpm **10.15.0** 和 MySQL **8.4**，网页、服务和数据库都可在本机运行。完整初始化 SQL、连接配置和停止方法见 [本地运行指南](docs/local.md)。
 
 ```bash
 git clone https://github.com/MAK1MAAaa/MACHUN1.git
 cd MACHUN1
-pnpm install
+corepack enable
+corepack prepare pnpm@10.15.0 --activate
+pnpm install --frozen-lockfile
 pnpm browser:install
 ```
 
-将数据库连接放入被 Git 忽略的 `.env`。已有远程数据库时，需要本机 SSH 配置中存在 `tencent` 别名：
+在本机 MySQL 按指南执行四项迁移，创建网页用户和仅有 CRUD 权限的数据库应用账号；将连接写入被 Git 忽略的 `.env`：
+
+```dotenv
+DATABASE_URL=mysql://machun_app:replace_with_your_local_password@127.0.0.1:3306/machun1
+```
+
+使用自己的数据库应用密码替换占位符，然后执行：
+
+```bash
+chmod 600 .env
+pnpm db:catalog
+pnpm start
+```
+
+打开 [http://127.0.0.1:4399/](http://127.0.0.1:4399/)，首次使用 `root / pwd` 登录。本机绑定会拉起独立浏览器完成手动登录。
+
+<details>
+<summary>使用现有远程 MySQL 和 SSH 隧道</summary>
+
+本机 SSH 配置中需存在 `tencent` 别名，将 `.env` 中的 `DATABASE_URL` 指向 `127.0.0.1:13306/machun1`：
 
 ```bash
 # 保持该终端运行；将本机 13306 转发到服务器 MySQL 的 3306
@@ -79,9 +100,11 @@ pnpm db:catalog
 pnpm start
 ```
 
-打开 [http://127.0.0.1:4399/](http://127.0.0.1:4399/)。首次建库可显式执行 `pnpm db:setup`，它通过 SSH 管理连接执行 [迁移 SQL](db/migrations/)，创建仅有 CRUD 权限的应用账号；不要把数据库管理账号用于应用运行。自定义数据库参考 [.env.example](.env.example)，管理连接需完成全部迁移。
+首次远程建库时，在尚未配置 `DATABASE_URL` 的独立工作副本中执行 `pnpm db:setup`；脚本通过 SSH 管理连接执行 [迁移 SQL](db/migrations/)，创建仅有 CRUD 权限的应用账号，并生成受限 `.env`。已有本地或自定义连接时，保留现有配置，使用管理连接手动执行迁移。连接示例见 [.env.example](.env.example)。
 
-停止时，在网页服务和 SSH 隧道各自的终端按 **Ctrl+C**。成绩和已保存的绑定不会随进程关闭而删除。
+</details>
+
+停止网页服务时，在启动终端按 **Ctrl+C**；使用 SSH 隧道时也停止隧道终端。成绩和已保存的绑定不会随进程关闭而删除。
 
 <a id="sync"></a>
 
