@@ -3,7 +3,7 @@
 @media (max-width: 660px) {
   input, select, textarea { font-size: 16px; }
   button, .source-actions a { touch-action: manipulation; }
-  .panel, .source-section, .b30-section, .records-section { min-width: 0; padding: 16px; }
+  .panel, .source-tools-content, .b30-section, .records-section { min-width: 0; padding: 16px; }
   .source-card, .source-sync-controls, .source-identity { min-width: 0; }
   .source-connection-heading { flex-wrap: wrap; }
   .source-identity, .source-sync-note, .source-sync-error { overflow-wrap: anywhere; }

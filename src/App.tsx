@@ -375,6 +375,7 @@ function App({ account, initial, initialNotice }: AppProps) {
           <button
             type="button"
             className="source-tools-toggle"
+            aria-label={sourceToolsOpen ? "收起成绩来源" : "展开成绩来源"}
             aria-expanded={sourceToolsOpen}
             aria-controls="source-tools-content"
             onClick={() => setSourceToolsOpen((open) => !open)}
@@ -384,17 +385,14 @@ function App({ account, initial, initialNotice }: AppProps) {
               <strong>成绩来源</strong>
               <small>Rin服 / 大饼 / 国服 · 落雪 / MuNET</small>
             </span>
-            <span>{sourceToolsOpen ? "完全折叠" : "展开来源"}<i aria-hidden="true">{sourceToolsOpen ? "−" : "+"}</i></span>
+            <span className="source-tools-indicator" aria-hidden="true">
+              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="m5 7.5 5 5 5-5" />
+              </svg>
+            </span>
           </button>
 
-          {sourceToolsOpen && <div className="source-section" id="source-tools-content">
-            <div className="section-heading">
-              <div>
-                <span className="section-index">02</span>
-                <h2>服务器成绩同步</h2>
-              </div>
-              <p>只合并更高分；定数与 Rating 始终按当前离线曲库重算</p>
-            </div>
+          {sourceToolsOpen && <div className="source-tools-content" id="source-tools-content">
             {sourceSync.serviceError && <div className="source-service-error" role="alert">
               <p>{sourceSync.serviceError}</p>
               <button type="button" onClick={() => { void sourceSync.refresh(); }}>重新连接</button>
@@ -402,10 +400,7 @@ function App({ account, initial, initialNotice }: AppProps) {
             <div className="source-grid">
             <article className="source-card munet">
               <div className="source-card-heading">
-                <div>
-                  <span className="source-badge">CHUNITHM SAVE DATA</span>
-                  <h3>MuNET</h3>
-                </div>
+                <h3>MuNET</h3>
                 <div className="source-card-tools">
                   <SourceTag source="munet" />
                   <button
@@ -417,9 +412,7 @@ function App({ account, initial, initialNotice }: AppProps) {
                   >?</button>
                 </div>
               </div>
-              <p>在独立窗口登录 MuNET，本机后台记住会话；点击同步以更新谱面最高分。</p>
               <SourceSyncControls source="munet" controller={sourceSync} />
-              <p className="source-sync-note">MuNET 分数严格高于已有国服成绩时才会覆盖；同分和较低分保留国服成绩及来源。</p>
               <div className="source-actions">
                 <button type="button" className="source-import-button" onClick={() => openSourceImport("munet")}>选择 MuNET JSON 文件</button>
               </div>
@@ -427,10 +420,7 @@ function App({ account, initial, initialNotice }: AppProps) {
 
             <article className="source-card rin">
               <div className="source-card-heading">
-                <div>
-                  <span className="source-badge">BEMANICN</span>
-                  <h3>Rin服</h3>
-                </div>
+                <h3>Rin服</h3>
                 <div className="source-card-tools">
                   <SourceTag source="rin" />
                   <button
@@ -442,7 +432,6 @@ function App({ account, initial, initialNotice }: AppProps) {
                   >?</button>
                 </div>
               </div>
-              <p>登录 Rin 后绑定当前卡片，后续按该卡同步完整谱面最高分记录。</p>
               <SourceSyncControls source="rin" controller={sourceSync} />
               <div className="source-actions">
                 <button type="button" className="source-import-button" onClick={() => openSourceImport("rin")}>选择 Rin JSON 文件</button>
@@ -452,10 +441,7 @@ function App({ account, initial, initialNotice }: AppProps) {
 
             <article className="source-card otogame">
               <div className="source-card-heading">
-                <div>
-                  <span className="source-badge">BEMANICN</span>
-                  <h3>大饼</h3>
-                </div>
+                <h3>大饼</h3>
                 <div className="source-card-tools">
                   <SourceTag source="otogame" />
                   <button
@@ -467,7 +453,6 @@ function App({ account, initial, initialNotice }: AppProps) {
                   >?</button>
                 </div>
               </div>
-              <p>读取绑定主卡的游玩历史，提取 EXP／MAS／ULT 最高分并关联当前离线曲库。</p>
               <SourceSyncControls source="otogame" controller={sourceSync} />
               <div className="source-actions">
                 <button type="button" className="source-import-button" onClick={() => openSourceImport("otogame")}>选择大饼 JSON 文件</button>
@@ -477,10 +462,7 @@ function App({ account, initial, initialNotice }: AppProps) {
 
             <article className="source-card lxns">
               <div className="source-card-heading">
-                <div>
-                  <span className="source-badge">PERSONAL API</span>
-                  <h3>国服 · 落雪</h3>
-                </div>
+                <h3>国服 · 落雪</h3>
                 <div className="source-card-tools">
                   <SourceTag source="lxns" />
                   <button
@@ -492,14 +474,11 @@ function App({ account, initial, initialNotice }: AppProps) {
                   >?</button>
                 </div>
               </div>
-              <p>首次保存个人 API Token 到本机后台，以后可直接同步，也可离线导入成绩文件。</p>
               <div className="source-repair-controls">
                 <button type="button" className="source-repair-toggle" aria-pressed={nationalRepairEnabled} disabled={nationalRepairBusy} onClick={() => setNationalRepairEnabled((enabled) => !enabled)}>
                   国服覆盖 MuNET
                 </button>
-                <p className="source-sync-note">{nationalRepairEnabled
-                  ? "已启用：国服同步或文件导入将替换同谱面的 MuNET 记录，同分和较低分也会覆盖。其他来源仍按最高分合并，未匹配的 MuNET 记录保留。"
-                  : "曾把国服成绩误导入 MuNET 时，可启用此模式后重新同步或导入国服文件；默认仅合并更高分。"}</p>
+                <p className="source-sync-note">开启后也覆盖同分和低分。</p>
               </div>
               <SourceSyncControls source="lxns" controller={sourceSync} mergeOptions={nationalRepairEnabled ? { overwriteMunet: true } : undefined} />
               <div className="source-actions split">

@@ -191,6 +191,5 @@ export function SourceSyncControls({ source, controller, mergeOptions }: { sourc
       {connection.lastAttemptAt && <span>最近尝试：{new Date(connection.lastAttemptAt).toLocaleString("zh-CN")}</span>}
     </div>
     {error && <p className="source-sync-error" role="alert">{error}</p>}
-    {canUnbind && <p className="source-sync-note">解绑仅清除当前账号的来源会话，已合并成绩保留。</p>}
   </div>;
 }
