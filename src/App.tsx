@@ -138,7 +138,6 @@ function App({ account, initial, initialNotice }: AppProps) {
   const [editing, setEditing] = useState<{ key: string; title: string; difficulty: string; score: string; isNew: boolean } | null>(null);
   const [editError, setEditError] = useState<string | null>(null);
   const editDialogRef = useRef<HTMLDialogElement>(null);
-  const [localToolsOpen, setLocalToolsOpen] = useState(false);
   const [sourceToolsOpen, setSourceToolsOpen] = useState(false);
   const [exportingImage, setExportingImage] = useState(false);
   const [imageExport, setImageExport] = useState<{ file: DownloadResource; label: string; missingCovers: number } | null>(null);
@@ -149,7 +148,6 @@ function App({ account, initial, initialNotice }: AppProps) {
   const [helpSource, setHelpSource] = useState<ExternalScoreSource | null>(null);
   const sourceFileInputRef = useRef<HTMLInputElement>(null);
   const backupInputRef = useRef<HTMLInputElement>(null);
-  const [backupMode, setBackupMode] = useState<"merge" | "replace">("merge");
   const sourceSync = useSourceSync((result) => {
     if (!result.workspace) throw new Error("同步未返回已保存的工作区，请更新本地服务后重试。");
     workspace.apply(result.workspace);
@@ -323,9 +321,9 @@ function App({ account, initial, initialNotice }: AppProps) {
     event.target.value = "";
     if (!file) return;
     if (file.size > 10 * 1024 * 1024) { setNotice({ kind: "error", text: "备份不能超过 10 MB" }); return; }
-    if (backupMode === "replace" && !window.confirm("确认用备份替换当前账号的全部成绩和个人别名？")) return;
+    if (!window.confirm("确认用备份替换当前账号的全部成绩和个人别名？")) return;
     try {
-      const result = await workspace.action({ type: "backup", raw: await file.text(), mode: backupMode });
+      const result = await workspace.action({ type: "backup", raw: await file.text(), mode: "replace" });
       setNotice({ kind: "success", text: result.notice ?? "备份导入完成" });
     } catch (error) { setNotice({ kind: "error", text: error instanceof Error ? error.message : "备份导入失败" }); }
   };
@@ -357,43 +355,17 @@ function App({ account, initial, initialNotice }: AppProps) {
       {notice && <div className={`toast ${notice.kind}`} role="status">{notice.text}</div>}
 
       <main>
-        <section className={`local-tools-section ${localToolsOpen ? "open" : ""}`}>
-          <button
-            type="button"
-            className="local-tools-toggle"
-            aria-expanded={localToolsOpen}
-            onClick={() => setLocalToolsOpen((open) => !open)}
-          >
-            <span><b>01</b><strong>账号数据</strong></span>
-            <span>{localToolsOpen ? "完全折叠" : "展开工具"}<i aria-hidden="true">{localToolsOpen ? "−" : "+"}</i></span>
-          </button>
-
-          {localToolsOpen && <aside className="panel data-panel">
-            <div className="panel-heading compact">
-              <div>
-                <span className="section-index">01</span>
-                <h2>账号数据</h2>
-              </div>
-            </div>
-            <div className="privacy-note">
-              <strong>{account.username}</strong>
-              <p>成绩和个人别名保存在 MySQL，来源绑定仅供当前账号使用。完整备份包含成绩、来源和达成标记，不包含登录信息。</p>
-            </div>
-            <div className="data-divider" />
-            <dl className="catalog-meta">
-              <div><dt>曲库</dt><dd>{CATALOG_VERSION}</dd></div>
-              <div><dt>谱面数</dt><dd>{catalog.length.toLocaleString("zh-CN")}</dd></div>
-              <div><dt>范围</dt><dd>13.0 — 16.0</dd></div>
-              <div><dt>类型</dt><dd>EXP / MAS / ULT</dd></div>
-            </dl>
-            <div className="backup-tools">
-              <button type="button" onClick={() => { downloadFullBackup(createFullBackup(localState, CATALOG_VERSION)); }}>导出完整备份</button>
-              <label>导入方式 <select aria-label="备份导入方式" value={backupMode} onChange={event => setBackupMode(event.target.value as "merge" | "replace")}><option value="merge">合并最高分</option><option value="replace">替换全部</option></select></label>
-              <button type="button" disabled={workspace.busy} onClick={() => backupInputRef.current?.click()}>导入完整备份</button>
-              <input ref={backupInputRef} type="file" accept=".json,application/json" hidden onChange={event => { void handleBackupImport(event); }} />
-            </div>
-            <button type="button" className="danger-action" disabled={workspace.busy} onClick={() => { void resetAllData(); }}>清空当前账号数据</button>
-          </aside>}
+        <section className="account-data-toolbar" aria-labelledby="account-data-title">
+          <div className="account-data-heading">
+            <span className="section-index">01</span>
+            <h2 id="account-data-title">账号数据</h2>
+          </div>
+          <div className="account-backup-actions">
+            <button type="button" disabled={workspace.busy} onClick={() => backupInputRef.current?.click()}>导入备份</button>
+            <button type="button" onClick={() => { downloadFullBackup(createFullBackup(localState, CATALOG_VERSION)); }}>导出备份</button>
+          </div>
+          <button type="button" className="account-clear-data" disabled={workspace.busy} onClick={() => { void resetAllData(); }}>清除数据</button>
+          <input ref={backupInputRef} type="file" accept=".json,application/json" hidden onChange={event => { void handleBackupImport(event); }} />
         </section>
 
         <section

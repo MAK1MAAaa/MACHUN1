@@ -10,7 +10,7 @@
 .section-heading h2 { letter-spacing: -.02em; }
 .section-index { letter-spacing: .12em; }
 .panel, .source-section, .b30-section, .records-section { box-shadow: 0 4px 18px rgb(65 91 66 / 4%); }
-.local-tools-toggle, .source-tools-toggle { background: #f8fbf5; box-shadow: none; }
+.source-tools-toggle { background: #f8fbf5; box-shadow: none; }
 .source-section { box-shadow: 0 4px 18px rgb(65 91 66 / 4%); }
 .source-section::before, .source-card::after { display: none; }
 .source-card { background: #fff; box-shadow: none; }

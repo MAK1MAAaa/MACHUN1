@@ -7,6 +7,28 @@ import { catalog } from "./core/catalog";
 import { calculateRating } from "./core/rating";
 import type { SingleRating } from "./types";
 
+describe("account data toolbar", () => {
+  it("shows three ordered actions without expansion, import modes or explanatory content", () => {
+    const initial: WorkspaceSnapshot = {
+      state: { schemaVersion: 2, scores: {}, nicknameOverrides: {} },
+      revision: 0, legacyMigrated: true, exportNickname: "",
+    };
+    const html = renderToStaticMarkup(createElement(App, { account: { username: "test" }, initial }));
+    const toolbar = html.match(/<section class="account-data-toolbar"[^>]*>([\s\S]*?)<\/section>/)?.[1] ?? "";
+
+    expect(Boolean(toolbar)).toBe(true);
+    expect(toolbar).toContain('<h2 id="account-data-title">账号数据</h2>');
+    expect([...toolbar.matchAll(/<button\b[^>]*>([^<]*)<\/button>/g)].map(match => match[1]))
+      .toEqual(["导入备份", "导出备份", "清除数据"]);
+    expect(toolbar.indexOf("账号数据")).toBeLessThan(toolbar.indexOf("导入备份"));
+    expect(/<(?:select|p|small|dl|aside)\b/.test(toolbar)).toBe(false);
+    expect(toolbar).toContain('type="file"');
+    expect(toolbar).toContain('hidden=""');
+    expect(html.includes("local-tools-toggle")).toBe(false);
+    expect(html.includes("展开工具")).toBe(false);
+  });
+});
+
 describe("workspace B30 display", () => {
   it.each([0, 35])("keeps analysis and exports without an inline card preview for %i records", (count) => {
     const records: SingleRating[] = catalog.slice(0, count).map((chart, index) => {

@@ -8,7 +8,4 @@
 .account-toolbar button, .account-error button { border: 1px solid var(--line); border-radius: 8px; padding: 8px 14px; background: var(--surface); cursor: pointer; }
 .account-error { color: var(--danger); font-size: .9rem; margin: 18px auto; max-width: 1200px; }
 .account-error p { overflow-wrap: anywhere; }
-.backup-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 16px 0; }
-.backup-tools button, .backup-tools select { padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text); }
-.backup-tools label { font-size: .85rem; }
 @media(max-width: 480px) { .login-card { padding: 28px 22px; } .login-card h1 { font-size: 1.7rem; } }
