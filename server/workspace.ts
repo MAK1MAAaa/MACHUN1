@@ -6,7 +6,7 @@ import { catalogByKey } from '../src/core/catalog';
 import { calculateRating } from '../src/core/rating';
 import { chartKey } from '../src/core/b30';
 import { enterManualScore, EMPTY_STATE, parseLocalState } from '../src/core/storage';
-import { importSourceFile, type ExternalScoreSource, type SourceImportReport, type SourceMergeOptions } from '../src/core/sources';
+import { importSourceFile, type ExternalScoreSource, type SourceImportReport } from '../src/core/sources';
 import { importBackup } from '../src/core/backup';
 import { mergeSyncResult } from '../src/core/sync';
 import { SYNC_SOURCES, type SyncResult } from '../src/syncTypes';
@@ -17,13 +17,6 @@ import { SyncError } from './provider';
 type DataAccess = Pick<Database, 'select' | 'insert' | 'update' | 'delete'>;
 type WorkspaceMutation = { state: LocalState; notice?: string; report?: SourceImportReport; exportNickname?: string };
 function invalid(message = '工作区请求格式无效。'): never { throw new SyncError('INVALID_REQUEST', message, 400); }
-export function mergeOptions(value: unknown, source: string): SourceMergeOptions {
-  if (value === undefined) return {};
-  if (!value || typeof value !== 'object' || Array.isArray(value)) invalid();
-  const option = value as Record<string, unknown>;
-  if (Object.keys(option).some(key => key !== 'overwriteMunet') || (option.overwriteMunet !== undefined && (typeof option.overwriteMunet !== 'boolean' || source !== 'lxns'))) invalid();
-  return { overwriteMunet: option.overwriteMunet as boolean | undefined };
-}
 export class WorkspaceRepository {
   constructor(private readonly db: Database) {}
   private async lock(tx: DataAccess, username: string) {
@@ -92,6 +85,7 @@ export class WorkspaceRepository {
     }));
   }
   async action(username: string, input: Record<string, unknown>): Promise<WorkspaceResult> {
+    if (input.type === 'import' && Object.keys(input).some(key => !['type', 'source', 'raw', 'filename'].includes(key))) invalid();
     return this.change(username, state => {
       switch (input.type) {
         case 'manual': {
@@ -125,7 +119,7 @@ export class WorkspaceRepository {
         }
         case 'import': {
           if (!SYNC_SOURCES.includes(input.source as ExternalScoreSource) || typeof input.raw !== 'string' || Buffer.byteLength(input.raw) > 10 * 1024 * 1024 || typeof input.filename !== 'string' || input.filename.length > 512) invalid();
-          const result = importSourceFile(input.raw, input.source as ExternalScoreSource, state, catalogByKey, input.filename, mergeOptions(input.mergeOptions, input.source as string));
+          const result = importSourceFile(input.raw, input.source as ExternalScoreSource, state, catalogByKey, input.filename);
           return { state: result.state, report: result.report, notice: `导入完成：新增 ${result.report.importedScores}，更新 ${result.report.updatedScores}，跳过 ${result.report.skippedScores + result.report.invalidEntries + result.report.unknownCharts}。` };
         }
         case 'backup': {
@@ -147,7 +141,7 @@ export class WorkspaceRepository {
       return { state: result.state, notice: `旧数据迁移完成：成绩 ${result.report.importedScores}，个人别名 ${result.report.importedAliases}，跳过 ${result.report.skippedScores}；浏览器原副本保留。` };
     }, true);
   }
-  async mergeSync(username: string, result: SyncResult, options: SourceMergeOptions): Promise<WorkspaceResult> {
-    return this.change(username, state => mergeSyncResult(state, result, options));
+  async mergeSync(username: string, result: SyncResult): Promise<WorkspaceResult> {
+    return this.change(username, state => mergeSyncResult(state, result));
   }
 }

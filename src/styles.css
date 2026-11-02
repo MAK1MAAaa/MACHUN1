@@ -368,12 +368,6 @@ main { padding: 28px 0 72px; }
 .source-sync-history { display: grid; gap: 3px; color: var(--muted); font-size: 0.65rem; line-height: 1.6; }
 .source-sync-note, .source-sync-error { margin: 0; font-size: 0.7rem; line-height: 1.65; overflow-wrap: anywhere; }
 .source-sync-note { color: var(--muted); }
-.source-repair-controls { display: flex; align-items: center; gap: 10px; padding: 10px; border: 1px dashed var(--line); border-radius: var(--radius-sm); }
-.source-repair-controls .source-sync-note { flex: 1; min-width: 0; }
-.source-repair-toggle { flex: 0 0 auto; min-height: 38px; padding: 0 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); color: var(--muted); font-size: 0.72rem; font-weight: 800; }
-.source-repair-toggle[aria-pressed="true"] { border-color: var(--cyan); color: var(--cyan); background: var(--cyan-soft); }
-.source-repair-toggle:hover, .source-repair-toggle:focus-visible { border-color: var(--cyan); outline: 0; box-shadow: 0 0 0 3px var(--cyan-soft); }
-.source-repair-toggle:disabled { cursor: wait; opacity: 0.55; }
 .source-sync-error { color: var(--danger); }
 .source-service-error { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; padding: 12px 14px; border: 1px solid rgba(153, 113, 55, 0.3); border-radius: var(--radius-sm); background: rgba(153, 113, 55, 0.06); }
 .source-service-error p { flex: 1 1 240px; margin: 0; color: var(--orange); font-size: 0.76rem; line-height: 1.65; }

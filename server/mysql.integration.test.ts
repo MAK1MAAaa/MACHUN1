@@ -108,29 +108,29 @@ describe.skipIf(!enabled)('isolated MySQL persistence and accounts', () => {
     expect(await repository.get('root')).toEqual(before);
   });
   it('merges synchronization with the latest manual score and does not lose concurrent distinct writes', async () => {
-    await repository.mergeSync('root', sync(1_008_000), {});
+    await repository.mergeSync('root', sync(1_008_000));
     await repository.action('root', { type: 'manual', key, score: '1000000' });
-    const merged = await repository.mergeSync('root', sync(1_005_000), {});
+    const merged = await repository.mergeSync('root', sync(1_005_000));
     expect(merged.report).toMatchObject({ importedScores: 0, updatedScores: 1 });
     const current = await repository.get('root');
     expect(current.state.scores[key]).toMatchObject({ score: 1_005_000, source: 'rin', combo: 'aj' });
     await repository.action('root', { type: 'manual', key, score: '1008000' });
-    const skipped = await repository.mergeSync('root', sync(1_005_000), {});
+    const skipped = await repository.mergeSync('root', sync(1_005_000));
     expect(skipped.report).toMatchObject({ importedScores: 0, updatedScores: 0, skippedScores: 1 });
     expect((await repository.get('root')).state.scores[key]).toMatchObject({ score: 1_008_000, source: 'manual' });
     await Promise.all(catalog.slice(1, 8).map((chart, index) => repository.action('root', { type: 'manual', key: `${chart.id}:${chart.difficulty}`, score: String(1_000_000 + index) })));
     expect(Object.keys((await repository.get('root')).state.scores)).toHaveLength(8);
   });
-  it('preserves national overwrite rules, equal/lower scores and FC/AJ export data', async () => {
-    await repository.mergeSync('root', sync(1_009_000, 'munet'), {});
-    await repository.mergeSync('root', sync(1_003_000, 'lxns'), { overwriteMunet: true });
-    await repository.mergeSync('root', sync(1_003_000, 'munet'), {});
-    expect((await repository.get('root')).state.scores[key].source).toBe('lxns');
-    await repository.mergeSync('root', sync(1_002_000, 'munet'), {});
-    expect((await repository.get('root')).state.scores[key].score).toBe(1_003_000);
-    await repository.mergeSync('root', sync(1_004_000, 'munet'), {});
+  it('preserves MuNET scores against equal/lower national syncs and keeps FC/AJ export data', async () => {
+    await repository.mergeSync('root', sync(1_009_000, 'munet'));
+    for (const score of [1_003_000, 1_009_000]) {
+      const kept = await repository.mergeSync('root', sync(score, 'lxns'));
+      expect(kept.state.scores[key]).toMatchObject({ score: 1_009_000, source: 'munet' });
+      expect(kept.report).toMatchObject({ updatedScores: 0, skippedScores: 1 });
+    }
+    await repository.mergeSync('root', sync(1_009_500, 'lxns'));
     const snapshot = await repository.get('root');
-    expect(snapshot.state.scores[key].source).toBe('munet');
+    expect(snapshot.state.scores[key]).toMatchObject({ score: 1_009_500, source: 'lxns' });
     const backup = createFullBackup(snapshot.state, 'test');
     expect(backup.scores.find(row => row.id === first.id && row.difficulty === first.difficulty)).toMatchObject({ combo: 'aj', fullChain: 'platinum' });
     const image = createB30Export(Object.values(snapshot.state.scores), catalogByKey, 'test');
@@ -141,10 +141,10 @@ describe.skipIf(!enabled)('isolated MySQL persistence and accounts', () => {
     await repository.action('clear-owner', { type: 'manual', key, score: '1009000' });
     expect((await repository.get('clear-owner')).state.scores[key]).not.toHaveProperty('clear');
     const result = sync(1_008_000, 'lxns');
-    await repository.mergeSync('clear-owner', result, {});
+    await repository.mergeSync('clear-owner', result);
     expect((await repository.get('clear-owner')).state.scores[key]).toMatchObject({ score: 1_009_000, source: 'manual', clear: 'absolute' });
     result.records[0] = { ...result.records[0], clear: 'catastrophy', score: 1_007_000 };
-    await repository.mergeSync('clear-owner', result, {});
+    await repository.mergeSync('clear-owner', result);
     await fixture.admin.query(fixture.migration);
     const current = await repository.get('clear-owner');
     expect(current.state.scores[key]).toMatchObject({ score: 1_009_000, source: 'manual', clear: 'catastrophy' });
@@ -189,7 +189,7 @@ describe.skipIf(!enabled)('isolated MySQL persistence and accounts', () => {
     const imported = await repository.action('nickname-owner', { type: 'import', source: 'rin', filename: 'scores.json', raw: JSON.stringify([{ id: first.id, difficulty: first.difficulty, score: 1001000 }]) });
     expect(imported.exportNickname).toBe('分表玩家 🎵');
     expect(imported.state.scores[key].score).toBe(1_001_000);
-    await repository.mergeSync('nickname-owner', sync(1_005_000), {});
+    await repository.mergeSync('nickname-owner', sync(1_005_000));
     await fixture.admin.query(fixture.migration);
     const restored = await new WorkspaceRepository(fixture.db).get('nickname-owner');
     expect(restored.exportNickname).toBe('分表玩家 🎵');
@@ -215,7 +215,7 @@ describe.skipIf(!enabled)('isolated MySQL persistence and accounts', () => {
     await Promise.all([
       repository.action('nickname-owner', { type: 'export-nickname', nickname: '并发设置' }),
       repository.action('nickname-owner', { type: 'manual', key, score: '1001000' }),
-      repository.mergeSync('nickname-owner', sync(1_008_000), {}),
+      repository.mergeSync('nickname-owner', sync(1_008_000)),
     ]);
     const current = await repository.get('nickname-owner');
     expect(current.exportNickname).toBe('并发设置');

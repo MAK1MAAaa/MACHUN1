@@ -75,12 +75,6 @@ describe("local source sync client", () => {
     await expect(createSyncClient(fetcher).sync("rin")).rejects.toMatchObject({ code: "auth_required", message: "登录已失效，请重新登录" });
   });
 
-  it("sends national repair mode to the server without sending any user identity", async () => {
-    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(response({ records: [] }));
-    await createSyncClient(fetcher).sync("lxns", undefined, { overwriteMunet: true });
-    expect(fetcher).toHaveBeenCalledWith("/api/sources/lxns/sync", expect.objectContaining({ body: '{"mergeOptions":{"overwriteMunet":true}}' }));
-  });
-
   it("portal expiry keeps the web account logged in; only UNAUTHORIZED expires it", async () => {
     const window = new EventTarget(); const expired = vi.fn(); window.addEventListener("machun-session-expired", expired);
     vi.stubGlobal("window", window);

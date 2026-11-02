@@ -1,4 +1,3 @@
-import type { SourceMergeOptions } from "./sources";
 import type { ExternalScoreSource } from "./sources";
 import type { SourceConnection, SyncOptions, SyncResult } from "../syncTypes";
 
@@ -58,8 +57,8 @@ export function createSyncClient(fetcher: typeof fetch = fetch, signal?: () => A
       if (source === "lxns" && !body.token) throw new SyncClientError("token_required", "请输入落雪个人 API Token");
       return (await request<{ connection: SourceConnection }>(`/${source}/bind`, "POST", body)).connection;
     },
-    sync(source: ExternalScoreSource, options?: SyncOptions, mergeOptions?: SourceMergeOptions): Promise<SyncResult> {
-      return request<SyncResult>(`/${source}/sync`, "POST", mergeOptions ? { ...options, mergeOptions } : options);
+    sync(source: ExternalScoreSource, options?: SyncOptions): Promise<SyncResult> {
+      return request<SyncResult>(`/${source}/sync`, "POST", options);
     },
     async unbind(source: ExternalScoreSource): Promise<SourceConnection> {
       return (await request<{ connection: SourceConnection }>(`/${source}/binding`, "DELETE")).connection;

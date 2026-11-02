@@ -1,5 +1,5 @@
 import type { LocalState, CatalogChart } from './types';
-import type { SourceImportReport, SourceMergeOptions } from './core/sources';
+import type { SourceImportReport } from './core/sources';
 import type { SyncResult } from './syncTypes';
 import type { SongChartDetail } from './core/songDetails';
 
@@ -12,7 +12,7 @@ export type WorkspaceAction =
   | { type: 'clear' }
   | { type: 'export-nickname'; nickname: string }
   | { type: 'aliases'; id: string; aliases: string[] }
-  | { type: 'import'; source: string; raw: string; filename: string; mergeOptions?: SourceMergeOptions }
+  | { type: 'import'; source: string; raw: string; filename: string }
   | { type: 'backup'; raw: string; mode: 'merge' | 'replace' };
 export interface WorkspaceResult extends WorkspaceSnapshot { notice?: string; report?: SourceImportReport }
 export type AccountSyncResult = SyncResult & { workspace: WorkspaceSnapshot };

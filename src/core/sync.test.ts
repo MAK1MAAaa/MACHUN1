@@ -28,44 +28,48 @@ function lowerChartResult(source: ExternalScoreSource, lowerCharts: CatalogChart
 }
 
 describe("sync response merge", () => {
-  it.each([1_000_000, 1_005_000, 1_009_000])("repairs a matching MuNET record with a national-server response scored %i", (score) => {
+  it.each([1_000_000, 1_005_000, 1_009_000])("keeps a MuNET best score unless national-server response %i is higher", (score) => {
     const key = `${chart.id}:${chart.difficulty}`;
     const current = mergeSyncResult(EMPTY_STATE, lowerChartResult("munet", [chart], 1_005_000)).state;
     current.nicknameOverrides[chart.id] = ["保留别名"];
     const before = structuredClone(current);
     const incoming = lowerChartResult("lxns", [chart], score);
-    const repaired = mergeSyncResult(current, incoming, { overwriteMunet: true });
-    expect(repaired.state.scores[key]).toMatchObject({ score, source: "lxns" });
-    expect(repaired.state.nicknameOverrides).toEqual(current.nicknameOverrides);
-    expect(repaired.report).toMatchObject({ updatedScores: 1, replacedMunetScores: 1 });
+    const merged = mergeSyncResult(current, incoming);
+    if (score > 1_005_000) {
+      expect(merged.state.scores[key]).toMatchObject({ score, source: "lxns" });
+      expect(merged.report).toMatchObject({ updatedScores: 1, skippedScores: 0 });
+    } else {
+      expect(merged.state).toEqual(current);
+      expect(merged.report).toMatchObject({ updatedScores: 0, skippedScores: 1 });
+    }
+    expect(merged.state.nicknameOverrides).toEqual(current.nicknameOverrides);
     expect(current).toEqual(before);
   });
 
-  it("does not apply a pending repair to a later manual edit or another source's score", () => {
+  it("does not lower a later manual edit or another source's score when a response arrives", () => {
     const key = `${chart.id}:${chart.difficulty}`;
     const initial = mergeSyncResult(EMPTY_STATE, lowerChartResult("munet", [chart], 1_009_000)).state;
     const pendingResult = lowerChartResult("lxns", [chart], 1_000_000);
     const edited = correctScore(initial, key, "1005000");
     const laterSynced = mergeSyncResult(edited, lowerChartResult("rin", [chart], 1_007_500)).state;
     for (const latest of [edited, laterSynced]) {
-      const kept = mergeSyncResult(latest, pendingResult, { overwriteMunet: true });
+      const kept = mergeSyncResult(latest, pendingResult);
       expect(kept.state).toEqual(latest);
       expect(kept.report).toMatchObject({ updatedScores: 0, skippedScores: 1 });
-      expect(kept.report.replacedMunetScores).toBeUndefined();
     }
   });
 
-  it("preserves unmatched MuNET scores and aliases during repair", () => {
+  it("preserves unmatched MuNET scores and aliases when merging a national-server response", () => {
     const otherChart = catalog.find((candidate) => candidate.id !== chart.id)!;
     const otherKey = `${otherChart.id}:${otherChart.difficulty}`;
     const initial = mergeSyncResult(EMPTY_STATE, lowerChartResult("munet", [chart, otherChart], 1_009_000)).state;
     initial.nicknameOverrides[otherChart.id] = ["未匹配曲目别名"];
-    const repaired = mergeSyncResult(initial, lowerChartResult("lxns", [chart], 1_000_000), { overwriteMunet: true });
-    expect(repaired.state.scores[otherKey]).toEqual(initial.scores[otherKey]);
-    expect(repaired.state.nicknameOverrides).toEqual(initial.nicknameOverrides);
-    const empty = mergeSyncResult(initial, lowerChartResult("lxns", [], 1_000_000), { overwriteMunet: true });
+    const merged = mergeSyncResult(initial, lowerChartResult("lxns", [chart], 1_009_500));
+    expect(merged.state.scores[`${chart.id}:${chart.difficulty}`]).toMatchObject({ score: 1_009_500, source: "lxns" });
+    expect(merged.state.scores[otherKey]).toEqual(initial.scores[otherKey]);
+    expect(merged.state.nicknameOverrides).toEqual(initial.nicknameOverrides);
+    const empty = mergeSyncResult(initial, lowerChartResult("lxns", [], 1_000_000));
     expect(empty.state).toEqual(initial);
-    expect(empty.report.replacedMunetScores).toBeUndefined();
   });
 
   it.each(["munet", "rin", "otogame", "lxns"] as const)("merges real 13.0 and 13.9 %s charts while preserving edits and aliases at response time", (source) => {

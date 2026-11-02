@@ -9,7 +9,6 @@ import { safeError } from "./manager";
 import { SyncError } from "./provider";
 import type { AccountBackend } from "./accountService";
 import { readSessionCookie, sessionCookie } from "./auth";
-import { mergeOptions } from "./workspace";
 import type { BrowserSource } from '../src/syncTypes';
 
 export type HttpManager = Pick<SourceManager, "connections" | "bind" | "unbind" | "sync">;
@@ -171,13 +170,12 @@ export function createAppServer(options: HttpOptions) {
         if (accounts && user && source !== 'lxns') await accounts.bindingTasks?.cancelFor(user.username, source);
         json(response, 200, { connection: await manager.unbind(source) });
       } else {
-        if (input.full !== undefined && (typeof input.full !== "boolean" || source !== "otogame")) {
-          throw new SyncError("INVALID_REQUEST", "全量校准参数无效。", 400);
+        if (Object.keys(input).some(key => key !== "full") || (input.full !== undefined && (typeof input.full !== "boolean" || source !== "otogame"))) {
+          throw new SyncError("INVALID_REQUEST", "同步参数无效。", 400);
         }
-        const optionsForMerge = mergeOptions(input.mergeOptions, source);
         const result = input.full === undefined ? await manager.sync(source) : await manager.sync(source, { full: input.full });
         if (accounts && user) {
-          const workspace = await accounts.workspace.mergeSync(user.username, result, optionsForMerge);
+          const workspace = await accounts.workspace.mergeSync(user.username, result);
           json(response, 200, { ...result, report: workspace.report ?? result.report, workspace });
         } else json(response, 200, result);
       }
