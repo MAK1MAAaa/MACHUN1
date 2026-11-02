@@ -400,6 +400,10 @@ main { padding: 28px 0 72px; }
 .b30-analysis-heading > div:first-child { display: grid; gap: 4px; }
 .b30-analysis-heading > div:first-child > span { color: var(--cyan); font-size: 0.62rem; font-weight: 800; letter-spacing: 0.18em; }
 .b30-analysis-heading h3 { margin: 0; font-size: 1.08rem; letter-spacing: -0.025em; }
+.b30-analysis-title { display: flex; align-items: baseline; gap: 12px; }
+.b30-analysis-rating { display: inline-flex; align-items: baseline; gap: 6px; white-space: nowrap; }
+.b30-analysis-rating span { color: var(--muted); font-size: 0.72rem; font-weight: 700; }
+.b30-analysis-rating strong { color: var(--cyan); font: 800 1.05rem/1.2 var(--font-numeric); font-variant-numeric: tabular-nums; }
 .difficulty-legend { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 12px; }
 .difficulty-legend span { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 0.61rem; font-weight: 800; letter-spacing: 0.06em; }
 .difficulty-legend i { width: 9px; height: 9px; border-radius: 2px; background: currentColor; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08); }
@@ -407,15 +411,6 @@ main { padding: 28px 0 72px; }
 .difficulty-legend .mas { color: var(--purple); }
 .difficulty-legend .ult { color: #7b8491; }
 .difficulty-legend .ult i { background: var(--ultima); border: 1px solid #737b87; }
-.analysis-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 16px; }
-.analysis-metrics > div { min-width: 0; display: grid; gap: 6px; padding: 11px 12px; border: 1px solid rgba(42, 87, 117, 0.72); border-radius: var(--radius-sm); background: rgba(7, 24, 37, 0.72); }
-.analysis-metrics span { color: var(--muted); font-size: 0.58rem; font-weight: 800; letter-spacing: 0.1em; }
-.analysis-metrics strong { color: #eef7fb; font: 900 1.05rem/1 ui-monospace, SFMono-Regular, Menlo, monospace; }
-.difficulty-counts { display: flex; align-items: center; gap: 6px; }
-.difficulty-counts i { min-width: 29px; padding: 4px 6px; border: 1px solid currentColor; border-radius: 999px; font-size: 0.72rem; font-style: normal; text-align: center; }
-.difficulty-counts .exp { color: var(--expert); background: rgba(239, 68, 84, 0.09); }
-.difficulty-counts .mas { color: var(--purple); background: rgba(169, 137, 237, 0.09); }
-.difficulty-counts .ult { color: #d8dde3; background: var(--ultima); border-color: #68717e; }
 .b30-chart-scroll { margin-top: 14px; overflow-x: auto; padding: 4px 0 5px; }
 .b30-chart-plot { min-width: 980px; height: 360px; display: grid; grid-template-columns: 44px minmax(0, 1fr); }
 .b30-chart-scale { position: relative; height: 100%; color: #7394aa; font: 700 0.6rem/1 ui-monospace, SFMono-Regular, Menlo, monospace; }
@@ -586,9 +581,6 @@ input::placeholder { color: #7a887a; opacity: 1; }
 .source-actions button.primary { color: #386b55; background: #e1edde; border-color: #a9c2a0; }
 .b30-export-actions button.primary { background: #e2eddb; color: #345c3b; border-color: #a9bf9f; }
 .b30-analysis { background: linear-gradient(145deg, rgba(235, 242, 230, 0.62), rgba(255, 255, 255, 0.65)); }
-.analysis-metrics > div { background: rgba(255, 255, 255, 0.63); border-color: var(--line-soft); }
-.analysis-metrics strong { color: #344d3d; }
-.difficulty-counts .ult { color: #f5f6f8; }
 .b30-chart-scale, .b30-bar-rank { color: #647560; }
 .b30-bars { border-color: #c6d4bf; }
 .b30-chart-guides span { border-color: rgba(147, 166, 134, 0.35); }
@@ -619,7 +611,6 @@ footer { color: #687b62; }
   .source-card > p { min-height: 0; }
   .alias-editor { grid-template-columns: 1fr; }
   .b30-heading-tools { width: 100%; justify-content: space-between; }
-  .analysis-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 660px) {
@@ -666,7 +657,6 @@ footer { color: #687b62; }
   .source-tools-toggle b { display: none; }
   .source-tools-toggle > span:first-child { gap: 0; }
   .source-tools-toggle > span:last-child { padding-left: 9px; }
-  .analysis-metrics { grid-template-columns: 1fr 1fr; }
 }
 
 @media (prefers-reduced-motion: reduce) {
