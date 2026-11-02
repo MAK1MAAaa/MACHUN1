@@ -364,33 +364,6 @@ function App({ account, initial, initialNotice }: AppProps) {
       {notice && <div className={`toast ${notice.kind}`} role="status">{notice.text}</div>}
 
       <main>
-        <section className="summary-grid" aria-label="B30 汇总">
-          <article className="summary-card primary">
-            <span>B30 RATING</span>
-            <strong>{summary.average.toFixed(4)}</strong>
-            <small>固定除以 30，空位计 0</small>
-          </article>
-          <article className="summary-card">
-            <span>已填槽位</span>
-            <strong>{summary.count}<i>/30</i></strong>
-            <small>{Math.round((summary.count / B30_SIZE) * 100)}% COMPLETE</small>
-          </article>
-          <article className="summary-card">
-            <span>账号成绩</span>
-            <strong>{records.length}</strong>
-            <small>UNIQUE CHARTS</small>
-          </article>
-          <a
-            className="summary-card import-shortcut"
-            href="#score-sources"
-            onClick={() => setSourceToolsOpen(true)}
-          >
-            <span>服务器成绩</span>
-            <strong>同步</strong>
-            <small>RIN / 大饼 / 国服 / MuNET</small>
-          </a>
-        </section>
-
         <section className={`local-tools-section ${localToolsOpen ? "open" : ""}`}>
           <button
             type="button"

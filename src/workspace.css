@@ -1,16 +1,12 @@
 /* Shared polish follows the existing sage palette; chart colors remain semantic. */
 :root { --text: #2e403b; --font-numeric: ui-monospace, SFMono-Regular, Menlo, monospace; }
-.site-header { padding-block: 36px 28px; gap: 24px; }
+.site-header { --header-bottom-space: 28px; padding-block: 36px var(--header-bottom-space); gap: 24px; }
+.brand-block { flex: 1; align-self: stretch; position: relative; display: grid; grid-template-columns: max-content minmax(0, 1fr); align-content: start; }
+.brand-block > .eyebrow { grid-column: 1 / -1; }
 .brand-block h1 { font-size: clamp(2.65rem, 5vw, 4.5rem); letter-spacing: -.065em; }
 .catalog-stamp { border-left-width: 1px; border-radius: 14px; padding: 18px 22px; background: #f8fbf5; }
-.site-header::after { background: var(--cyan); width: 72px; }
-.summary-grid { gap: 14px; }
-.summary-card { background: #fff; min-height: 140px; border-color: var(--line-soft); box-shadow: 0 4px 16px rgb(65 91 66 / 4%); }
-.summary-card::before, .summary-card::after { display: none; }
-.summary-card.primary { background: #e3eddd; border-color: #becfba; }
-.summary-card.primary strong { font-family: var(--font-numeric); font-variant-numeric: tabular-nums; letter-spacing: -.055em; }
-.summary-card.import-shortcut { background: #f8fbf5; }
-.summary-card:hover { transform: none; }
+/* The title sets the first grid column, so the accent follows its width. */
+.brand-block::after { content: ""; position: absolute; grid-column: 1 / 2; left: 0; right: 0; bottom: calc(-1 * var(--header-bottom-space) - 1px); height: 2px; background: var(--cyan); }
 .section-heading h2 { letter-spacing: -.02em; }
 .section-index { letter-spacing: .12em; }
 .panel, .source-section, .b30-section, .records-section { box-shadow: 0 4px 18px rgb(65 91 66 / 4%); }
@@ -57,13 +53,9 @@
   .card-rank { left: 14px; top: 14px; }
 }
 @media (max-width: 660px) {
-  .site-header { padding-block: 20px 24px; }
+  .site-header { --header-bottom-space: 24px; padding-block: 20px var(--header-bottom-space); }
   .brand-block h1 { font-size: 3rem; }
   main { padding-top: 18px; }
-  .summary-grid { gap: 10px; }
-  .summary-card { min-height: 118px; padding: 16px 12px; }
-  .summary-card strong { font-size: clamp(1.55rem, 7.3vw, 2rem); }
-  .summary-card small { font-size: .61rem; }
   .section-heading h2 { font-size: 1.2rem; }
   .section-heading p { line-height: 1.55; }
   .b30-export-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; }
@@ -94,5 +86,5 @@
 }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
-  button, a, .source-card, .summary-card, .b30-card { transition: none; }
+  button, a, .source-card, .b30-card { transition: none; }
 }
