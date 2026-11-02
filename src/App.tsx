@@ -216,10 +216,6 @@ function App({ account, initial, initialNotice }: AppProps) {
     const axis = getB30Axis(b30);
     const rating = Math.floor(summary.average * 100 + 1e-8) / 100;
     const ratingPosition = ((rating - axis.min) / axis.span) * 100;
-    const difficultyCounts = b30.reduce(
-      (counts, record) => ({ ...counts, [record.difficulty]: counts[record.difficulty] + 1 }),
-      { EXP: 0, MAS: 0, ULT: 0 },
-    );
     return {
       scaleMax: axis.max,
       scaleMin: axis.min,
@@ -227,7 +223,6 @@ function App({ account, initial, initialNotice }: AppProps) {
       ratingPosition,
       showRatingGuide: ratingPosition >= 0 && ratingPosition <= 100,
       scaleSpan: axis.span,
-      difficultyCounts,
     };
   }, [b30, summary.average]);
   const deleteRecord = async (record: SingleRating) => {
@@ -593,28 +588,15 @@ function App({ account, initial, initialNotice }: AppProps) {
             <div className="b30-analysis-heading">
               <div>
                 <span>RATING PROFILE</span>
-                <h3>B30 柱状分析</h3>
+                <div className="b30-analysis-title">
+                  <h3>B30 柱状分析</h3>
+                  <div className="b30-analysis-rating"><span>Rating</span><strong>{summary.average.toFixed(4)}</strong></div>
+                </div>
               </div>
               <div className="difficulty-legend" aria-label="难度颜色图例">
                 <span className="exp"><i />EXPERT</span>
                 <span className="mas"><i />MASTER</span>
                 <span className="ult"><i />ULTIMA</span>
-              </div>
-            </div>
-            <div className="analysis-metrics">
-              <div><span>上界 · B1 + 0.2 向下取整</span><strong>{b30Analysis.scaleMax.toFixed(1)}</strong></div>
-              <div>
-                <span>下界 · {b30.length === B30_SIZE ? "B30" : "当前末位"} − 0.2 向上取整</span>
-                <strong>{b30Analysis.scaleMin.toFixed(1)}</strong>
-              </div>
-              <div><span>Rating · 向下取整</span><strong>{b30Analysis.scaleRating.toFixed(2)}</strong></div>
-              <div>
-                <span>难度分布</span>
-                <strong className="difficulty-counts">
-                  <i className="exp">{b30Analysis.difficultyCounts.EXP}</i>
-                  <i className="mas">{b30Analysis.difficultyCounts.MAS}</i>
-                  <i className="ult">{b30Analysis.difficultyCounts.ULT}</i>
-                </strong>
               </div>
             </div>
             <div className="b30-chart-scroll">
