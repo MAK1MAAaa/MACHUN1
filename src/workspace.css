@@ -2,8 +2,6 @@
 :root { --text: #2e403b; --font-numeric: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .site-header { padding-block: 36px 28px; gap: 24px; }
 .brand-block h1 { font-size: clamp(2.65rem, 5vw, 4.5rem); letter-spacing: -.065em; }
-.brand-block p { max-width: 620px; line-height: 1.7; }
-.hero-tags span { padding: 6px 10px; letter-spacing: .06em; background: rgb(255 255 255 / 65%); }
 .catalog-stamp { border-left-width: 1px; border-radius: 14px; padding: 18px 22px; background: #f8fbf5; }
 .site-header::after { background: var(--cyan); width: 72px; }
 .summary-grid { gap: 14px; }
@@ -61,9 +59,6 @@
 @media (max-width: 660px) {
   .site-header { padding-block: 20px 24px; }
   .brand-block h1 { font-size: 3rem; }
-  .brand-block p { font-size: .85rem; }
-  .hero-tags { gap: 5px; }
-  .hero-tags span { font-size: .55rem; padding: 5px 7px; }
   main { padding-top: 18px; }
   .summary-grid { gap: 10px; }
   .summary-card { min-height: 118px; padding: 16px 12px; }

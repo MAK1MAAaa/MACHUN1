@@ -343,12 +343,6 @@ function App({ account, initial, initialNotice }: AppProps) {
         <div className="brand-block">
           <span className="eyebrow">MACHUN1 RATING WORKSPACE</span>
           <h1>MACHUN<span>1</span></h1>
-          <p>按账号保存和同步各来源成绩，自动计算单曲 Rating。</p>
-          <div className="hero-tags" aria-label="工具特性">
-            <span>USER WORKSPACE</span>
-            <span>13.0+ CHARTS</span>
-            <span>BEST 30 ONLY</span>
-          </div>
         </div>
         <div className="catalog-stamp" aria-label="曲库版本">
           <span>MATE SNAPSHOT</span>
