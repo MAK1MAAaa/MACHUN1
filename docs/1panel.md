@@ -123,7 +123,7 @@ MACHUN_PORT=1650 pnpm start
 
 若当前部署目录中有 `DEPLOYED.md` 和 `compose.runtime.json`，更新或重启时使用 `DEPLOYED.md` 记录的双文件 Compose 命令，保留运行参数和固定镜像摘要。随包的 `start.sh` 只读取 `compose.yaml`；直接运行它不会加载该服务器专用覆盖文件。新版本部署应继续使用原项目名 `machun1` 和原数据卷。
 
-评分、别名、来源、FC/AJ、评级与导出保持原逻辑；网页预览 3×10，PNG 导出 5×6 / 5×10。应用启动不自动建表、不重置已有用户密码。
+评分、别名、来源、FC/AJ、评级与导出保持原逻辑；PNG 导出 5×6 / 5×10。应用启动不自动建表、不重置已有用户密码。
 
 切换数据库时可覆盖 `DATABASE_URL`。启用 HTTPS 反代时在编排增加 `MACHUN_PUBLIC_ORIGIN=https://你的域名`，保留实际 Host；此时只接受该配置域名，登录 Cookie 自动加 Secure。不要把数据库管理账号交给应用。
 

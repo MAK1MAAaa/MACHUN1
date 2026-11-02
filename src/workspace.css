@@ -31,13 +31,7 @@
   .b30-export-settings input, .b30-export-settings button { min-height: 44px; }
   .b30-export-settings span { flex-basis: 100%; }
 }
-.b30-export-actions button, .b30-preview-toggle { min-height: 44px; padding: 10px 14px; border-radius: 9px; }
-.b30-grid { min-width: 0; }
-.b30-table-scroll { background: #f3f6f0; border-color: var(--line-soft); }
-.b30-card::before { inset: 0 0 auto; width: auto; height: 3px; }
-.b30-card { background: #fff; border-color: var(--line-soft); box-shadow: none; }
-.b30-card .card-chart-meta > span { color: var(--card-accent); }
-.b30-card:not(.empty):hover { transform: none; }
+.b30-export-actions button { min-height: 44px; padding: 10px 14px; border-radius: 9px; }
 .account-toolbar { width: min(1480px, calc(100% - 48px)); gap: 10px; }
 .account-toolbar > span { font-size: .8rem; color: var(--muted); padding: 9px 14px; border: 1px solid var(--line-soft); border-radius: 999px; background: #f8fbf5; }
 .account-toolbar strong { color: var(--text); }
@@ -47,11 +41,6 @@
 .login-card h1 { letter-spacing: -.035em; }
 .login-card input { min-height: 48px; }
 .login-submit { min-height: 48px; }
-@media (max-width: 1100px) {
-  .b30-card { grid-template-columns: 56px minmax(0, 1fr); gap: 8px; padding: 10px; }
-  .card-cover { width: 56px; height: 56px; }
-  .card-rank { left: 14px; top: 14px; }
-}
 @media (max-width: 660px) {
   .site-header { --header-bottom-space: 24px; padding-block: 20px var(--header-bottom-space); }
   .brand-block h1 { font-size: 3rem; }
@@ -60,24 +49,6 @@
   .section-heading p { line-height: 1.55; }
   .b30-export-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; }
   .b30-export-actions button { font-size: .75rem; line-height: 1.5; padding: 9px 8px; }
-  .b30-table-scroll { padding: 6px; overflow-x: visible; }
-  .b30-grid { gap: 5px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .b30-card { min-width: 0; padding: 7px; display: flex; flex-direction: column; gap: 7px; min-height: 238px; border-radius: 8px; }
-  .b30-card .card-cover { width: 100%; height: auto; aspect-ratio: 1; border-radius: 5px; }
-  .b30-card .card-content { min-width: 0; width: 100%; flex: 1; gap: 6px; }
-  .b30-card .card-rank { top: 10px; left: 10px; font-size: .58rem; padding: 2px 4px; }
-  .b30-card .card-chart-meta { flex-wrap: wrap; gap: 3px; font-size: .56rem; }
-  .b30-card .card-chart-meta > span { font-size: .56rem; letter-spacing: 0; }
-  .b30-card .card-title h3 { font-size: .7rem; line-height: 1.45; margin-block: 5px; min-height: 2.9em; -webkit-line-clamp: 2; }
-  .b30-card .score-source { max-width: 100%; font-size: .56rem; padding: 2px 3px; letter-spacing: 0; }
-  .b30-card .card-stats { grid-template-columns: minmax(0, 1fr); gap: 5px; padding-top: 6px; }
-  .b30-card .card-stats > div { min-width: 0; }
-  .b30-card .card-stats span { font-size: .54rem; letter-spacing: 0; }
-  .b30-card .card-stats strong { font-size: clamp(.58rem, 2.9vw, .78rem); letter-spacing: -.045em; }
-  .b30-card .score-badges { gap: 2px; flex-wrap: wrap; }
-  .b30-card .score-badges > span { font-size: .54rem; padding: 2px 3px; }
-  .b30-card.empty { min-height: 238px; }
-  .empty-mark { font-size: .55rem; }
   .account-toolbar { width: calc(100% - 24px); margin-top: 12px; justify-content: space-between; }
   .account-toolbar > span { min-width: 0; max-width: calc(100% - 100px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .source-help-button { width: 44px; height: 44px; }
@@ -86,5 +57,5 @@
 }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
-  button, a, .source-card, .b30-card { transition: none; }
+  button, a, .source-card { transition: none; }
 }

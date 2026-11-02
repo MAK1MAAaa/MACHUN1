@@ -13,15 +13,6 @@
               "path": "mockups/mobile-workspace/index.html"
             }
           ]
-        },
-        {
-          "slug": "score-card-refresh",
-          "files": [
-            {
-              "label": "index.html",
-              "path": "mockups/score-card-refresh/index.html"
-            }
-          ]
         }
       ]
     },
