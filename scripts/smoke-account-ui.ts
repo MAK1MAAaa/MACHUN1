@@ -411,9 +411,12 @@ try {
   await card.getByText('模拟来源请求失败', { exact: true }).waitFor();
   assert.equal((await state(page)).scores[key].score, 1_006_000); manager.fail = false;
   mark('sync preserves manual edits made while waiting, suppresses repeat clicks and keeps data on provider failure');
-  await page.locator('.local-tools-toggle').click();
+  const accountTools = page.locator('.account-data-toolbar');
+  assert.deepEqual(await accountTools.getByRole('button').allTextContents(), ['导入备份', '导出备份', '清除数据']);
+  assert.equal(await accountTools.locator('select, p, small, dl').count(), 0);
+  assert.equal(await page.locator('.local-tools-toggle').count(), 0);
   const backupDownload = page.waitForEvent('download');
-  await page.getByRole('button', { name: '导出完整备份', exact: true }).click();
+  await accountTools.getByRole('button', { name: '导出备份', exact: true }).click();
   const backup = await backupDownload; const path = await backup.path(); assert(path);
   const saved = JSON.parse(await readFile(path, 'utf8'));
   assert.equal(saved.scores.length, 50);
@@ -421,13 +424,24 @@ try {
   assert(saved.scores.some((row: SingleRating) => row.clear === 'absolute' && !row.combo));
   assert.equal(saved.nicknameOverrides['3055'][0], '个人测试别名');
   assert(!JSON.stringify(saved).includes('token'));
-  await edit(page, 1_005_000);
+  await edit(page, 1_007_000);
   const chooserPromise = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: '导入完整备份', exact: true }).click();
+  await accountTools.getByRole('button', { name: '导入备份', exact: true }).click();
   const chooser = await chooserPromise;
+  const importRequest = page.waitForRequest(request => request.method() === 'POST'
+    && new URL(request.url()).pathname === '/api/workspace/actions'
+    && request.postDataJSON().type === 'backup');
+  page.once('dialog', async dialog => {
+    assert.equal(dialog.type(), 'confirm');
+    assert.match(dialog.message(), /替换当前账号的全部成绩和个人别名/);
+    await dialog.accept();
+  });
   await chooser.setFiles({ name: 'full-backup.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(saved)) });
+  assert.equal((await importRequest).postDataJSON().mode, 'replace');
   await score(page, 1_006_000, 'rin');
-  mark('full backup import restores all records, personal aliases, source and AJ/full-chain marks');
+  assert.equal(Object.keys((await state(page)).scores).length, saved.scores.length);
+  assert.deepEqual((await state(page)).nicknameOverrides, saved.nicknameOverrides);
+  mark('permanent three-action account toolbar imports backups in replace mode, restoring lower saved scores, aliases, source and AJ/full-chain marks');
   assert.equal(await page.getByLabel('导出昵称', { exact: true }).inputValue(), exportNickname);
   for (const name of ['导出 B30 图片', '导出 B30 + 候选20 图片', '导出 AJ B30 图片', '导出 B50 图片']) {
     await exportPng(page, name);
@@ -476,8 +490,11 @@ try {
   assert.equal(Object.keys((await state(mobile)).scores).length, 50);
   assert.equal((await state(mobile)).nicknameOverrides['3055'][0], '个人测试别名');
   assert.equal(await mobile.evaluate(key => localStorage.getItem(key), STORAGE_KEY), null);
+  const mobileAccountTools = mobile.locator('.account-data-toolbar');
+  assert.deepEqual(await mobileAccountTools.getByRole('button').allTextContents(), ['导入备份', '导出备份', '清除数据']);
   for (const width of [320, 390, 768]) {
     await mobile.setViewportSize({ width, height: 844 });
+    assert(await mobileAccountTools.evaluate(element => element.scrollWidth <= element.clientWidth));
     assert.equal(await mobile.locator('.b30-preview-toggle, #b30-image-preview, .b30-grid, .b30-card').count(), 0);
     assert.equal(await mobile.locator('.b30-analysis').count(), 1);
     assert(await mobile.locator('.record-table').evaluate(element => element.scrollWidth <= element.clientWidth));
