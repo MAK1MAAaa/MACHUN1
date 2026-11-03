@@ -13,10 +13,9 @@
   .source-sync-history { flex-wrap: wrap; }
   .b30-export-actions { flex-wrap: wrap; }
   .b30-export-actions button { min-height: 44px; }
-  .records-pagination { flex-wrap: wrap; gap: 10px; }
-  .records-pagination button, .row-actions button, .records-mode button, .records-filter-actions button { min-height: 44px; }
+  .row-actions button, .records-filter-actions button { min-height: 44px; }
   .records-filters { min-width: 0; }
-  .records-filter select, .records-page-jump select, .records-browser .record-search input { font-size: 16px; min-height: 44px; }
+  .records-filter select, .records-browser .record-search input { font-size: 16px; min-height: 44px; }
   .records-filter input, .records-filter select { min-width: 0; max-width: 100%; }
   .record-table-wrap, .b30-chart-scroll { overscroll-behavior-x: contain; }
   .song-details-dialog { max-height: calc(100dvh - 20px); width: calc(100vw - 20px); }
