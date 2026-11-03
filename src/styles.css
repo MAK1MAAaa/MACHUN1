@@ -138,7 +138,7 @@ footer,
 }
 .catalog-stamp strong { font-size: 1.45rem; letter-spacing: -0.04em; }
 
-main { padding: 28px 0 72px; }
+main { padding: 28px 0 24px; }
 
 .workspace-grid {
   display: grid;
@@ -448,7 +448,7 @@ main { padding: 28px 0 72px; }
 .row-actions button.delete { color: var(--danger); }
 .table-empty { text-align: center; color: var(--muted); padding: 34px !important; }
 
-footer { display: flex; justify-content: space-between; gap: 16px; padding: 22px 0 40px; border-top: 1px solid var(--line-soft); color: #657084; font-size: 0.68rem; }
+footer { display: flex; justify-content: space-between; gap: 16px; padding: 16px 0 20px; border-top: 1px solid var(--line-soft); color: #657084; font-size: 0.68rem; }
 footer span { letter-spacing: 0.16em; font-weight: 800; }
 footer p { margin: 0; }
 

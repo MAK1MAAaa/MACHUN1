@@ -22,6 +22,18 @@ export const DEFAULT_CONSTANT_TABLE_FILTERS: ConstantTableFilters = {
   difficulty: "", level: "", constants: ["14.0"], genre: "", version: "",
 };
 
+export type ConstantTableSelectionMode = "single" | "all";
+
+export function resolveConstantTableSelection(
+  charts: readonly CatalogChart[],
+  filters: ConstantTableFilters,
+  mode: ConstantTableSelectionMode,
+): string[] {
+  const available = getAvailableChartConstants(charts, filters);
+  if (mode === "all") return filters.level ? available : [];
+  return reconcileConstantSelection(filters.constants, available);
+}
+
 export interface ConstantTableEntry {
   chart: CatalogChart;
   record: SingleRating | undefined;

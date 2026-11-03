@@ -19,6 +19,7 @@ import { SCORE_SOURCE_LABELS } from "../core/sources";
 import { DIFFICULTIES, SCORE_SOURCES, type CatalogChart, type SingleRating } from "../types";
 import { SongDetailsDialog } from "./SongDetailsDialog";
 import { ScoreBadges } from "./ScoreBadges";
+import { CollapsibleSection } from "./CollapsibleSection";
 import "./RecordsSection.css";
 
 export interface RecordsSectionProps {
@@ -91,14 +92,7 @@ export function RecordsSection({ scores, nicknameOverrides, onEdit, onDelete, on
   }
 
   return (
-    <section className="records-section records-browser" aria-labelledby="records-title">
-      <div className="section-heading records-heading">
-        <div>
-          <span className="section-index">04</span>
-          <h2 id="records-title">全部成绩</h2>
-        </div>
-      </div>
-
+    <CollapsibleSection id="records-title" index="04" title="全部成绩" className="records-section records-browser">
       <div className="records-filters" aria-label="成绩筛选">
         <label className="record-search records-filter-search">
           <span>搜索</span>
@@ -283,6 +277,6 @@ export function RecordsSection({ scores, nicknameOverrides, onEdit, onDelete, on
         onSaveAliases={onAliases ? (aliases) => onAliases(selectedChart.id, aliases) : undefined}
         onClose={() => setSelectedChart(null)}
       />}
-    </section>
+    </CollapsibleSection>
   );
 }

@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import { setTimeout as delay } from 'node:timers/promises';
-import { chromium, type Browser, type Page } from 'playwright';
+import { chromium, type Browser, type Page, type Request } from 'playwright';
 import { eq } from 'drizzle-orm';
 import { prepareTestDatabase } from './mysql-test-fixture';
 import { AccountService, MysqlSourceStore } from '../server/accountService';
@@ -93,14 +93,22 @@ async function login(page: Page, username: string, password: string) {
 async function state(page: Page) {
   return page.evaluate(async () => { const response = await fetch('/api/workspace'); if (!response.ok) throw new Error('workspace error'); return (await response.json()).state as LocalState; });
 }
+async function expandSection(page: Page, title: '全部成绩' | '定数表') {
+  const toggle = page.getByRole('button', { name: new RegExp(`^(展开|收起)${title}$`) });
+  await toggle.waitFor();
+  if (await toggle.getAttribute('aria-expanded') === 'false') await toggle.click();
+  assert.equal(await toggle.getAttribute('aria-expanded'), 'true');
+}
 async function score(page: Page, expected: number, source?: SingleRating['source']) {
   await page.waitForFunction(async ({ key, expected, source }) => {
     const response = await fetch('/api/workspace'); if (!response.ok) return false;
     const current = (await response.json()).state.scores[key]; return current?.score === expected && (!source || current.source === source);
   }, { key, expected, source });
+  await expandSection(page, '全部成绩');
   await page.locator('.record-table tbody tr').first().waitFor();
 }
 async function edit(page: Page, value: number) {
+  await expandSection(page, '全部成绩');
   const section = page.locator('.records-browser');
   await section.getByRole('button', { name: '清除筛选', exact: true }).click();
   await section.getByRole('searchbox').fill(first.id);
@@ -113,6 +121,7 @@ async function edit(page: Page, value: number) {
   await score(page, value, 'manual'); await section.getByRole('searchbox').fill('');
 }
 async function verifyRecordsSingleSort(page: Page) {
+  await expandSection(page, '全部成绩');
   const section = page.locator('.records-browser');
   const labels: Record<RecordsSortField, string> = { score: '分数', rating: 'Rating' };
   const records = Object.values((await state(page)).scores);
@@ -192,6 +201,7 @@ async function exportPng(page: Page, name: string) {
 }
 
 async function exportConstantTable(page: Page, withScores: boolean) {
+  await expandSection(page, '定数表');
   const section = page.locator('.constant-table-section');
   const showScores = section.getByRole('button', { name: '显示成绩', exact: true });
   if ((await showScores.getAttribute('aria-pressed') === 'true') !== withScores) await showScores.click();
@@ -214,6 +224,7 @@ async function exportConstantTable(page: Page, withScores: boolean) {
 }
 
 async function verifyAvailableConstantFilters(page: Page) {
+  await expandSection(page, '全部成绩');
   const section = page.locator('.records-browser');
   const constant = section.getByLabel('定数', { exact: true });
   await section.getByRole('button', { name: '清除筛选', exact: true }).click();
@@ -232,6 +243,7 @@ async function verifyAvailableConstantFilters(page: Page) {
 }
 
 async function verifyConstantTableMissingStep(page: Page) {
+  await expandSection(page, '定数表');
   const section = page.locator('.constant-table-section');
   const constant = section.getByLabel('定数表定数', { exact: true });
   const generate = section.getByRole('button', { name: '生成定数表', exact: true });
@@ -269,7 +281,54 @@ async function verifyConstantTableMissingStep(page: Page) {
   assert.deepEqual(await generatedConstants(), ['14.0']);
 }
 
+async function verifyConstantTableLevelAll(page: Page) {
+  await expandSection(page, '定数表');
+  const section = page.locator('.constant-table-section');
+  const level = section.getByLabel('定数表等级', { exact: true });
+  const constant = section.getByLabel('定数表定数', { exact: true });
+  const allConstants = constant.locator('option[value="all"]');
+  const generate = section.getByRole('button', { name: '生成定数表', exact: true });
+  const exportButton = section.getByRole('button', { name: '导出定数表 PNG', exact: true });
+  const generatedConstants = () => section.locator('.constant-table-group').evaluateAll(elements => elements.map(element => element.getAttribute('data-constant')));
+  const before = await state(page), mutations: string[] = [];
+  const recordMutation = (request: Request) => {
+    if (new URL(request.url()).pathname.startsWith('/api/') && !['GET', 'HEAD'].includes(request.method())) mutations.push(request.method());
+  };
+  page.on('request', recordMutation);
+  try {
+    assert.equal(await level.inputValue(), '');
+    assert.notEqual(await allConstants.getAttribute('disabled'), null, 'all constants are disabled without one selected level');
+    await level.selectOption('14');
+    assert.equal(await allConstants.getAttribute('disabled'), null);
+    await constant.selectOption('all');
+    assert.equal(await constant.inputValue(), 'all');
+    assert(await exportButton.isDisabled(), 'all-constant selection cannot export the prior generated table');
+    assert.deepEqual(await generatedConstants(), ['14.0']);
+    await generate.click();
+    const expected = ['14.4', '14.3', '14.2', '14.1', '14.0'];
+    assert.deepEqual(await generatedConstants(), expected);
+    await section.getByRole('button', { name: '收起定数表', exact: true }).click();
+    assert.equal(await level.isVisible(), false);
+    await expandSection(page, '定数表');
+    assert.equal(await constant.inputValue(), 'all');
+    assert.deepEqual(await generatedConstants(), expected, 'folding preserves the selection and generated groups');
+    await level.selectOption('');
+    assert.notEqual(await allConstants.getAttribute('disabled'), null);
+    assert.equal(await constant.inputValue(), '', 'returning to all levels clears the all-constant selection');
+    assert(await generate.isDisabled());
+    assert(await exportButton.isDisabled());
+    assert.deepEqual(await generatedConstants(), expected);
+    await constant.selectOption('14.0');
+    await generate.click();
+    assert.deepEqual(await generatedConstants(), ['14.0']);
+    assert.deepEqual(await state(page), before, 'constant selection, generation and folding do not alter the account workspace');
+    assert.deepEqual(mutations, [], 'constant table controls make no API writes');
+  } finally { page.off('request', recordMutation); }
+  mark('one selected level enables all its constants, generates five level-14 groups, retains them while folded and disables all-selection across all levels without API writes');
+}
+
 async function verifyConstantTable(page: Page) {
+  await expandSection(page, '定数表');
   const section = page.locator('.constant-table-section');
   const constant = section.getByLabel('定数表定数', { exact: true });
   const generate = section.getByRole('button', { name: '生成定数表', exact: true });
@@ -277,6 +336,7 @@ async function verifyConstantTable(page: Page) {
   assert.equal(await section.locator('.constant-table-score-panel').count(), 0);
   assert.equal(await section.locator('.constant-table-grid').first().evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length), 10);
   await verifyConstantTableMissingStep(page);
+  await verifyConstantTableLevelAll(page);
   await constant.selectOption('');
   assert(await generate.isDisabled());
   await constant.selectOption('13.0');
@@ -299,7 +359,7 @@ async function verifyConstantTable(page: Page) {
   const target = catalog.find(chart => chart.difficulty === 'MAS' && chart.constant >= 13.5 && chart.constant <= 13.9)!;
   assert(target);
   await section.getByLabel('定数表等级', { exact: true }).selectOption('13+');
-  assert.deepEqual(await constant.locator('option').allTextContents(), ['选择定数', '13.5', '13.6', '13.7', '13.8', '13.9']);
+  assert.deepEqual(await constant.locator('option:not([value="all"])').allTextContents(), ['选择定数', '13.5', '13.6', '13.7', '13.8', '13.9']);
   assert.equal(await constant.inputValue(), '', 'changing level clears the previous 13.4 selection');
   await section.getByLabel('定数表难度', { exact: true }).selectOption('MAS');
   await section.getByLabel('定数表分类', { exact: true }).selectOption(target.genre);
@@ -349,6 +409,7 @@ try {
   assert.equal(await page.getByText('注册', { exact: true }).count(), 0);
   await page.screenshot({ path: join(output, 'login.png') });
   await login(page, 'root', 'pwd');
+  for (const title of ['全部成绩', '定数表']) assert.equal(await page.getByRole('button', { name: `展开${title}`, exact: true }).getAttribute('aria-expanded'), 'false');
   assert.equal(Object.keys((await state(page)).scores).length, 50);
   assert.equal(await page.evaluate(key => localStorage.getItem(key), STORAGE_KEY), JSON.stringify(seed));
   assert.equal(await page.locator('.record-table tbody tr').count(), 10);
@@ -495,11 +556,13 @@ try {
   await secondContext.route('https://otoge-db.net/**', route => route.fulfill({ status: 200, contentType: 'image/png', body: cover }));
   const mobile = await secondContext.newPage(); mobile.setDefaultTimeout(15_000);
   await mobile.goto(origin); await login(mobile, 'root', 'pwd');
+  for (const title of ['全部成绩', '定数表']) assert.equal(await mobile.getByRole('button', { name: `展开${title}`, exact: true }).getAttribute('aria-expanded'), 'false');
   assert.equal(Object.keys((await state(mobile)).scores).length, 50);
   assert.equal((await state(mobile)).nicknameOverrides['3055'][0], '个人测试别名');
   assert.equal(await mobile.evaluate(key => localStorage.getItem(key), STORAGE_KEY), null);
   const mobileAccountTools = mobile.locator('.account-data-toolbar');
   assert.deepEqual(await mobileAccountTools.getByRole('button').allTextContents(), ['导入备份', '导出备份', '清除数据']);
+  await expandSection(mobile, '全部成绩');
   for (const width of [320, 390, 768]) {
     await mobile.setViewportSize({ width, height: 844 });
     assert(await mobileAccountTools.evaluate(element => element.scrollWidth <= element.clientWidth));
@@ -512,12 +575,14 @@ try {
   assert.equal(await mobile.getByLabel('导出昵称', { exact: true }).inputValue(), exportNickname);
   mark('a second user cannot read the nickname, while the same account on a fresh mobile context restores it from MySQL');
   const mobileConstants = mobile.locator('.constant-table-section');
+  await expandSection(mobile, '定数表');
   for (const width of [320, 390, 768]) {
     await mobile.setViewportSize({ width, height: 844 });
     assert(await mobileConstants.evaluate(element => element.scrollWidth <= element.clientWidth));
   }
   await mobile.setViewportSize({ width: 390, height: 844 });
   await verifyConstantTableMissingStep(mobile);
+  await verifyConstantTableLevelAll(mobile);
   await exportConstantTable(mobile, false);
   await exportConstantTable(mobile, true);
   assert.equal(await mobileConstants.locator('.constant-table-grid').first().evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length), 1);

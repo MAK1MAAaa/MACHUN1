@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { CatalogChart, SingleRating } from "../types";
 import { chartKey } from "./b30";
-import { buildConstantTableGroups, constantTableLamp, DEFAULT_CONSTANT_TABLE_FILTERS, reconcileConstantSelection, toggleConstantSelection, validateConstantSelection } from "./constantTable";
+import { buildConstantTableGroups, constantTableLamp, DEFAULT_CONSTANT_TABLE_FILTERS, reconcileConstantSelection, resolveConstantTableSelection, toggleConstantSelection, validateConstantSelection } from "./constantTable";
 
 const dates = vi.hoisted(() => ({ old: "2020-01-01", new: "2026-01-01", "2": "2020-01-01", "10": "2020-01-01" } as Record<string, string>));
 vi.mock("./chartReleaseDates", () => ({ getChartReleaseDate: (chart: CatalogChart) => dates[chart.id] ?? null }));
@@ -16,6 +16,37 @@ function record(data: CatalogChart, extra: Partial<SingleRating> = {}): SingleRa
 }
 
 describe("constant table selection", () => {
+  it("selects every available constant within one level without crossing its boundary", () => {
+    const charts = [14.5, 14.4, 14.2, 14, 14.3, 14.1, 13.9].map((constant, index) => chart(String(index), { constant }));
+    const filters = { ...DEFAULT_CONSTANT_TABLE_FILTERS, level: "14" };
+    const constants = resolveConstantTableSelection(charts, filters, "all");
+    expect(constants).toEqual(["14.0", "14.1", "14.2", "14.3", "14.4"]);
+    expect(buildConstantTableGroups(charts, {}, { ...filters, constants }).map(group => group.constant))
+      .toEqual(["14.4", "14.3", "14.2", "14.1", "14.0"]);
+  });
+
+  it("respects missing constants and the single-constant level 16", () => {
+    const charts = [15.5, 15.6, 15.7, 15.8, 16].map((constant, index) => chart(String(index), { constant }));
+    const filters = { ...DEFAULT_CONSTANT_TABLE_FILTERS, level: "15+", constants: ["15.8"] };
+    expect(resolveConstantTableSelection(charts, filters, "all")).toEqual(["15.5", "15.6", "15.7", "15.8"]);
+    expect(resolveConstantTableSelection(charts, { ...filters, level: "16" }, "all")).toEqual(["16.0"]);
+    expect(resolveConstantTableSelection(charts, { ...filters, level: "" }, "all")).toEqual([]);
+    expect(resolveConstantTableSelection(charts, { ...filters, level: "16", constants: ["16.0"] }, "single")).toEqual(["16.0"]);
+  });
+
+  it("refreshes all-level selection from the active difficulty, genre and version", () => {
+    const charts = [chart("a", { constant: 14 }), chart("b", { constant: 14.1 }),
+      chart("difficulty", { constant: 14.2, difficulty: "EXP" }), chart("genre", { constant: 14.3, genre: "VARIETY" }),
+      chart("version", { constant: 14.4, version: "AIR" })];
+    const filters = { ...DEFAULT_CONSTANT_TABLE_FILTERS, level: "14", difficulty: "MAS" as const, genre: "ORIGINAL", version: "MATE" };
+    expect(resolveConstantTableSelection(charts, filters, "all")).toEqual(["14.0", "14.1"]);
+    expect(resolveConstantTableSelection(charts, { ...filters, difficulty: "EXP" }, "all")).toEqual(["14.2"]);
+    expect(resolveConstantTableSelection(charts, { ...filters, genre: "VARIETY" }, "all")).toEqual(["14.3"]);
+    expect(resolveConstantTableSelection(charts, { ...filters, version: "AIR" }, "all")).toEqual(["14.4"]);
+    expect(resolveConstantTableSelection(charts, { ...filters, genre: "不存在" }, "all")).toEqual([]);
+    expect(resolveConstantTableSelection(charts, { ...filters, constants: ["14.0"] }, "single")).toEqual(["14.0"]);
+  });
+
   it("fills a continuous interval in either direction and accepts at most five tenths", () => {
     expect(toggleConstantSelection(["14.0"], "14.3")).toEqual(["14.0", "14.1", "14.2", "14.3"]);
     expect(toggleConstantSelection(["14.4"], "14.0")).toEqual(["14.0", "14.1", "14.2", "14.3", "14.4"]);
