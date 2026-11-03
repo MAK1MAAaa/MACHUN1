@@ -10,7 +10,6 @@ import {
   constantTableLamp,
   DEFAULT_CONSTANT_TABLE_FILTERS,
   reconcileConstantSelection,
-  toggleConstantSelection,
   validateConstantSelection,
   type ConstantTableEntry,
   type ConstantTableFilters,
@@ -92,15 +91,6 @@ export function ConstantTableSection({ scores }: { scores: Record<string, Single
     setSelectionError(null); setExportError(null);
   }
 
-  function selectConstant(constant: string) {
-    try {
-      const selected = toggleConstantSelection(filters.constants, constant, constantOptions);
-      changeFilter("constants", selected);
-    } catch (error) {
-      setSelectionError(error instanceof Error ? error.message : "定数选择无效。");
-    }
-  }
-
   function generate() {
     try {
       const constants = validateConstantSelection(filters.constants, constantOptions);
@@ -149,6 +139,10 @@ export function ConstantTableSection({ scores }: { scores: Record<string, Single
       <label><span>等级</span><select aria-label="定数表等级" value={filters.level} disabled={exporting} onChange={event => changeFilter("level", event.target.value)}>
         <option value="">全部等级</option>{options.levels.map(level => <option key={level} value={level}>{level}</option>)}
       </select></label>
+      <label><span>定数</span><select aria-label="定数表定数" value={filters.constants[0] ?? ""} disabled={exporting}
+        onChange={event => changeFilter("constants", event.target.value ? [event.target.value] : [])}>
+        <option value="">选择定数</option>{constantOptions.map(constant => <option key={constant} value={constant}>{constant}</option>)}
+      </select></label>
       <label><span>分类</span><select aria-label="定数表分类" value={filters.genre} disabled={exporting} onChange={event => changeFilter("genre", event.target.value)}>
         <option value="">全部分类</option>{options.genres.map(genre => <option key={genre} value={genre}>{genre}</option>)}
       </select></label>
@@ -156,23 +150,12 @@ export function ConstantTableSection({ scores }: { scores: Record<string, Single
         <option value="">全部版本</option>{options.versions.map(version => <option key={version} value={version}>{version}</option>)}
       </select></label>
     </div>
-    <fieldset className="constant-table-constant-picker" disabled={exporting} aria-describedby="constant-table-selection-hint">
-      <legend>定数</legend>
-      <div className="constant-table-constants" role="group" aria-label="定数表定数">
-        {constantOptions.length === 0 && <span className="constant-table-no-constants">当前条件下没有可选定数。</span>}
-        {constantOptions.map(constant => <button type="button" key={constant} aria-pressed={filters.constants.includes(constant)} onClick={() => selectConstant(constant)}>{constant}</button>)}
-        <button type="button" className="constant-table-clear-constants" onClick={() => changeFilter("constants", [])}>清空定数</button>
-      </div>
-      <p id="constant-table-selection-hint">最多连续 5 档，跨度不超过 0.4；按当前可用选项补齐区间，自动跳过缺档，只能移除两端。筛选变化后会清理失效项。{filters.constants.length > 0 && <span> 当前：{[...filters.constants].sort().join("、")}</span>}</p>
-    </fieldset>
     {selectionError && <p className="constant-table-error" role="alert">{selectionError}</p>}
     <div className="constant-table-actions">
       <button type="button" className="constant-table-generate" onClick={generate} disabled={exporting || !selectionValid}>生成定数表</button>
       <button type="button" aria-pressed={showScores} disabled={exporting} onClick={() => setShowScores(value => !value)}>显示成绩</button>
       <button type="button" onClick={() => { void exportImage(); }} disabled={exporting || pendingChanges || !selectionValid || chartCount === 0}>{exporting ? "正在生成定数表图片" : "导出定数表 PNG"}</button>
-      <span className="constant-table-result-count" aria-live="polite">共 {chartCount} 张谱面 · {showScores ? "每行最多 5 张" : "每行最多 10 张"}</span>
     </div>
-    {pendingChanges && <p className="constant-table-pending" role="status">筛选已修改，点击“生成定数表”更新下方结果。</p>}
     {exportError && <p className="constant-table-error" role="alert">{exportError}</p>}
     <div className={`constant-table-results${showScores ? " show-scores" : ""}`} aria-label="定数表结果" aria-busy={exporting}>
       {chartCount === 0 && <p className="constant-table-empty">当前生成条件下没有可显示的谱面。</p>}

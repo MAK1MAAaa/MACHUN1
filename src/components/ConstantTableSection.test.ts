@@ -58,18 +58,26 @@ describe("constant table cards", () => {
 });
 
 describe("constant table section", () => {
-  it("starts with a generated 14.0 cover table and independent accessible filters", () => {
+  it("starts with a generated 14.0 cover table and five ordered single-select filters", () => {
     const html = renderToStaticMarkup(createElement(ConstantTableSection, { scores: {} }));
-    for (const label of ["定数表难度", "定数表等级", "定数表分类", "定数表版本", "定数表定数"]) expect(html).toContain(`aria-label="${label}"`);
+    const selects = [...html.matchAll(/<select\b[^>]*aria-label="([^"]*)"[^>]*>[\s\S]*?<\/select>/g)];
+    expect(selects.map(match => match[1])).toEqual(["定数表难度", "定数表等级", "定数表定数", "定数表分类", "定数表版本"]);
+    const constantSelect = selects[2][0];
+    expect(constantSelect).toContain('<option value="">选择定数</option>');
+    expect(constantSelect).toContain('<option value="14.0" selected="">14.0</option>');
+    expect(constantSelect).not.toContain("multiple");
     expect(html).toContain('data-constant="14.0"');
-    expect(html).toContain(`共 ${catalog.filter(chart => chart.constant === 14).length} 张谱面`);
-    expect(html).toContain("每行最多 10 张");
-    expect(html).toContain('aria-pressed="true">14.0</button>');
+    expect(html.match(/class="constant-table-card /g)).toHaveLength(catalog.filter(chart => chart.constant === 14).length);
     expect(html).toContain('aria-pressed="false">显示成绩</button>');
     expect(html).not.toContain("constant-table-score-panel");
     expect(html.indexOf('value="ULT"')).toBeLessThan(html.indexOf('value="MAS"'));
     expect(html.indexOf('value="MAS"')).toBeLessThan(html.indexOf('value="EXP"'));
+    expect(html).not.toContain("<fieldset");
+    expect(html).not.toContain("constant-table-constant-picker");
+    expect(html).not.toContain("constant-table-result-count");
+    expect(html).not.toContain("constant-table-pending");
     expect(html).not.toContain("筛选已修改");
-    expect(html).toContain("最多连续 5 档");
+    expect(html).not.toContain("最多连续 5 档");
+    expect(html).not.toContain("清空定数");
   });
 });
