@@ -129,7 +129,6 @@ export function ConstantTableSection({ scores }: { scores: Record<string, Single
   return <section className="constant-table-section" aria-labelledby="constant-table-title">
     <div className="section-heading constant-table-heading">
       <div><span className="section-index">05</span><h2 id="constant-table-title">定数表</h2></div>
-      <p>黑谱 → 紫谱 → 红谱 · 同难度按上线时间从早到晚</p>
     </div>
     <div className="constant-table-filters" aria-label="定数表筛选">
       <label><span>难度</span><select aria-label="定数表难度" value={filters.difficulty} disabled={exporting}
