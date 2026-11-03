@@ -1,0 +1,44 @@
+{
+  "capturedAt": "2026-11-03T08:30:16.688Z",
+  "revision": "e00d12365ef9406c14bb88eaf1fdf47da197363c",
+  "statistics": {
+    "scoreCount": 446,
+    "b30Rating": "16.5442",
+    "catalogChartCount": 1522,
+    "uniqueSongs": 1255,
+    "catalogDate": "2026-11-01",
+    "nickname": "ROXY",
+    "sourceCount": 4,
+    "boundSourceCount": 4,
+    "exportMissingCovers": 0
+  },
+  "images": {
+    "records-pc.png": {
+      "width": 1392,
+      "height": 1020,
+      "sha256": "5b5782c364712107d9d9e2e8375f0517d02e9b5d8c6d235f8af05834f2b6ba0b"
+    },
+    "dashboard-pc.png": {
+      "width": 1392,
+      "height": 630,
+      "sha256": "1edf05947540237d32866cbfb97dbf0a1676d72985ee3d7109a08f353c31de68"
+    },
+    "constants-pc.png": {
+      "width": 1392,
+      "height": 718,
+      "sha256": "3c765cb1e7e2132738c2b1aca3de2e857141ed6a0db44b4fb8d0943641ac4583"
+    },
+    "b30-export.png": {
+      "width": 2360,
+      "height": 1360,
+      "sha256": "20a03f799ea4463fa107bcf42b9e810d83434de836ae37f83e7e023237cd54ce"
+    },
+    "records-mobile.png": {
+      "width": 366,
+      "height": 955,
+      "sha256": "7ab869faf907c313a71b35346cfe309edba457546bce63a8dab91ef0686d0c9c"
+    }
+  },
+  "source": "http://124.221.227.122:1650",
+  "captureType": "authenticated-production-ui"
+}
