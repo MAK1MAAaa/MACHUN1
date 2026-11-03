@@ -233,50 +233,60 @@ async function verifyAvailableConstantFilters(page: Page) {
 
 async function verifyConstantTableMissingStep(page: Page) {
   const section = page.locator('.constant-table-section');
-  const choices = section.getByRole('group', { name: '定数表定数', exact: true });
+  const constant = section.getByLabel('定数表定数', { exact: true });
+  const generate = section.getByRole('button', { name: '生成定数表', exact: true });
+  const exportButton = section.getByRole('button', { name: '导出定数表 PNG', exact: true });
+  const generatedConstants = () => section.locator('.constant-table-group').evaluateAll(elements => elements.map(element => element.getAttribute('data-constant')));
+  assert.equal(await constant.getAttribute('multiple'), null);
+  assert.equal(await constant.locator('option[value=""]').innerText(), '选择定数');
+  assert.equal(await section.locator('fieldset, .constant-table-result-count, .constant-table-pending').count(), 0);
   await section.getByLabel('定数表难度', { exact: true }).selectOption('ULT');
-  await choices.getByRole('button', { name: '清空定数', exact: true }).click();
-  await choices.getByRole('button', { name: '15.8', exact: true }).click();
-  await choices.getByRole('button', { name: '16.0', exact: true }).click();
-  assert.equal(await choices.getByRole('button', { name: '15.9', exact: true }).count(), 0);
-  assert.deepEqual(await choices.locator('button[aria-pressed="true"]').allTextContents(), ['15.8', '16.0']);
-  await section.getByRole('button', { name: '生成定数表', exact: true }).click();
-  assert.deepEqual(await section.locator('.constant-table-group').evaluateAll(elements => elements.map(element => element.getAttribute('data-constant'))), ['16.0', '15.8']);
+  assert.equal(await constant.locator('option[value="15.9"]').count(), 0);
+  assert.equal(await constant.locator('option[value="15.8"]').count(), 1);
+  assert.equal(await constant.locator('option[value="16.0"]').count(), 1);
+  await constant.selectOption('15.8');
+  await generate.click();
+  assert.deepEqual(await generatedConstants(), ['15.8']);
   await exportConstantTable(page, false);
-  await choices.getByRole('button', { name: '15.8', exact: true }).click();
-  await choices.getByRole('button', { name: '16.0', exact: true }).click();
-  assert.equal(await choices.locator('button[aria-pressed="true"]').count(), 0, 'both visible endpoints can be removed without leaving a hidden 15.9');
-  assert(await section.getByRole('button', { name: '生成定数表', exact: true }).isDisabled());
-  await choices.getByRole('button', { name: '16.0', exact: true }).click();
+  await constant.selectOption('16.0');
+  assert.equal(await constant.inputValue(), '16.0');
+  assert.deepEqual(await generatedConstants(), ['15.8'], 'changing the selected constant retains the previous generated table');
+  assert(await exportButton.isDisabled(), 'a changed selection cannot export stale results');
+  await generate.click();
+  assert.deepEqual(await generatedConstants(), ['16.0']);
+  await constant.selectOption('');
+  assert(await generate.isDisabled());
+  assert(await exportButton.isDisabled());
+  assert.deepEqual(await generatedConstants(), ['16.0']);
+  await constant.selectOption('16.0');
   await section.getByLabel('定数表难度', { exact: true }).selectOption('EXP');
-  assert.equal(await choices.locator('button[aria-pressed="true"]').count(), 0);
-  assert.equal(await choices.getByRole('button', { name: '16.0', exact: true }).count(), 0);
+  assert.equal(await constant.inputValue(), '', 'changing difficulty clears an unavailable selected constant');
+  assert.equal(await constant.locator('option[value="16.0"]').count(), 0);
+  assert(await generate.isDisabled());
   await section.getByLabel('定数表难度', { exact: true }).selectOption('');
-  await choices.getByRole('button', { name: '14.0', exact: true }).click();
-  await section.getByRole('button', { name: '生成定数表', exact: true }).click();
+  await constant.selectOption('14.0');
+  await generate.click();
+  assert.deepEqual(await generatedConstants(), ['14.0']);
 }
 
 async function verifyConstantTable(page: Page) {
   const section = page.locator('.constant-table-section');
-  const choices = section.getByRole('group', { name: '定数表定数', exact: true });
+  const constant = section.getByLabel('定数表定数', { exact: true });
   const generate = section.getByRole('button', { name: '生成定数表', exact: true });
   const exportButton = section.getByRole('button', { name: '导出定数表 PNG', exact: true });
   assert.equal(await section.locator('.constant-table-score-panel').count(), 0);
   assert.equal(await section.locator('.constant-table-grid').first().evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length), 10);
   await verifyConstantTableMissingStep(page);
-  await choices.getByRole('button', { name: '清空定数', exact: true }).click();
+  await constant.selectOption('');
   assert(await generate.isDisabled());
-  await choices.getByRole('button', { name: '13.0', exact: true }).click();
-  await choices.getByRole('button', { name: '13.4', exact: true }).click();
-  assert.equal(await choices.locator('button[aria-pressed="true"]').count(), 5);
-  await choices.getByRole('button', { name: '13.5', exact: true }).click();
-  assert.equal(await choices.locator('button[aria-pressed="true"]').count(), 5);
-  assert((await section.getByRole('alert').innerText()).includes('连续 5 档'));
-  await choices.getByRole('button', { name: '13.2', exact: true }).click();
-  assert((await section.getByRole('alert').innerText()).includes('区间两端'));
+  await constant.selectOption('13.0');
+  await constant.selectOption('13.4');
+  assert.equal(await constant.inputValue(), '13.4');
+  assert.deepEqual(await constant.locator('option:checked').allTextContents(), ['13.4']);
+  assert.deepEqual(await section.locator('.constant-table-group').evaluateAll(elements => elements.map(element => element.getAttribute('data-constant'))), ['14.0']);
   assert(await exportButton.isDisabled(), 'changed filters must not export an old result');
   await generate.click();
-  assert.deepEqual(await section.locator('.constant-table-group').evaluateAll(elements => elements.map(element => element.getAttribute('data-constant'))), ['13.4', '13.3', '13.2', '13.1', '13.0']);
+  assert.deepEqual(await section.locator('.constant-table-group').evaluateAll(elements => elements.map(element => element.getAttribute('data-constant'))), ['13.4']);
   const groups = await section.locator('.constant-table-group').evaluateAll(elements => elements.map(element => [...element.querySelectorAll('li[data-chart-key]')].map(entry => ({
     difficulty: entry.getAttribute('data-difficulty')!, date: entry.getAttribute('data-release-date')!,
   }))));
@@ -289,22 +299,21 @@ async function verifyConstantTable(page: Page) {
   const target = catalog.find(chart => chart.difficulty === 'MAS' && chart.constant >= 13.5 && chart.constant <= 13.9)!;
   assert(target);
   await section.getByLabel('定数表等级', { exact: true }).selectOption('13+');
-  assert.deepEqual(await choices.locator('button[aria-pressed]').allTextContents(), ['13.5', '13.6', '13.7', '13.8', '13.9']);
-  await choices.getByRole('button', { name: '13.5', exact: true }).click();
-  await choices.getByRole('button', { name: '13.9', exact: true }).click();
+  assert.deepEqual(await constant.locator('option').allTextContents(), ['选择定数', '13.5', '13.6', '13.7', '13.8', '13.9']);
+  assert.equal(await constant.inputValue(), '', 'changing level clears the previous 13.4 selection');
   await section.getByLabel('定数表难度', { exact: true }).selectOption('MAS');
   await section.getByLabel('定数表分类', { exact: true }).selectOption(target.genre);
   await section.getByLabel('定数表版本', { exact: true }).selectOption(target.version);
+  await constant.selectOption(target.constant.toFixed(1));
   await generate.click();
   const filteredKeys = await section.locator('li[data-chart-key]').evaluateAll(elements => elements.map(element => element.getAttribute('data-chart-key')));
   assert(filteredKeys.includes(`${target.id}:${target.difficulty}`));
   for (const key of filteredKeys) {
     const data = catalog.find(chart => `${chart.id}:${chart.difficulty}` === key)!;
-    assert(data.difficulty === 'MAS' && data.constant >= 13.5 && data.constant <= 13.9 && data.genre === target.genre && data.version === target.version);
+    assert(data.difficulty === 'MAS' && data.constant === target.constant && data.genre === target.genre && data.version === target.version);
   }
   for (const label of ['定数表等级', '定数表难度', '定数表分类', '定数表版本']) await section.getByLabel(label, { exact: true }).selectOption('');
-  await choices.getByRole('button', { name: '清空定数', exact: true }).click();
-  await choices.getByRole('button', { name: first.constant.toFixed(1), exact: true }).click();
+  await constant.selectOption(first.constant.toFixed(1));
   await generate.click();
   await exportConstantTable(page, false);
   await section.getByRole('button', { name: '显示成绩', exact: true }).click();
@@ -320,7 +329,7 @@ async function verifyConstantTable(page: Page) {
   })), 'full achievement labels fit the desktop score panel');
   const box = await card.boundingBox(); assert(box && Math.abs(box.width - box.height * 2) < 2);
   await exportConstantTable(page, true);
-  mark('constant tables enforce continuous five-step ranges, combine all filters, sort release dates, render 10/5 columns and save both PNG modes');
+  mark('constant tables select one available constant, clear invalid selections, retain old results until generation, render 10/5 columns and save both PNG modes');
 }
 try {
   await fixture.db.insert(users).values({ username: 'ui-second', pwd: hashPassword('second-pwd') }).onDuplicateKeyUpdate({ set: { pwd: hashPassword('second-pwd') } });
