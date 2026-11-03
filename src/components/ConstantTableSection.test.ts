@@ -64,6 +64,7 @@ describe("constant table section", () => {
     expect(selects.map(match => match[1])).toEqual(["定数表难度", "定数表等级", "定数表定数", "定数表分类", "定数表版本"]);
     const constantSelect = selects[2][0];
     expect(constantSelect).toContain('<option value="">选择定数</option>');
+    expect(constantSelect).toContain('<option value="all" disabled="">全部定数</option>');
     expect(constantSelect).toContain('<option value="14.0" selected="">14.0</option>');
     expect(constantSelect).not.toContain("multiple");
     expect(html).toContain('data-constant="14.0"');

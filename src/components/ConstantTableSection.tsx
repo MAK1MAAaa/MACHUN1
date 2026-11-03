@@ -9,10 +9,11 @@ import {
   CONSTANT_TABLE_LAMP_LABELS,
   constantTableLamp,
   DEFAULT_CONSTANT_TABLE_FILTERS,
-  reconcileConstantSelection,
+  resolveConstantTableSelection,
   validateConstantSelection,
   type ConstantTableEntry,
   type ConstantTableFilters,
+  type ConstantTableSelectionMode,
 } from "../core/constantTable";
 import { generateConstantTablePng } from "../core/constantTableExport";
 import { createDownloadResource, type DownloadResource } from "../core/fileDelivery";
@@ -20,6 +21,7 @@ import { getAvailableChartConstants, getRecordsFilterOptions } from "../core/rec
 import { formatScore, scoreGrade } from "../core/rating";
 import type { Difficulty, SingleRating } from "../types";
 import { ImageExportDialog } from "./ImageExportDialog";
+import { CollapsibleSection } from "./CollapsibleSection";
 import "./ConstantTableSection.css";
 
 function copyFilters(filters: ConstantTableFilters): ConstantTableFilters {
@@ -51,6 +53,7 @@ export function ConstantTableCard({ entry, showScores }: { entry: ConstantTableE
 export function ConstantTableSection({ scores }: { scores: Record<string, SingleRating> }) {
   const [filters, setFilters] = useState<ConstantTableFilters>(() => copyFilters(DEFAULT_CONSTANT_TABLE_FILTERS));
   const [generatedFilters, setGeneratedFilters] = useState<ConstantTableFilters>(() => copyFilters(DEFAULT_CONSTANT_TABLE_FILTERS));
+  const [selectionMode, setSelectionMode] = useState<ConstantTableSelectionMode>("single");
   const [showScores, setShowScores] = useState(false);
   const [selectionError, setSelectionError] = useState<string | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
@@ -77,15 +80,27 @@ export function ConstantTableSection({ scores }: { scores: Record<string, Single
 
   useEffect(() => {
     setFilters(current => {
-      const constants = reconcileConstantSelection(current.constants, getAvailableChartConstants(catalog, current));
+      const constants = resolveConstantTableSelection(catalog, current, selectionMode);
       return JSON.stringify(constants) === JSON.stringify(current.constants) ? current : { ...current, constants };
     });
-  }, [constantOptions]);
+  }, [constantOptions, selectionMode]);
 
-  function changeFilter<Key extends keyof ConstantTableFilters>(key: Key, value: ConstantTableFilters[Key]) {
+  function changeFilter<Key extends Exclude<keyof ConstantTableFilters, "constants">>(key: Key, value: ConstantTableFilters[Key]) {
+    if (key === "level" && !value) setSelectionMode("single");
     setFilters(current => {
       const next = { ...current, [key]: value };
-      next.constants = reconcileConstantSelection(next.constants, getAvailableChartConstants(catalog, next));
+      next.constants = resolveConstantTableSelection(catalog, next, selectionMode);
+      return next;
+    });
+    setSelectionError(null); setExportError(null);
+  }
+
+  function changeConstant(value: string) {
+    const mode = value === "all" && filters.level ? "all" : "single";
+    setSelectionMode(mode);
+    setFilters(current => {
+      const next = { ...current, constants: value && value !== "all" ? [value] : [] };
+      next.constants = resolveConstantTableSelection(catalog, next, mode);
       return next;
     });
     setSelectionError(null); setExportError(null);
@@ -126,10 +141,7 @@ export function ConstantTableSection({ scores }: { scores: Record<string, Single
     }
   }
 
-  return <section className="constant-table-section" aria-labelledby="constant-table-title">
-    <div className="section-heading constant-table-heading">
-      <div><span className="section-index">05</span><h2 id="constant-table-title">定数表</h2></div>
-    </div>
+  return <><CollapsibleSection id="constant-table-title" index="05" title="定数表" className="constant-table-section">
     <div className="constant-table-filters" aria-label="定数表筛选">
       <label><span>难度</span><select aria-label="定数表难度" value={filters.difficulty} disabled={exporting}
         onChange={event => changeFilter("difficulty", event.target.value as Difficulty | "")}>
@@ -138,9 +150,10 @@ export function ConstantTableSection({ scores }: { scores: Record<string, Single
       <label><span>等级</span><select aria-label="定数表等级" value={filters.level} disabled={exporting} onChange={event => changeFilter("level", event.target.value)}>
         <option value="">全部等级</option>{options.levels.map(level => <option key={level} value={level}>{level}</option>)}
       </select></label>
-      <label><span>定数</span><select aria-label="定数表定数" value={filters.constants[0] ?? ""} disabled={exporting}
-        onChange={event => changeFilter("constants", event.target.value ? [event.target.value] : [])}>
-        <option value="">选择定数</option>{constantOptions.map(constant => <option key={constant} value={constant}>{constant}</option>)}
+      <label><span>定数</span><select aria-label="定数表定数" value={selectionMode === "all" ? "all" : filters.constants[0] ?? ""} disabled={exporting}
+        onChange={event => changeConstant(event.target.value)}>
+        <option value="">选择定数</option><option value="all" disabled={!filters.level || constantOptions.length === 0}>全部定数</option>
+        {constantOptions.map(constant => <option key={constant} value={constant}>{constant}</option>)}
       </select></label>
       <label><span>分类</span><select aria-label="定数表分类" value={filters.genre} disabled={exporting} onChange={event => changeFilter("genre", event.target.value)}>
         <option value="">全部分类</option>{options.genres.map(genre => <option key={genre} value={genre}>{genre}</option>)}
@@ -165,6 +178,7 @@ export function ConstantTableSection({ scores }: { scores: Record<string, Single
         </ol> : <p className="constant-table-empty">此定数下没有符合筛选条件的谱面。</p>}
       </div>)}
     </div>
+  </CollapsibleSection>
     {imageExport && <ImageExportDialog file={imageExport.file} label="定数表" missingCovers={imageExport.missingCovers} previewAlt={imageExport.previewAlt} onClose={closeImageExport} />}
-  </section>;
+  </>;
 }

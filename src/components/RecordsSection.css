@@ -1,5 +1,4 @@
 .records-browser { min-width: 0; }
-.records-browser .records-heading { flex-wrap: wrap; }
 .records-filters { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 10px; }
 .records-filter, .records-browser .records-filter-search { display: grid; grid-template-rows: 18px 36px; align-items: stretch; gap: 6px; width: 92px; min-width: 0; color: var(--muted); font-size: 0.74rem; }
 .records-filter > span, .records-filter-search > span { line-height: 18px; }
