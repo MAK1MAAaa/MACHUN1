@@ -102,7 +102,7 @@ async function score(page: Page, expected: number, source?: SingleRating['source
 }
 async function edit(page: Page, value: number) {
   const section = page.locator('.records-browser');
-  await section.getByRole('button', { name: 'Rating 排名', exact: true }).click();
+  await section.getByRole('button', { name: '清除筛选', exact: true }).click();
   await section.getByRole('searchbox').fill(first.id);
   const row = page.locator('.record-table tbody tr').filter({ has: page.getByText(first.difficulty, { exact: true }) });
   await row.getByRole('button', { name: '修改分数', exact: true }).click();
@@ -112,49 +112,49 @@ async function edit(page: Page, value: number) {
   await dialog.waitFor({ state: 'hidden' });
   await score(page, value, 'manual'); await section.getByRole('searchbox').fill('');
 }
-async function verifyRecordsMultiSort(page: Page) {
+async function verifyRecordsSingleSort(page: Page) {
   const section = page.locator('.records-browser');
-  let sorts: RecordsSort[] = ['constant-descending'];
-  const labels: Record<RecordsSortField, string> = { constant: '定数', score: '分数', rating: 'Rating' };
+  const labels: Record<RecordsSortField, string> = { score: '分数', rating: 'Rating' };
   const records = Object.values((await state(page)).scores);
+  const comparators: Record<RecordsSort, (left: SingleRating, right: SingleRating) => number> = {
+    'rating-descending': (left, right) => right.rating - left.rating || right.score - left.score,
+    'rating-ascending': (left, right) => left.rating - right.rating || left.score - right.score,
+    'score-descending': (left, right) => right.score - left.score || right.rating - left.rating,
+    'score-ascending': (left, right) => left.score - right.score || left.rating - right.rating,
+  };
   assert.equal(await section.getByLabel('排序方式', { exact: true }).count(), 0);
-  async function click(field: RecordsSortField) {
-    await section.getByRole('button', { name: '下一页', exact: true }).click();
-    await section.getByRole('button', { name: `按${labels[field]}排序`, exact: true }).click();
-    const current = sorts.find(sort => sort.startsWith(`${field}-`));
-    sorts = !current ? [`${field}-descending`, ...sorts]
-      : current.endsWith('descending') ? sorts.map(sort => sort === current ? `${field}-ascending` as RecordsSort : sort)
-      : sorts.filter(sort => sort !== current);
-    const expected = [...records].sort((left, right) => {
-      for (const sort of sorts) {
-        const key = sort.split('-')[0] as RecordsSortField;
-        const difference = left[key] - right[key];
-        if (difference) return sort.endsWith('ascending') ? difference : -difference;
-      }
-      return right.constant - left.constant || left.title.localeCompare(right.title, 'zh-CN')
-        || `${left.id}:${left.difficulty}`.localeCompare(`${right.id}:${right.difficulty}`);
-    });
+  assert.equal(await section.getByRole('button', { name: '按定数排序', exact: true }).count(), 0);
+  assert.equal(await section.locator('.records-mode, .records-count, .records-sort-help').count(), 0);
+  async function check(sort: RecordsSort) {
+    const expected = [...records].sort((left, right) => comparators[sort](left, right)
+      || right.constant - left.constant || left.title.localeCompare(right.title, 'zh-CN')
+      || `${left.id}:${left.difficulty}`.localeCompare(`${right.id}:${right.difficulty}`));
     const displayed = await section.locator('.record-table tbody tr').evaluateAll(rows => rows.map(row => {
       const id = row.querySelector('.record-song-info small')!.textContent!.replace(/^ID /, '');
       const difficulty = row.querySelector('.records-difficulty-cell')!.textContent!;
       return `${id}:${difficulty}`;
     }));
     assert.deepEqual(displayed, expected.slice(0, 10).map(record => `${record.id}:${record.difficulty}`));
-    assert.match(await section.locator('.records-page-status').innerText(), /^第 1 \/ /, 'changing any sort resets pagination');
-    for (const key of ['constant', 'score', 'rating'] as const) {
-      const button = section.getByRole('button', { name: `按${labels[key]}排序`, exact: true });
-      const index = sorts.findIndex(sort => sort.startsWith(`${key}-`));
-      assert.equal(await button.getAttribute('aria-pressed'), String(index >= 0));
-      if (index >= 0) assert.equal(await button.locator('sup').innerText(), String(index + 1));
+    assert.match(await section.locator('.records-page-status').innerText(), /^第 1 \/ /, 'changing the selected sort resets pagination');
+    const active = sort.startsWith('score-') ? 'score' : 'rating';
+    for (const field of ['score', 'rating'] as const) {
+      const button = section.getByRole('button', { name: `按${labels[field]}排序`, exact: true });
+      assert.equal(await button.getAttribute('aria-pressed'), String(field === active));
+      assert.equal(await button.locator('sup').count(), 0);
     }
+    const headers = section.locator('thead th[aria-sort]');
+    assert.equal(await headers.count(), 1);
+    assert.equal(await headers.getAttribute('aria-sort'), sort.endsWith('ascending') ? 'ascending' : 'descending');
   }
-  await click('score'); await click('rating');
-  assert.equal(sorts.length, 3, 'all three criteria stay enabled together');
-  await click('constant'); await click('rating'); await click('rating');
-  await click('score'); await click('score'); await click('constant');
-  assert.equal(sorts.length, 0, 'every column can independently cycle off');
-  await click('rating'); await click('score'); await click('constant');
-  assert.deepEqual(sorts, ['constant-descending', 'score-descending', 'rating-descending']);
+  await check('rating-descending');
+  for (const [field, expected] of [
+    ['score', 'score-descending'], ['score', 'score-ascending'], ['score', 'score-descending'],
+    ['rating', 'rating-descending'], ['rating', 'rating-ascending'], ['rating', 'rating-descending'],
+  ] as const) {
+    await section.getByRole('button', { name: '下一页', exact: true }).click();
+    await section.getByRole('button', { name: `按${labels[field]}排序`, exact: true }).click();
+    await check(expected);
+  }
 }
 
 async function exportPng(page: Page, name: string) {
@@ -371,14 +371,13 @@ try {
   await page.reload(); await page.locator('.account-toolbar').waitFor(); await score(page, 1_001_000, 'manual');
   mark('manual score, achievements and source survive refresh; legacy migration does not repeat');
   const section = page.locator('.records-browser');
-  await section.getByRole('button', { name: '曲库筛选', exact: true }).click();
   await verifyAvailableConstantFilters(page);
   await page.getByLabel('等级', { exact: true }).selectOption('13');
   assert.deepEqual(await page.getByLabel('定数', { exact: true }).locator('option').allTextContents(), ['全部定数', '13.0', '13.1', '13.2', '13.3', '13.4']);
   await page.getByRole('button', { name: '清除筛选', exact: true }).click();
-  await verifyRecordsMultiSort(page);
+  await verifyRecordsSingleSort(page);
   await page.getByRole('button', { name: '清除筛选', exact: true }).click();
-  mark('desktop header clicks combine all three sort criteria, preserve priorities, cycle directions/off and reset pagination without a selector');
+  mark('desktop score and Rating headers select one sort, toggle direction, apply the other value as a tie-breaker and reset pagination');
   await page.getByRole('button', { name: '显示未游玩谱面', exact: true }).click();
   await section.getByRole('searchbox').fill('3055');
   await page.getByRole('button', { name: '查看歌曲详情：SAN値直葬', exact: true }).click();
@@ -391,7 +390,7 @@ try {
   await song.getByRole('button', { name: '关闭歌曲详情', exact: true }).click();
   await section.getByRole('searchbox').fill('个人测试别名'); assert.equal(await page.locator('.record-table tbody tr').count(), 1);
   mark('catalog filters, pagination, new low-level details and personal aliases work in the database workspace');
-  await section.getByRole('searchbox').fill(''); await section.getByRole('button', { name: 'Rating 排名', exact: true }).click();
+  await section.getByRole('searchbox').fill(''); await section.getByRole('button', { name: '清除筛选', exact: true }).click();
   await page.locator('.source-tools-toggle').click();
   const card = page.locator('.source-card.rin');
   await card.getByRole('button', { name: '绑定账号', exact: true }).click();
@@ -524,7 +523,6 @@ try {
   await mobile.setViewportSize({ width: 390, height: 844 });
   mark('touch constant tables avoid horizontal overflow and both cover and score PNGs save after an explicit tap');
   const mobileRecords = mobile.locator('.records-browser');
-  await mobileRecords.getByRole('button', { name: '曲库筛选', exact: true }).click();
   assert.equal(await mobileRecords.getByLabel('等级', { exact: true }).isVisible(), false);
   await mobileRecords.getByRole('button', { name: '展开筛选', exact: true }).click();
   await verifyAvailableConstantFilters(mobile);
@@ -532,12 +530,11 @@ try {
   assert.deepEqual(await mobileRecords.getByLabel('定数', { exact: true }).locator('option').allTextContents(), ['全部定数', '13.0', '13.1', '13.2', '13.3', '13.4']);
   await mobileRecords.getByRole('button', { name: '清除筛选', exact: true }).click();
   await mobileRecords.getByRole('button', { name: '收起筛选', exact: true }).click();
-  await verifyRecordsMultiSort(mobile);
+  await verifyRecordsSingleSort(mobile);
   await mobileRecords.getByRole('button', { name: '展开筛选', exact: true }).click();
   await mobileRecords.getByRole('button', { name: '清除筛选', exact: true }).click();
-  mark('touch sorting buttons stay available with filters collapsed and combine constant, score and Rating with the same priorities as desktop');
+  mark('touch sorting buttons stay available with filters collapsed and select only score or Rating with the same tie-breakers as desktop');
   await mobileRecords.getByRole('button', { name: '收起筛选', exact: true }).click();
-  await mobileRecords.getByRole('button', { name: 'Rating 排名', exact: true }).click();
   for (const name of ['导出 B30 图片', '导出 B30 + 候选20 图片', '导出 AJ B30 图片', '导出 B50 图片']) await exportPng(mobile, name);
   mark('touch viewport omits the B30 card preview while keeping the chart, readable records and collapsed filters; regular, AJ B30 and B50 PNGs save after an explicit tap without reporting unconfirmed success');
   await mobile.locator('.source-tools-toggle').click();

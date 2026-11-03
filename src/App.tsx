@@ -582,7 +582,6 @@ function App({ account, initial, initialNotice }: AppProps) {
         </section>
 
         <RecordsSection
-          records={records}
           scores={localState.scores}
           nicknameOverrides={localState.nicknameOverrides}
           disabled={workspace.busy}

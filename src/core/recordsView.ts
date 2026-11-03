@@ -1,4 +1,4 @@
-import { chartKey, compareRatings } from "./b30";
+import { chartKey } from "./b30";
 import { normalizeSearchText } from "./search";
 import { SCORE_SOURCE_LABELS } from "./sources";
 import type { CatalogChart, Difficulty, ScoreSource, SingleRating } from "../types";
@@ -22,11 +22,9 @@ function compareGameVersions(left: string, right: string): number {
     || (left < right ? -1 : left > right ? 1 : 0);
 }
 
-export type RecordsViewMode = "rating" | "catalog";
-export type RecordsSort = "constant-descending" | "constant-ascending"
-  | "rating-descending" | "rating-ascending"
+export type RecordsSort = "rating-descending" | "rating-ascending"
   | "score-descending" | "score-ascending";
-export type RecordsSortField = "constant" | "rating" | "score";
+export type RecordsSortField = "rating" | "score";
 
 export interface RecordsFilters {
   query: string;
@@ -37,7 +35,7 @@ export interface RecordsFilters {
   version: string;
   includeUnplayed: boolean;
   source: ScoreSource | "";
-  sorts: RecordsSort[];
+  sort: RecordsSort;
 }
 
 export const EMPTY_RECORDS_FILTERS: RecordsFilters = {
@@ -49,21 +47,16 @@ export const EMPTY_RECORDS_FILTERS: RecordsFilters = {
   version: "",
   includeUnplayed: false,
   source: "",
-  sorts: ["constant-descending"],
+  sort: "rating-descending",
 };
 
-/** Newly enabled columns take priority; changing a direction preserves its place. */
-export function cycleRecordsSort(sorts: readonly RecordsSort[], field: RecordsSortField): RecordsSort[] {
-  const current = sorts.find(sort => sort.startsWith(`${field}-`));
-  if (!current) return [`${field}-descending`, ...sorts];
-  if (current.endsWith("descending")) return sorts.map<RecordsSort>(sort => sort === current ? `${field}-ascending` : sort);
-  return sorts.filter(sort => sort !== current);
+export function cycleRecordsSort(sort: RecordsSort, field: RecordsSortField): RecordsSort {
+  return sort === `${field}-descending` ? `${field}-ascending` : `${field}-descending`;
 }
 
 export interface RecordsRow {
   chart: CatalogChart;
   record: SingleRating | undefined;
-  rank: number | null;
 }
 
 export function getChartLevel(constant: number): string {
@@ -116,15 +109,15 @@ function matchesSearch(row: RecordsRow, query: string, nicknameOverrides: Record
   return normalizeSearchText(text).includes(query);
 }
 
-function compareCatalogRows(left: RecordsRow, right: RecordsRow, sorts: readonly RecordsSort[]): number {
+function compareCatalogRows(left: RecordsRow, right: RecordsRow, sort: RecordsSort): number {
   // A missing score is not a zero score and always follows played charts.
   if (Boolean(left.record) !== Boolean(right.record)) return left.record ? -1 : 1;
-  for (const sort of sorts) {
-    const difference = sort.startsWith("constant-")
-      ? left.chart.constant - right.chart.constant
-      : left.record && right.record
-        ? sort.startsWith("rating-") ? left.record.rating - right.record.rating : left.record.score - right.record.score
-        : 0;
+  if (left.record && right.record) {
+    const ratingDifference = left.record.rating - right.record.rating;
+    const scoreDifference = left.record.score - right.record.score;
+    const difference = sort.startsWith("rating-")
+      ? ratingDifference || scoreDifference
+      : scoreDifference || ratingDifference;
     if (difference) return sort.endsWith("ascending") ? difference : -difference;
   }
   return right.chart.constant - left.chart.constant
@@ -134,36 +127,23 @@ function compareCatalogRows(left: RecordsRow, right: RecordsRow, sorts: readonly
 
 export function buildRecordsRows(
   charts: readonly CatalogChart[],
-  records: readonly SingleRating[],
   scores: Record<string, SingleRating>,
   nicknameOverrides: Record<string, string[]>,
-  mode: RecordsViewMode,
   filters: RecordsFilters,
 ): RecordsRow[] {
-  const chartsByKey = new Map(charts.map((chart) => [chartKey(chart), chart]));
-  const rankedRecords = records.filter((record) => chartsByKey.has(chartKey(record))).sort(compareRatings);
-  const ranks = new Map(rankedRecords.map((record, index) => [chartKey(record), index + 1]));
   const query = normalizeSearchText(filters.query);
-  if (mode === "rating") {
-    return rankedRecords.map((record) => ({
-      chart: chartsByKey.get(chartKey(record))!,
-      record,
-      rank: ranks.get(chartKey(record))!,
-    })).filter((row) => matchesSearch(row, query, nicknameOverrides));
-  }
-
   return charts
     .filter((chart) => (!filters.difficulty || chart.difficulty === filters.difficulty)
       && (!filters.level || getChartLevel(chart.constant) === filters.level)
       && (!filters.constant || chart.constant.toFixed(1) === filters.constant)
       && (!filters.genre || chart.genre === filters.genre)
       && (!filters.version || chart.version === filters.version))
-    .map((chart) => ({ chart, record: scores[chartKey(chart)], rank: ranks.get(chartKey(chart)) ?? null }))
+    .map((chart) => ({ chart, record: scores[chartKey(chart)] }))
     .filter((row) => (filters.source
       ? row.record?.source === filters.source
       : filters.includeUnplayed || row.record !== undefined)
       && matchesSearch(row, query, nicknameOverrides))
-    .sort((left, right) => compareCatalogRows(left, right, filters.sorts));
+    .sort((left, right) => compareCatalogRows(left, right, filters.sort));
 }
 
 export function paginateRecords(rows: readonly RecordsRow[], requestedPage: number): {
