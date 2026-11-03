@@ -30,6 +30,10 @@ function headers(html: string): string[] {
   return html.match(/<thead>([\s\S]*?)<\/thead>/)?.[1].match(/<th\b[^>]*>[\s\S]*?<\/th>/g) ?? [];
 }
 
+function paginationButton(html: string, label: string): string {
+  return html.match(new RegExp(`<button\\b[^>]*aria-label="${label}"[^>]*>[\\s\\S]*?<\\/button>`))?.[0] ?? "";
+}
+
 describe("records section", () => {
   beforeEach(() => { renderState.filters = {}; renderState.filtersExpanded = false; });
   it("starts with catalog filters and ten rows without ranking, counts or sort instructions", () => {
@@ -46,6 +50,8 @@ describe("records section", () => {
     expect(html).not.toContain("records-mode");
     expect(html).not.toContain("records-count");
     expect(html).not.toContain("records-sort-help");
+    expect(html).not.toContain("records-source-note");
+    expect(html).not.toContain("来源按当前最高成绩的归属筛选");
     expect(html).not.toContain("共 12 项");
     expect(html.match(/>修改分数<\/button>/g)).toHaveLength(10);
     expect(html.match(/disabled="">修改分数<\/button>/g)).toHaveLength(10);
@@ -67,8 +73,34 @@ describe("records section", () => {
     expect(html).toContain('aria-label="成绩分页"');
     expect(html).toContain("第 1 / 1 页");
     for (const label of ["首页", "上一页", "下一页", "末页"]) {
-      expect(html).toContain(`disabled="">${label}</button>`);
+      expect(paginationButton(html, label)).toContain('disabled=""');
     }
+  });
+
+  it("labels icon navigation, announces page changes and retains the page selector and total", () => {
+    const records: SingleRating[] = catalog.slice(0, 12).map((chart) => ({
+      id: chart.id, title: chart.title, difficulty: chart.difficulty, constant: chart.constant,
+      score: 1_000_000, rating: 14.5, source: "manual", updatedAt: "2026-10-04T00:00:00Z",
+    }));
+    const html = renderRecords(records);
+    const navigation = html.match(/<nav\b[^>]*aria-label="成绩分页"[^>]*>[\s\S]*?<\/nav>/)?.[0] ?? "";
+    const status = navigation.match(/<span\b[^>]*class="[^"]*records-page-status[^"]*"[^>]*>[\s\S]*?<\/span>/)?.[0] ?? "";
+    expect(status).toContain("records-sr-only");
+    expect(status).toContain('aria-live="polite"');
+    expect(status).toContain("第 1 / 2 页");
+    for (const label of ["首页", "上一页", "下一页", "末页"]) {
+      const button = paginationButton(navigation, label);
+      expect(button).toContain(`title="${label}"`);
+      expect(button).toMatch(/<svg\b[^>]*aria-hidden="true"/);
+      expect(button.replace(/<[^>]*>/g, "")).toBe("");
+      if (label === "首页" || label === "上一页") expect(button).toContain('disabled=""');
+      else expect(button).not.toContain('disabled=""');
+    }
+    const selector = navigation.match(/<select\b[^>]*aria-label="跳转页码"[^>]*>[\s\S]*?<\/select>/)?.[0] ?? "";
+    expect(selector).toContain('<option value="1" selected="">1</option>');
+    expect(selector).toContain('<option value="2">2</option>');
+    const visiblePageText = navigation.replace(status, "").replace(selector, "").replace(/<[^>]*>/g, "");
+    expect(visiblePageText).toMatch(/\/\s*2/);
   });
 
   it("shows difficulty, display level, and constant in separate cells", () => {

@@ -250,21 +250,28 @@ export function RecordsSection({ scores, nicknameOverrides, onEdit, onDelete, on
         </table>
       </div>
 
-      <p className="records-source-note">来源按当前最高成绩的归属筛选{filters.source ? "，仅显示所选来源的已游玩谱面" : "；未游玩谱面没有来源，排序时置于已游玩谱面之后"}。</p>
-
       <nav className="records-pagination" aria-label="成绩分页">
-        <span className="records-page-status" aria-live="polite">第 {pagination.page} / {pagination.pageCount} 页</span>
+        <span className="records-page-status records-sr-only" aria-live="polite">第 {pagination.page} / {pagination.pageCount} 页</span>
         <div className="records-page-controls">
-          <button type="button" disabled={pagination.page === 1} onClick={() => setRequestedPage(1)}>首页</button>
-          <button type="button" disabled={pagination.page === 1} onClick={() => setRequestedPage(pagination.page - 1)}>上一页</button>
+          <button type="button" aria-label="首页" title="首页" disabled={pagination.page === 1} onClick={() => setRequestedPage(1)}>
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5v10m9-10-5 5 5 5" /></svg>
+          </button>
+          <button type="button" aria-label="上一页" title="上一页" disabled={pagination.page === 1} onClick={() => setRequestedPage(pagination.page - 1)}>
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m12.5 5-5 5 5 5" /></svg>
+          </button>
           <label className="records-page-jump">
             <span className="records-sr-only">跳转页码</span>
             <select aria-label="跳转页码" value={pagination.page} onChange={(event) => setRequestedPage(Number(event.target.value))}>
               {Array.from({ length: pagination.pageCount }, (_, index) => <option key={index + 1} value={index + 1}>{index + 1}</option>)}
             </select>
+            <span className="records-page-total" aria-hidden="true">/{pagination.pageCount}</span>
           </label>
-          <button type="button" disabled={pagination.page === pagination.pageCount} onClick={() => setRequestedPage(pagination.page + 1)}>下一页</button>
-          <button type="button" disabled={pagination.page === pagination.pageCount} onClick={() => setRequestedPage(pagination.pageCount)}>末页</button>
+          <button type="button" aria-label="下一页" title="下一页" disabled={pagination.page === pagination.pageCount} onClick={() => setRequestedPage(pagination.page + 1)}>
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7.5 5 5 5-5 5" /></svg>
+          </button>
+          <button type="button" aria-label="末页" title="末页" disabled={pagination.page === pagination.pageCount} onClick={() => setRequestedPage(pagination.pageCount)}>
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M15 5v10M6 5l5 5-5 5" /></svg>
+          </button>
         </div>
       </nav>
       {selectedChart && <SongDetailsDialog
