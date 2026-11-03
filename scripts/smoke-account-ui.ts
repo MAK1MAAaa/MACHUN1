@@ -346,14 +346,14 @@ try {
   mark('root login migrates 50 legacy scores and one alias while keeping the old browser copy');
   const exportNickname = '分表测试玩家';
   await page.getByLabel('导出昵称', { exact: true }).fill(exportNickname);
-  await page.getByRole('button', { name: '保存昵称', exact: true }).click();
+  await page.locator('.b30-export-settings').getByRole('button', { name: '保存', exact: true }).click();
   await page.waitForFunction(async nickname => {
     const response = await fetch('/api/workspace');
     return response.ok && (await response.json()).exportNickname === nickname;
   }, exportNickname);
   await page.reload(); await page.locator('.account-toolbar').waitFor();
   assert.equal(await page.getByLabel('导出昵称', { exact: true }).inputValue(), exportNickname);
-  assert(await page.getByRole('button', { name: '保存昵称', exact: true }).isDisabled());
+  assert(await page.locator('.b30-export-settings').getByRole('button', { name: '保存', exact: true }).isDisabled());
   mark('export nickname is saved to the account and survives a full page reload');
   let emptyAjDownloads = 0;
   const countEmptyAjDownload = () => { emptyAjDownloads++; };

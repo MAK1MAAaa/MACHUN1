@@ -13,21 +13,23 @@
 .source-card::after { display: none; }
 .source-card { background: #fff; box-shadow: none; }
 .source-card:hover { transform: none; box-shadow: 0 5px 16px rgb(65 91 66 / 6%); }
-.b30-heading-tools { row-gap: 12px; }
-.b30-export-actions { gap: 8px; }
-.b30-export-settings { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 0 20px; padding: 14px 16px; border: 1px solid var(--line-soft); border-radius: 10px; background: var(--surface-2); }
-.b30-export-settings label { font-size: .85rem; font-weight: 700; color: var(--text); }
-.b30-export-settings input { width: 220px; max-width: 100%; min-width: 0; min-height: 42px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; color: var(--text); background: #fff; font-size: .85rem; }
-.b30-export-settings button { min-height: 42px; padding: 8px 14px; border: 1px solid var(--line); border-radius: 8px; background: #e2eddb; color: #345c3b; font-size: .8rem; font-weight: 700; }
+.b30-section > .section-heading { align-items: flex-start; }
+.b30-section > .section-heading > div:first-child { min-height: 44px; align-items: center; white-space: nowrap; }
+.b30-heading-tools { flex: 1; min-width: 0; justify-content: flex-start; row-gap: 12px; }
+.b30-export-actions { gap: 8px; margin-inline-start: auto; }
+.b30-export-settings { display: grid; grid-template-columns: auto 120px auto; align-items: center; gap: 6px; min-height: 44px; margin: 0; padding: 0; border: 0; background: transparent; }
+.b30-export-settings label { white-space: nowrap; font-size: .75rem; font-weight: 700; color: var(--text); }
+.b30-export-settings input { width: 100%; min-width: 0; min-height: 34px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; color: var(--text); background: #fff; font-size: .8rem; }
+.b30-export-settings button { min-height: 34px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: transparent; color: #345c3b; font-size: .75rem; font-weight: 700; white-space: nowrap; }
 .b30-export-settings button:disabled { opacity: .5; cursor: default; }
-.b30-export-settings span { flex: 1 1 250px; font-size: .75rem; line-height: 1.6; color: var(--muted); }
+.b30-export-settings span { grid-column: 1 / -1; font-size: .75rem; line-height: 1.6; color: var(--danger); }
 .b30-export-settings input[aria-invalid="true"] { border-color: var(--danger); }
 @media (max-width: 660px) {
-  .b30-export-settings { gap: 8px; padding: 12px; }
-  .b30-export-settings label { flex-basis: 100%; }
-  .b30-export-settings input { width: 0; flex: 1 1 0; }
+  .b30-heading-tools { align-items: stretch; }
+  .b30-export-actions { margin-inline-start: 0; }
+  .b30-export-settings { width: 100%; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; }
   .b30-export-settings input, .b30-export-settings button { min-height: 44px; }
-  .b30-export-settings span { flex-basis: 100%; }
+  .b30-export-settings input { font-size: 16px; }
 }
 .b30-export-actions button { min-height: 44px; padding: 10px 14px; border-radius: 9px; }
 .account-toolbar { width: min(1480px, calc(100% - 48px)); gap: 10px; }

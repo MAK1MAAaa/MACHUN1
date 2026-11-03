@@ -492,7 +492,14 @@ function App({ account, initial, initialNotice }: AppProps) {
               <h2>BEST 30</h2>
             </div>
             <div className="b30-heading-tools">
-              <p>按单曲 Rating 自动排序 · 同一谱面只占一个位置</p>
+              <form className="b30-export-settings" onSubmit={(event) => { event.preventDefault(); void saveExportNickname(); }}>
+                <label htmlFor="export-nickname">导出昵称</label>
+                <input id="export-nickname" value={exportNickname} onChange={(event) => setExportNickname(event.target.value)}
+                  placeholder={account.username} maxLength={64} disabled={workspace.busy}
+                  aria-describedby={nicknameTooLong ? "export-nickname-hint" : undefined} aria-invalid={nicknameTooLong || undefined} />
+                <button type="submit" disabled={workspace.busy || nicknameTooLong || exportNickname.trim() === savedExportNickname}>保存</button>
+                {nicknameTooLong && <span id="export-nickname-hint" role="alert">昵称最多 32 个字符。</span>}
+              </form>
               <div className="b30-export-actions">
                 <button type="button" onClick={() => exportB30Json()}>导出 B30 JSON</button>
                 <button type="button" onClick={() => exportB30Json(true)}>导出 B30 + 候选20 JSON</button>
@@ -513,14 +520,6 @@ function App({ account, initial, initialNotice }: AppProps) {
               </div>
             </div>
           </div>
-          <form className="b30-export-settings" onSubmit={(event) => { event.preventDefault(); void saveExportNickname(); }}>
-            <label htmlFor="export-nickname">导出昵称</label>
-            <input id="export-nickname" value={exportNickname} onChange={(event) => setExportNickname(event.target.value)}
-              placeholder={account.username} maxLength={64} disabled={workspace.busy}
-              aria-describedby="export-nickname-hint" aria-invalid={nicknameTooLong || undefined} />
-            <button type="submit" disabled={workspace.busy || nicknameTooLong || exportNickname.trim() === savedExportNickname}>保存昵称</button>
-            <span id="export-nickname-hint">{nicknameTooLong ? "昵称最多 32 个字符。" : "保存后显示在所有分表图片左上角，留空使用登录用户名。"}</span>
-          </form>
           <div className="b30-analysis" aria-label="B30 Rating 柱状分析">
             <div className="b30-analysis-heading">
               <div>
