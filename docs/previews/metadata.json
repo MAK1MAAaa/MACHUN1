@@ -1,6 +1,6 @@
 {
-  "capturedAt": "2026-11-03T08:30:16.688Z",
-  "revision": "e00d12365ef9406c14bb88eaf1fdf47da197363c",
+  "capturedAt": "2026-11-03T09:27:33.575Z",
+  "revision": "0f741ddff636da90d67d8802f0fcf56d1586c04e",
   "statistics": {
     "scoreCount": 446,
     "b30Rating": "16.5442",
@@ -13,30 +13,40 @@
     "exportMissingCovers": 0
   },
   "images": {
+    "workspace-pc.png": {
+      "width": 1440,
+      "height": 1305,
+      "sha256": "29b6b4ccb6bf79187b2dd705c1d9eeea4cf0dbea1247f019706631dfc1ab91e8"
+    },
     "records-pc.png": {
       "width": 1392,
-      "height": 1020,
-      "sha256": "5b5782c364712107d9d9e2e8375f0517d02e9b5d8c6d235f8af05834f2b6ba0b"
+      "height": 996,
+      "sha256": "3ba95caa12c5e5bfd722e85d7a39dadbbbb3d5cf69653699ddcb9f4f6c0302be"
     },
     "dashboard-pc.png": {
       "width": 1392,
       "height": 630,
-      "sha256": "1edf05947540237d32866cbfb97dbf0a1676d72985ee3d7109a08f353c31de68"
+      "sha256": "5d3b02408b1c6746c3dc426d917bf67224009e0a8a41fcfd5f48756b9ddfea7d"
     },
     "constants-pc.png": {
       "width": 1392,
-      "height": 718,
-      "sha256": "3c765cb1e7e2132738c2b1aca3de2e857141ed6a0db44b4fb8d0943641ac4583"
+      "height": 1334,
+      "sha256": "afb0a56cb9e6e675edf77c1d906a23d7d562900e8e5f98862faf8bdbca163d36"
     },
     "b30-export.png": {
       "width": 2360,
       "height": 1360,
-      "sha256": "20a03f799ea4463fa107bcf42b9e810d83434de836ae37f83e7e023237cd54ce"
+      "sha256": "3b19c030f51e3c3ee56ca8f68f62fd12b8fe5fd0174fa524c332a95a9180b7ad"
+    },
+    "workspace-mobile.png": {
+      "width": 390,
+      "height": 1514,
+      "sha256": "07aab178667efd72bff96a55e9876a7207d94a8cb847dc7e02f74ad17c316243"
     },
     "records-mobile.png": {
       "width": 366,
-      "height": 955,
-      "sha256": "7ab869faf907c313a71b35346cfe309edba457546bce63a8dab91ef0686d0c9c"
+      "height": 946,
+      "sha256": "c800a95f67ecd80bc54db22a433c806fa9194049b7803eb9143855b24efe3aa4"
     }
   },
   "source": "http://124.221.227.122:1650",
