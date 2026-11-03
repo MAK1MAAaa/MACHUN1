@@ -165,7 +165,6 @@ export function ConstantTableSection({ scores }: { scores: Record<string, Single
         </ol> : <p className="constant-table-empty">此定数下没有符合筛选条件的谱面。</p>}
       </div>)}
     </div>
-    <p className="constant-table-footnote">优先谱面上线日，缺失时按歌曲首发日，从早到晚排列；未知日期置后。封面加载失败时显示占位图。{showScores && " 未游玩谱面不标记为 CLEAR。"}</p>
     {imageExport && <ImageExportDialog file={imageExport.file} label="定数表" missingCovers={imageExport.missingCovers} previewAlt={imageExport.previewAlt} onClose={closeImageExport} />}
   </section>;
 }
