@@ -105,11 +105,7 @@ pnpm install --frozen-lockfile
 pnpm browser:install
 ```
 
-按[本机运行指南](docs/local.md)使用管理连接执行全部四项 SQL 迁移，准备仅有 CRUD 权限的数据库应用账号，将自己的连接写入被 Git 忽略的 `.env`：
-
-```dotenv
-DATABASE_URL=mysql://machun_app:your_password@127.0.0.1:3306/machun1
-```
+按[本机运行指南](docs/local.md)初始化数据库并执行全部四项迁移，使用仅有 CRUD 权限的应用账号，将连接配置写入被 Git 忽略的 `.env`，然后启动：
 
 ```bash
 chmod 600 .env
@@ -117,11 +113,11 @@ pnpm db:catalog
 pnpm start
 ```
 
-打开 [http://127.0.0.1:4399](http://127.0.0.1:4399)。首次初始化账号为 `root / pwd`，已有数据库不会重置密码。应用启动不会自动执行 DDL。停止服务按 Ctrl+C，MySQL 中的数据保留。
+打开 [http://127.0.0.1:4399](http://127.0.0.1:4399)，使用部署管理员提供的账号登录。数据库迁移由管理员执行，应用启动不会自动修改表结构。停止服务按 Ctrl+C，已保存的数据保留。
 
 ### Docker / 1Panel
 
-容器使用 **linux/amd64**，默认端口 **1650**，命名卷挂载 `/data`。仓库编排默认接入已有的 `1panel-network` 和 MySQL，使用前需按自己的环境调整数据库连接并补齐四项迁移。
+容器架构为 **linux/amd64**，默认端口 **1650**，数据卷挂载 `/data`。编排使用已有的 `1panel-network` 和 MySQL，部署前需调整数据库连接并完成迁移。
 
 | 路径 | 入口 |
 | --- | --- |
@@ -129,7 +125,7 @@ pnpm start
 | 使用已发布的 Hub 镜像 | [Docker Hub](https://hub.docker.com/r/mak1maaaa/machun1) · [compose.hub.yaml](compose.hub.yaml) |
 | 电脑完成服务器来源绑定 | [登录助手](docs/1panel.md#电脑绑定手机同步) |
 
-当前线上示例从合并后的 `main` 构建部署；Hub 标签按单独的发布流程更新，不代表与当前线上示例同步。更新既有实例时保留原 Compose 项目名、数据库和数据卷；有 `compose.runtime.json` 的实例使用部署记录中的双文件命令。
+线上示例从 `main` 构建，Hub 镜像单独发布。更新时保留原 Compose 项目名、数据库和数据卷；使用 `compose.runtime.json` 的实例按部署记录中的双文件命令操作。
 
 ## 开发与文档
 
@@ -139,7 +135,7 @@ pnpm test
 pnpm build
 ```
 
-普通测试跳过需要 MySQL 环境的集成用例。`pnpm test:mysql` 使用独立 Docker MySQL 和随机凭据，不读取项目 `.env` 或访问正式数据库；完整检查需要本机 Docker 和 Google Chrome。
+`pnpm test` 默认跳过 MySQL 集成用例。运行 `pnpm test:mysql` 需安装 Docker 和 Google Chrome，测试使用独立数据库，不读取项目 `.env` 或访问正式库。
 
 | 文档 | 内容 |
 | --- | --- |
