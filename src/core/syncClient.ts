@@ -35,7 +35,6 @@ export function createSyncClient(fetcher: typeof fetch = fetch, signal?: () => A
     if (requestSignal?.aborted) throw new SyncClientError("cancelled", "请求已取消");
     if (!response.ok) {
       const failure = payload && typeof payload === "object" ? payload as Record<string, unknown> : {};
-      if (response.status === 401 && failure.code === "UNAUTHORIZED" && typeof window !== "undefined") window.dispatchEvent(new Event("machun-session-expired"));
       throw new SyncClientError(
         typeof failure.code === "string" ? failure.code : "request_failed",
         typeof failure.error === "string" ? failure.error : `本地同步请求失败（HTTP ${response.status}）`,

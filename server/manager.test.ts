@@ -38,7 +38,7 @@ function browserSession(url = "https://portal.example/login") {
   };
 }
 
-async function setup(companionLogin = false) {
+async function setup() {
   const directory = await mkdtemp(join(tmpdir(), "machun-manager-"));
   folders.push(directory);
   const provider: BrowserProvider = {
@@ -48,7 +48,7 @@ async function setup(companionLogin = false) {
   const launcher = {
     open: vi.fn(async () => browserSession().session),
   };
-  const options = { store: new SourceStore(directory), providers: { rin: provider, munet: provider, otogame: provider }, launcher, bindPollMs: 2, bindTimeoutMs: 2000, companionLogin };
+  const options = { store: new SourceStore(directory), providers: { rin: provider, munet: provider, otogame: provider }, launcher, bindPollMs: 2, bindTimeoutMs: 2000 };
   const manager = new SourceManager(options);
   managers.push(manager);
   await manager.initialize();
@@ -61,12 +61,6 @@ async function bound(manager: SourceManager, source: "rin" | "otogame" = "rin") 
 }
 
 describe("local source manager", () => {
-  it("deployment requests companion binding and never opens a visible server browser", async () => {
-    const { manager, launcher } = await setup(true);
-    await expect(manager.bind('rin')).rejects.toMatchObject({ code: 'COMPANION_REQUIRED' });
-    expect(launcher.open).not.toHaveBeenCalled();
-    expect(manager.connections().find(item => item.source === 'rin')?.bindingMode).toBe('companion');
-  });
   it("does not expose a remote login URL for native browser windows", async () => {
     const { manager, provider } = await setup();
     vi.mocked(provider.identify).mockRejectedValue(new SyncError("AUTH_REQUIRED", "等待登录", 401));
@@ -87,6 +81,21 @@ describe("local source manager", () => {
     expect(launcher.open).toHaveBeenLastCalledWith(options.store.profilePath(saved.binding.profile), provider.loginUrl, false);
     expect((await stat(join(directory, "rin.json"))).mode & 0o777).toBe(0o600);
     expect((await stat(directory)).mode & 0o777).toBe(0o700);
+  });
+
+  it("asks for a local login when a saved profile is missing", async () => {
+    const { manager, options, launcher } = await setup();
+    await bound(manager);
+    const saved = await options.store.load("rin");
+    await options.store.removeProfile(saved.binding!.profile!);
+    const replacement = new SourceManager(options);
+    managers.push(replacement);
+    await replacement.initialize();
+    expect(replacement.connections().find((item) => item.source === "rin")).toMatchObject({
+      status: "auth_required", bound: true, error: "本地登录会话缺失，请重新登录该来源。",
+    });
+    await expect(replacement.sync("rin")).rejects.toMatchObject({ code: "AUTH_REQUIRED" });
+    expect(launcher.open).toHaveBeenCalledOnce();
   });
 
   it("returns only normalized scores and metadata, never the original payload", async () => {

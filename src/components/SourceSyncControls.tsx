@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createSyncClient } from "../core/syncClient";
-import { CompanionBinding } from './CompanionBinding';
 import type { ExternalScoreSource } from "../core/sources";
 import { SYNC_SOURCES, type ConnectionStatus, type SourceConnection, type SyncResult } from "../syncTypes";
 
@@ -129,18 +128,16 @@ type SourceSyncController = ReturnType<typeof useSourceSync>;
 export function SourceSyncControls({ source, controller }: { source: ExternalScoreSource; controller: SourceSyncController }) {
   const [token, setToken] = useState("");
   const [editingToken, setEditingToken] = useState(false);
-  const [companion, setCompanion] = useState(false);
   const connection = controller.connections[source];
   const operation = controller.pending[source];
   const running = connection.status === "binding" || connection.status === "syncing";
-  const busy = Boolean(operation) || running || companion;
+  const busy = Boolean(operation) || running;
   const showToken = source === "lxns" && (!connection.bound || connection.status === "auth_required" || editingToken);
   const canUnbind = connection.bound || running || Boolean(operation) || connection.status !== "unbound";
   const error = controller.errors[source] ?? connection.error;
-  const status = operation === "unbind" ? "正在清除绑定" : operation === "sync" ? "正在同步" : operation === "bind" ? "正在建立绑定" : (connection.status === "binding" && connection.bindingMode === "companion" ? "服务器正在验证" : STATUS_LABEL[connection.status]);
+  const status = operation === "unbind" ? "正在清除绑定" : operation === "sync" ? "正在同步" : operation === "bind" ? "正在建立绑定" : STATUS_LABEL[connection.status];
 
   const bind = async () => {
-    if (source !== 'lxns' && connection.bindingMode === 'companion') { setCompanion(true); return; }
     if (source === "lxns" && !showToken) {
       setEditingToken(true);
       return;
@@ -160,8 +157,7 @@ export function SourceSyncControls({ source, controller }: { source: ExternalSco
       <span>个人 API Token</span>
       <input type="password" value={token} onChange={(event) => setToken(event.target.value)} placeholder="首次绑定时填写" autoComplete="off" disabled={busy} />
     </label>}
-    {connection.status === "binding" && connection.bindingMode !== "companion" && <p className="source-sync-note">请在弹出窗口完成登录、验证码或授权确认，本页会自动更新。</p>}
-    {companion && source !== 'lxns' && <CompanionBinding source={source} onDone={() => { void controller.refresh(); }} onClose={() => setCompanion(false)} />}
+    {source !== "lxns" && connection.status === "binding" && <p className="source-sync-note">请在弹出窗口完成登录、验证码或授权确认。</p>}
     {(operation === "sync" || connection.status === "syncing") && connection.progress && <p className="source-sync-note" role="status">
       已读取 {connection.progress.completedPages} 页。
       {connection.progress.retryAt

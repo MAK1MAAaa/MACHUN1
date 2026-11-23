@@ -1,7 +1,5 @@
-import { and, eq } from 'drizzle-orm';
-import type { Database } from './db/connection';
-import { withDatabase } from './db/connection';
-import { personalAliases, scores, workspaces } from './db/schema';
+import type { DatabaseSync } from 'node:sqlite';
+import { localTransaction } from './db/sqlite';
 import { catalogByKey } from '../src/core/catalog';
 import { calculateRating } from '../src/core/rating';
 import { chartKey } from '../src/core/b30';
@@ -10,83 +8,110 @@ import { importSourceFile, type ExternalScoreSource, type SourceImportReport } f
 import { importBackup } from '../src/core/backup';
 import { mergeSyncResult } from '../src/core/sync';
 import { SYNC_SOURCES, type SyncResult } from '../src/syncTypes';
-import type { LocalState } from '../src/types';
+import type { LocalState, SingleRating } from '../src/types';
 import type { WorkspaceSnapshot, WorkspaceResult } from '../src/accountTypes';
 import { SyncError } from './provider';
 
-type DataAccess = Pick<Database, 'select' | 'insert' | 'update' | 'delete'>;
 type WorkspaceMutation = { state: LocalState; notice?: string; report?: SourceImportReport; exportNickname?: string };
+type ScoreRow = {
+  song_id: SingleRating['id'];
+  difficulty: SingleRating['difficulty'];
+  score: SingleRating['score'];
+  source: SingleRating['source'];
+  combo: SingleRating['combo'] | null;
+  full_chain: SingleRating['fullChain'] | null;
+  clear_status: SingleRating['clear'] | null;
+  updated_at: SingleRating['updatedAt'];
+};
+type WorkspaceRow = { revision: number; legacy_migrated: number; export_nickname: string };
+
 function invalid(message = '工作区请求格式无效。'): never { throw new SyncError('INVALID_REQUEST', message, 400); }
+
 export class WorkspaceRepository {
-  constructor(private readonly db: Database) {}
-  private async lock(tx: DataAccess, username: string) {
-    await tx.insert(workspaces).values({ username }).onDuplicateKeyUpdate({ set: { username } });
-    const [row] = await tx.select().from(workspaces).where(eq(workspaces.username, username)).for('update');
-    return row;
+  constructor(private readonly db: DatabaseSync) {}
+
+  private metadata(): WorkspaceRow {
+    return this.db.prepare('SELECT revision, legacy_migrated, export_nickname FROM workspace WHERE id = 1').get() as WorkspaceRow;
   }
-  private async read(tx: DataAccess, username: string): Promise<LocalState> {
+
+  private read(): LocalState {
     const state = structuredClone(EMPTY_STATE);
-    const rows = await tx.select().from(scores).where(eq(scores.username, username));
-    for (const row of rows) {
-      const chart = catalogByKey.get(`${row.songId}:${row.difficulty}`);
+    const scores = this.db.prepare('SELECT song_id, difficulty, score, source, combo, full_chain, clear_status, updated_at FROM scores').all() as ScoreRow[];
+    for (const row of scores) {
+      const chart = catalogByKey.get(`${row.song_id}:${row.difficulty}`);
       if (!chart) continue;
       state.scores[chartKey(chart)] = {
         id: chart.id, title: chart.title, difficulty: chart.difficulty, constant: chart.constant,
-        score: row.score, rating: calculateRating(row.score, chart.constant), source: row.source, updatedAt: row.updatedAt,
-        ...(row.combo ? { combo: row.combo } : {}), ...(row.fullChain ? { fullChain: row.fullChain } : {}), ...(row.clear ? { clear: row.clear } : {}),
+        score: row.score, rating: calculateRating(row.score, chart.constant), source: row.source, updatedAt: row.updated_at,
+        ...(row.combo ? { combo: row.combo } : {}), ...(row.full_chain ? { fullChain: row.full_chain } : {}), ...(row.clear_status ? { clear: row.clear_status } : {}),
       };
     }
-    for (const row of await tx.select().from(personalAliases).where(eq(personalAliases.username, username))) state.nicknameOverrides[row.songId] = row.aliases;
+    const aliases = this.db.prepare('SELECT song_id, aliases FROM personal_aliases').all() as { song_id: string; aliases: string }[];
+    for (const row of aliases) state.nicknameOverrides[row.song_id] = JSON.parse(row.aliases);
     return state;
   }
-  private async write(tx: DataAccess, username: string, before: LocalState, after: LocalState): Promise<void> {
+
+  private write(before: LocalState, after: LocalState): void {
+    const deleteScore = this.db.prepare('DELETE FROM scores WHERE song_id = ? AND difficulty = ?');
     for (const [key, previous] of Object.entries(before.scores)) {
-      if (!after.scores[key]) await tx.delete(scores).where(and(eq(scores.username, username), eq(scores.songId, previous.id), eq(scores.difficulty, previous.difficulty)));
+      if (!after.scores[key]) deleteScore.run(previous.id, previous.difficulty);
     }
+    const saveScore = this.db.prepare(`
+      INSERT INTO scores (song_id, difficulty, score, source, combo, full_chain, clear_status, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(song_id, difficulty) DO UPDATE SET
+        score = excluded.score, source = excluded.source, combo = excluded.combo,
+        full_chain = excluded.full_chain, clear_status = excluded.clear_status, updated_at = excluded.updated_at
+    `);
     for (const [key, record] of Object.entries(after.scores)) {
       if (JSON.stringify(record) === JSON.stringify(before.scores[key])) continue;
-      const row = { username, songId: record.id, difficulty: record.difficulty, score: record.score, source: record.source, combo: record.combo ?? null, fullChain: record.fullChain ?? null, clear: record.clear ?? null, updatedAt: record.updatedAt };
-      await tx.insert(scores).values(row).onDuplicateKeyUpdate({ set: row });
+      saveScore.run(record.id, record.difficulty, record.score, record.source, record.combo ?? null, record.fullChain ?? null, record.clear ?? null, record.updatedAt);
     }
+    const deleteAliases = this.db.prepare('DELETE FROM personal_aliases WHERE song_id = ?');
     for (const id of Object.keys(before.nicknameOverrides)) {
-      if (!after.nicknameOverrides[id]) await tx.delete(personalAliases).where(and(eq(personalAliases.username, username), eq(personalAliases.songId, id)));
+      if (!after.nicknameOverrides[id]) deleteAliases.run(id);
     }
+    const saveAliases = this.db.prepare(`
+      INSERT INTO personal_aliases (song_id, aliases) VALUES (?, ?)
+      ON CONFLICT(song_id) DO UPDATE SET aliases = excluded.aliases
+    `);
     for (const [songId, aliases] of Object.entries(after.nicknameOverrides)) {
       if (JSON.stringify(aliases) === JSON.stringify(before.nicknameOverrides[songId])) continue;
-      const row = { username, songId, aliases };
-      await tx.insert(personalAliases).values(row).onDuplicateKeyUpdate({ set: row });
+      saveAliases.run(songId, JSON.stringify(aliases));
     }
   }
-  async get(username: string): Promise<WorkspaceSnapshot> {
-    return withDatabase(() => this.db.transaction(async tx => {
-      const row = await this.lock(tx, username);
-      return { state: await this.read(tx, username), revision: row.revision, legacyMigrated: row.legacyMigrated, exportNickname: row.exportNickname };
-    }));
+
+  async get(): Promise<WorkspaceSnapshot> {
+    return localTransaction(this.db, () => {
+      const row = this.metadata();
+      return { state: this.read(), revision: row.revision, legacyMigrated: Boolean(row.legacy_migrated), exportNickname: row.export_nickname };
+    });
   }
-  private async change(username: string, apply: (state: LocalState) => WorkspaceMutation, migrate = false, replace = false): Promise<WorkspaceResult> {
-    return withDatabase(() => this.db.transaction(async tx => {
-      const row = await this.lock(tx, username);
-      const before = await this.read(tx, username);
-      if (migrate && row.legacyMigrated) return { state: before, revision: row.revision, legacyMigrated: true, exportNickname: row.exportNickname, notice: '旧浏览器数据已经迁移，未重复导入。' };
+
+  private async change(apply: (state: LocalState) => WorkspaceMutation, migrate = false, replace = false): Promise<WorkspaceResult> {
+    return localTransaction(this.db, () => {
+      const row = this.metadata();
+      const before = this.read();
+      if (migrate && row.legacy_migrated) return { state: before, revision: row.revision, legacyMigrated: true, exportNickname: row.export_nickname, notice: '旧浏览器数据已经迁移，未重复导入。' };
       let result: ReturnType<typeof apply>;
       try { result = apply(structuredClone(before)); } catch (error) {
         if (error instanceof SyncError) throw error;
         invalid(error instanceof Error ? error.message : undefined);
       }
-      if (replace) {
-        await tx.delete(scores).where(eq(scores.username, username));
-        await tx.delete(personalAliases).where(eq(personalAliases.username, username));
-      }
-      await this.write(tx, username, replace ? structuredClone(EMPTY_STATE) : before, result.state);
+      if (replace) this.db.exec('DELETE FROM scores; DELETE FROM personal_aliases;');
+      this.write(replace ? EMPTY_STATE : before, result.state);
       const revision = row.revision + 1;
-      const exportNickname = result.exportNickname ?? row.exportNickname;
-      await tx.update(workspaces).set({ revision, exportNickname, ...(migrate ? { legacyMigrated: true } : {}) }).where(eq(workspaces.username, username));
-      return { ...result, revision, legacyMigrated: migrate || row.legacyMigrated, exportNickname };
-    }));
+      const exportNickname = result.exportNickname ?? row.export_nickname;
+      const legacyMigrated = migrate || Boolean(row.legacy_migrated);
+      this.db.prepare('UPDATE workspace SET revision = ?, export_nickname = ?, legacy_migrated = ? WHERE id = 1')
+        .run(revision, exportNickname, Number(legacyMigrated));
+      return { ...result, revision, legacyMigrated, exportNickname };
+    });
   }
-  async action(username: string, input: Record<string, unknown>): Promise<WorkspaceResult> {
+
+  async action(input: Record<string, unknown>): Promise<WorkspaceResult> {
     if (input.type === 'import' && Object.keys(input).some(key => !['type', 'source', 'raw', 'filename'].includes(key))) invalid();
-    return this.change(username, state => {
+    return this.change(state => {
       switch (input.type) {
         case 'manual': {
           if (typeof input.key !== 'string' || typeof input.score !== 'string') invalid();
@@ -99,7 +124,7 @@ export class WorkspaceRepository {
           delete state.scores[input.key];
           return { state, notice: '成绩已删除。' };
         }
-        case 'clear': return { state: structuredClone(EMPTY_STATE), notice: '当前账号的成绩和个人别名已清空。' };
+        case 'clear': return { state: structuredClone(EMPTY_STATE), notice: '本地成绩和个人别名已清空。' };
         case 'export-nickname': {
           if (typeof input.nickname !== 'string') invalid('导出昵称格式无效。');
           const nickname = input.nickname.trim();
@@ -131,17 +156,16 @@ export class WorkspaceRepository {
       }
     }, false, input.type === 'clear' || (input.type === 'backup' && input.mode === 'replace'));
   }
-  async migrate(username: string, input: Record<string, unknown>): Promise<WorkspaceResult> {
-    if (username !== 'root') throw new SyncError('FORBIDDEN', '旧全局浏览器数据只能归入 root。', 403);
+  async migrate(input: Record<string, unknown>): Promise<WorkspaceResult> {
     let legacy: LocalState;
     try { legacy = parseLocalState(JSON.stringify(input.state)); } catch { invalid('旧浏览器数据无效，原数据未删除。'); }
-    return this.change(username, state => {
+    return this.change(state => {
       const backup = { ...legacy, scores: Object.values(legacy.scores) };
       const result = importBackup(JSON.stringify(backup), state, catalogByKey, 'merge');
       return { state: result.state, notice: `旧数据迁移完成：成绩 ${result.report.importedScores}，个人别名 ${result.report.importedAliases}，跳过 ${result.report.skippedScores}；浏览器原副本保留。` };
     }, true);
   }
-  async mergeSync(username: string, result: SyncResult): Promise<WorkspaceResult> {
-    return this.change(username, state => mergeSyncResult(state, result));
+  async mergeSync(result: SyncResult): Promise<WorkspaceResult> {
+    return this.change(state => mergeSyncResult(state, result));
   }
 }

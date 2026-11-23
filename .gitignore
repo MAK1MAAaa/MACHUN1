@@ -9,6 +9,10 @@ coverage/
 
 # Local credentials, bindings, tokens and browser profiles
 .machun.local/
+*.sqlite
+*.sqlite-journal
+*.sqlite-shm
+*.sqlite-wal
 .env
 .env.*
 !.env.example

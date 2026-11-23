@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { accountClient, newerWorkspace } from '../core/accountClient';
+import { workspaceClient, newerWorkspace } from '../core/workspaceClient';
 import type { WorkspaceAction, WorkspaceResult, WorkspaceSnapshot } from '../accountTypes';
 
-export function useAccountWorkspace(initial: WorkspaceSnapshot) {
+export function useWorkspace(initial: WorkspaceSnapshot) {
   const [snapshot, setSnapshot] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -23,7 +23,7 @@ export function useAccountWorkspace(initial: WorkspaceSnapshot) {
   async function action(input: WorkspaceAction): Promise<WorkspaceResult> {
     pending.current++; setBusy(true);
     try {
-      const result = await accountClient.action(input, abort.current.signal);
+      const result = await workspaceClient.action(input, abort.current.signal);
       apply(result); return result;
     } catch (failure) {
       if (alive.current) setError(failure instanceof Error ? failure.message : '本次未保存。');
@@ -31,7 +31,7 @@ export function useAccountWorkspace(initial: WorkspaceSnapshot) {
     } finally { pending.current--; if (alive.current) setBusy(pending.current > 0); }
   }
   async function reload() {
-    try { apply(await accountClient.workspace(abort.current.signal)); }
+    try { apply(await workspaceClient.workspace(abort.current.signal)); }
     catch (failure) { if (alive.current) setError(failure instanceof Error ? failure.message : '读取失败。'); }
   }
   return { snapshot, busy, error, apply, action, reload };

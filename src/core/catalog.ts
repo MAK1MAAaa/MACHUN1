@@ -69,7 +69,7 @@ export let catalogByKey: Map<string, CatalogChart> = new Map(
   catalog.map((chart) => [`${chart.id}:${chart.difficulty}`, chart] as const),
 );
 
-/** Install the authenticated database snapshot before mounting the workspace. */
+/** Use the local service's catalog before mounting the workspace. */
 export function installCatalogSnapshot(snapshot: { date: string; version: string; charts: CatalogChart[] }): void {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(snapshot.date) || typeof snapshot.version !== "string" || !snapshot.version) throw new Error("曲库版本无效");
   const validated = validateCatalog(snapshot.charts);

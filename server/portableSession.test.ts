@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { capturePortableSession, portableStorageState, validatePortableSession } from './portableSession';
 import type { BrowserContext } from 'playwright';
-import { remoteServer } from '../scripts/login-remote';
 
 describe('minimal portable portal sessions', () => {
   it('retains Rin tokens and excludes embedded passwords, account metadata and cookies', async () => {
@@ -28,14 +27,5 @@ describe('minimal portable portal sessions', () => {
     { version: 1, source: 'rin', localStorage: { currentAccount: '{"accessToken":"access","tokenType":"Bearer"}', password: 'secret' } },
   ])('rejects wrong sources, unknown fields and malformed state without echoing secrets', value => {
     expect(() => validatePortableSession('rin', value)).toThrow('登录会话格式无效');
-  });
-  it('accepts HTTPS or direct IP HTTP on 1650, while refusing arbitrary domains and URL credentials', () => {
-    expect(remoteServer('https://chuni.example:1650/')).toBe('https://chuni.example:1650');
-    expect(remoteServer('http://127.0.0.1:1650')).toBe('http://127.0.0.1:1650');
-    expect(remoteServer('http://203.0.113.12:1650')).toBe('http://203.0.113.12:1650');
-    expect(remoteServer('http://[2001:db8::12]:1650')).toBe('http://[2001:db8::12]:1650');
-    expect(remoteServer('http://localhost:4399')).toBe('http://localhost:4399');
-    expect(() => remoteServer('http://203.0.113.12:4399')).toThrow();
-    for (const value of ['http://public.example', 'https://user:pwd@example.com', 'https://example.com/path', 'https://example.com?code=secret']) expect(() => remoteServer(value)).toThrow();
   });
 });

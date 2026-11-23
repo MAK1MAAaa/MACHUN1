@@ -9,12 +9,26 @@ export interface BrowserLauncher {
   openPortable?(session: PortableSession, url: string): Promise<BrowserSession>;
 }
 
+function missingBrowser(error: unknown): boolean {
+  return error instanceof Error && /Executable doesn't exist/.test(error.message);
+}
+
+function browserMissingError(): SyncError {
+  return new SyncError("BROWSER_MISSING", "未找到可用浏览器，请先运行 pnpm browser:install，或安装 Google Chrome。", 503);
+}
+
 export function createBrowserLauncher(): BrowserLauncher {
   return {
     async openPortable(session, url) {
       let browser;
-      try { browser = await chromium.launch({ headless: true, timeout: 30_000 }); }
-      catch { throw new SyncError("BROWSER_UNAVAILABLE", "无法启动无界面浏览器，请检查 Chromium 安装。", 503); }
+      const options = { headless: true, timeout: 30_000 };
+      try {
+        browser = await chromium.launch(options);
+      } catch (error) {
+        if (!missingBrowser(error)) throw new SyncError("BROWSER_UNAVAILABLE", "无法启动无界面浏览器，请检查浏览器安装。", 503);
+        try { browser = await chromium.launch({ ...options, channel: "chrome" }); }
+        catch { throw browserMissingError(); }
+      }
       try {
         const context = await browser.newContext({ storageState: portableStorageState(session), viewport: { width: 1150, height: 820 }, acceptDownloads: false });
         context.on('close', () => { void browser.close().catch(() => undefined); });
@@ -24,7 +38,7 @@ export function createBrowserLauncher(): BrowserLauncher {
         return { context, page };
       } catch {
         await browser.close().catch(() => undefined);
-        throw new SyncError('NETWORK_ERROR', '无法恢复门户会话，请检查网络或重新运行登录助手。', 502);
+        throw new SyncError("NETWORK_ERROR", "无法打开来源网站，请检查网络后重试。", 502);
       }
     },
     async open(profilePath, url, visible) {
@@ -38,12 +52,12 @@ export function createBrowserLauncher(): BrowserLauncher {
       try {
         context = await chromium.launchPersistentContext(profilePath, options);
       } catch (error) {
-        if (error instanceof Error && /Executable doesn't exist/.test(error.message)) {
+        if (missingBrowser(error)) {
           try {
             // Chrome still receives our dedicated profilePath; never use the user's main profile.
             context = await chromium.launchPersistentContext(profilePath, { ...options, channel: "chrome" });
           } catch {
-            throw new SyncError("BROWSER_MISSING", "未找到可用浏览器，请先运行 pnpm browser:install，或安装 Google Chrome。", 503);
+            throw browserMissingError();
           }
         } else {
           throw new SyncError("BROWSER_UNAVAILABLE", "无法启动登录浏览器，请关闭占用该会话的窗口后重试。", 503);
