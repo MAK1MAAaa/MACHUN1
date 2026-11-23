@@ -20,7 +20,7 @@ describe("constant table cards", () => {
   it("shows only the square cover and difficulty border until scores are enabled", () => {
     const html = card(entry);
     expect(html).toContain('class="constant-table-cover"');
-    expect(html).toContain("--constant-difficulty-color:#8b4bb7");
+    expect(html).toContain("--constant-difficulty-color:#7c3aed");
     expect(html).toContain(`src="${chart.coverUrl}"`);
     expect(html).toContain("2026-04-23");
     expect(html).not.toContain('class="constant-table-score-panel"');
@@ -28,13 +28,15 @@ describe("constant table cards", () => {
     expect(html).not.toContain(`>${chart.title}<`);
   });
 
-  it.each([["ULT", "#26212e"], ["MAS", "#8b4bb7"], ["EXP", "#dd2636"]] as const)("uses the semantic border for %s", (difficulty, color) => {
+  it.each([["ULT", "#18181b"], ["MAS", "#7c3aed"], ["EXP", "#e11d48"]] as const)("uses the semantic border for %s", (difficulty, color) => {
     expect(card({ ...entry, chart: { ...chart, difficulty } })).toContain(`--constant-difficulty-color:${color}`);
   });
 
-  it.each(["fc", "aj", "ajc"] as const)("retains the %s lamp and score in the rectangle", combo => {
+  it.each(["fc", "aj", "ajc"] as const)("retains the %s lamp and score in the two-tier rectangle", combo => {
     const html = card({ ...entry, record: { ...record, combo } }, true);
-    expect(html).toContain(`lamp-${combo} with-score`);
+    expect(html).toContain(`lamp-${combo} score-tier-sss_plus with-score`);
+    expect(html).toContain('class="constant-table-score-tier"');
+    expect(html).toContain('class="constant-table-lamp-tier"');
     expect(html).toContain('class="constant-table-score">1,009,123</strong>');
     expect(html).toContain('class="constant-table-grade">SSS+</span>');
     expect(html).toContain(`class="constant-table-lamp">${{ fc: "FULL COMBO", aj: "ALL JUSTICE", ajc: "AJC" }[combo]}</span>`);
@@ -42,13 +44,13 @@ describe("constant table cards", () => {
 
   it("uses the default CLEAR visual group for played scores without combo", () => {
     const html = card(entry, true);
-    expect(html).toContain("lamp-clear with-score");
+    expect(html).toContain("lamp-clear score-tier-sss_plus with-score");
     expect(html).toContain('class="constant-table-lamp">CLEAR</span>');
   });
 
   it("keeps unplayed charts distinct from zero scores or CLEAR", () => {
     const html = card({ ...entry, record: undefined, releaseDate: null }, true);
-    expect(html).toContain("lamp-unplayed with-score");
+    expect(html).toContain("lamp-unplayed score-tier-unplayed with-score");
     expect(html).toContain("上线日期未知");
     expect(html).toContain('class="constant-table-score">—</strong>');
     expect(html).toContain('class="constant-table-lamp">未游玩</span>');

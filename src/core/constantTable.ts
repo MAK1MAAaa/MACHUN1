@@ -5,10 +5,39 @@ import { getChartReleaseDate } from "./chartReleaseDates";
 
 export const MAX_CONSTANT_TABLE_SELECTION = 5;
 export const CONSTANT_TABLE_DIFFICULTY_COLORS: Record<Difficulty, string> = {
-  ULT: "#26212e", MAS: "#8b4bb7", EXP: "#dd2636",
+  ULT: "#18181b", MAS: "#7c3aed", EXP: "#e11d48",
 };
-export const CONSTANT_TABLE_AJ_COLORS = ["#f3a5bc", "#ffe08c", "#b0e0a1", "#9dc9ef", "#c7a5e8"] as const;
-export const CONSTANT_TABLE_AJC_COLORS = ["#dc7097", "#e2b64e", "#74b76d", "#5998cf", "#a179ca"] as const;
+export const CONSTANT_TABLE_FC_COLOR = "#d1fae5";
+export const CONSTANT_TABLE_AJ_COLORS = ["#fbcfe8", "#fef08a", "#bbf7d0", "#bae6fd", "#ddd6fe"] as const;
+export const CONSTANT_TABLE_AJC_COLORS = ["#f472b6", "#fbbf24", "#34d399", "#38bdf8", "#a78bfa"] as const;
+
+export type ConstantTableScoreTier = "unplayed" | "below_s" | "s" | "ss" | "ss_plus" | "sss" | "sss_plus";
+
+export interface ConstantTableColorStyle {
+  background: string;
+  gradient?: readonly string[];
+  text: string;
+}
+
+export const CONSTANT_TABLE_SCORE_STYLES: Record<ConstantTableScoreTier, ConstantTableColorStyle> = {
+  unplayed: { background: "#f8fafc", text: "#94a3b8" },
+  below_s: { background: "#f1f5f9", text: "#334155" },
+  s: { background: "#f3e8ff", text: "#6d28d9" },
+  ss: { background: "#e0e7ff", text: "#3730a3" },
+  ss_plus: { background: "#e0f2fe", text: "#0369a1" },
+  sss: { background: "#fef08a", gradient: CONSTANT_TABLE_AJ_COLORS, text: "#1e293b" },
+  sss_plus: { background: "#fbbf24", gradient: CONSTANT_TABLE_AJC_COLORS, text: "#0f172a" },
+};
+
+export function constantTableScoreTier(record: SingleRating | undefined): ConstantTableScoreTier {
+  if (!record) return "unplayed";
+  if (record.score >= 1_009_000) return "sss_plus";
+  if (record.score >= 1_007_500) return "sss";
+  if (record.score >= 1_005_000) return "ss_plus";
+  if (record.score >= 1_000_000) return "ss";
+  if (record.score >= 975_000) return "s";
+  return "below_s";
+}
 
 export interface ConstantTableFilters {
   difficulty: Difficulty | "";

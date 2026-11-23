@@ -1,4 +1,17 @@
-import { CONSTANT_TABLE_AJ_COLORS, CONSTANT_TABLE_AJC_COLORS, CONSTANT_TABLE_DIFFICULTY_COLORS, CONSTANT_TABLE_LAMP_LABELS, constantTableLamp, validateConstantSelection, type ConstantTableEntry, type ConstantTableFilters, type ConstantTableGroup } from "./constantTable";
+import {
+  CONSTANT_TABLE_AJ_COLORS,
+  CONSTANT_TABLE_AJC_COLORS,
+  CONSTANT_TABLE_DIFFICULTY_COLORS,
+  CONSTANT_TABLE_FC_COLOR,
+  CONSTANT_TABLE_LAMP_LABELS,
+  CONSTANT_TABLE_SCORE_STYLES,
+  constantTableLamp,
+  constantTableScoreTier,
+  validateConstantSelection,
+  type ConstantTableEntry,
+  type ConstantTableFilters,
+  type ConstantTableGroup,
+} from "./constantTable";
 import { scoreGrade } from "./rating";
 import { catalog } from "./catalog";
 import { getAvailableChartConstants } from "./recordsView";
@@ -106,39 +119,82 @@ function cover(context: CanvasRenderingContext2D, entry: ConstantTableEntry, ima
   }
 }
 
-function achievementBackground(context: CanvasRenderingContext2D, entry: ConstantTableEntry, x: number, y: number, size: number): string | CanvasGradient {
-  const lamp = constantTableLamp(entry.record);
-  if (lamp === "fc") return "#fff4c7";
-  if (lamp !== "aj" && lamp !== "ajc") return "#fff";
-  const gradient = context.createLinearGradient(x, y, x + size, y + size);
-  const colors = lamp === "aj"
-    ? CONSTANT_TABLE_AJ_COLORS
-    : CONSTANT_TABLE_AJC_COLORS;
+function gradientFill(
+  context: CanvasRenderingContext2D,
+  colors: readonly string[],
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+): CanvasGradient {
+  const gradient = context.createLinearGradient(x, y, x + width, y + height);
   colors.forEach((color, index) => gradient.addColorStop(index / (colors.length - 1), color));
   return gradient;
 }
 
+function scoreLayerBackground(context: CanvasRenderingContext2D, entry: ConstantTableEntry, x: number, y: number, width: number, height: number): string | CanvasGradient {
+  const style = CONSTANT_TABLE_SCORE_STYLES[constantTableScoreTier(entry.record)];
+  return style.gradient ? gradientFill(context, style.gradient, x, y, width, height) : style.background;
+}
+
+function lampLayerBackground(context: CanvasRenderingContext2D, entry: ConstantTableEntry, x: number, y: number, width: number, height: number): string | CanvasGradient {
+  const lamp = constantTableLamp(entry.record);
+  if (lamp === "fc") return CONSTANT_TABLE_FC_COLOR;
+  if (lamp === "aj") return gradientFill(context, CONSTANT_TABLE_AJ_COLORS, x, y, width, height);
+  if (lamp === "ajc") return gradientFill(context, CONSTANT_TABLE_AJC_COLORS, x, y, width, height);
+  if (lamp === "unplayed") return "#f1f5f9";
+  return "#ffffff";
+}
+
+function lampLayerTextColor(entry: ConstantTableEntry): string {
+  const lamp = constantTableLamp(entry.record);
+  if (lamp === "fc") return "#047857";
+  if (lamp === "ajc") return "#0f172a";
+  if (lamp === "aj") return "#1e293b";
+  if (lamp === "unplayed") return "#94a3b8";
+  return "#334155";
+}
+
 function scorePanel(context: CanvasRenderingContext2D, entry: ConstantTableEntry, x: number, y: number, size: number): void {
-  context.fillStyle = achievementBackground(context, entry, x, y, size);
-  context.fillRect(x, y, size, size);
-  context.strokeStyle = "#d9e2d5";
+  const topHeight = Math.round(size * 0.62);
+  const bottomHeight = size - topHeight;
+  const tier = constantTableScoreTier(entry.record);
+
+  // Top layer: score + grade tier background
+  context.fillStyle = scoreLayerBackground(context, entry, x, y, size, topHeight);
+  context.fillRect(x, y, size, topHeight);
+
+  // Bottom layer: AJ / AJC / FC / CLEAR lamp background
+  context.fillStyle = lampLayerBackground(context, entry, x, y + topHeight, size, bottomHeight);
+  context.fillRect(x, y + topHeight, size, bottomHeight);
+
+  // Subtle horizontal divider between score tier and lamp tier
+  context.fillStyle = "rgba(15, 23, 42, 0.1)";
+  context.fillRect(x, y + topHeight, size, 1);
+
+  context.strokeStyle = "#cbd5e1";
   context.lineWidth = 1;
   context.strokeRect(x + 0.5, y + 0.5, size - 1, size - 1);
+
+  // Score & Grade in top layer
   context.textAlign = "center";
-  context.fillStyle = constantTableLamp(entry.record) === "ajc" ? "#17251c" : "#293f32";
+  context.fillStyle = CONSTANT_TABLE_SCORE_STYLES[tier].text;
   const score = entry.record ? scoreFormatter.format(entry.record.score) : "—";
-  let scoreSize = 34;
-  do { context.font = `900 ${scoreSize--}px ui-monospace, "SFMono-Regular", monospace`; }
+  let scoreSize = 32;
+  do { context.font = `900 ${scoreSize--}px "JetBrains Mono", ui-monospace, "SFMono-Regular", monospace`; }
   while (context.measureText(score).width > size - 20 && scoreSize > 16);
-  context.fillText(score, x + size / 2, y + size * 0.3);
-  context.font = '900 30px Inter, "PingFang SC", sans-serif';
-  context.fillText(entry.record ? scoreGrade(entry.record.score) : "—", x + size / 2, y + size * 0.58);
+  context.fillText(score, x + size / 2, y + topHeight * 0.44);
+  context.font = '900 28px "Plus Jakarta Sans", "PingFang SC", sans-serif';
+  context.fillText(entry.record ? scoreGrade(entry.record.score) : "—", x + size / 2, y + topHeight * 0.84);
+
+  // Lamp label in bottom layer
   const lamp = constantTableLamp(entry.record);
   const label = CONSTANT_TABLE_LAMP_LABELS[lamp];
-  let lampSize = 22;
-  do { context.font = `800 ${lampSize--}px Inter, "Noto Sans SC", "PingFang SC", sans-serif`; }
+  context.fillStyle = lampLayerTextColor(entry);
+  let lampSize = 21;
+  do { context.font = `800 ${lampSize--}px "Plus Jakarta Sans", "Noto Sans SC", "PingFang SC", sans-serif`; }
   while (context.measureText(label).width > size - 16 && lampSize > 12);
-  context.fillText(label, x + size / 2, y + size * 0.84);
+  context.fillText(label, x + size / 2, y + topHeight + bottomHeight * 0.64);
 }
 
 function subtitle(options: ConstantTablePngOptions, constants: string[]): string {
@@ -173,25 +229,30 @@ export async function generateConstantTablePng(groups: readonly ConstantTableGro
     const context = canvas.getContext("2d");
     if (!context) throw new Error("当前浏览器不支持 Canvas 图片导出。");
     context.scale(scale, scale);
-    context.fillStyle = "#f6f8f3"; context.fillRect(0, 0, WIDTH, logicalHeight);
+    context.fillStyle = "#f5f7fc"; context.fillRect(0, 0, WIDTH, logicalHeight);
+    const accentBar = context.createLinearGradient(0, 0, WIDTH, 0);
+    accentBar.addColorStop(0, "#4f46e5");
+    accentBar.addColorStop(0.5, "#0ea5e9");
+    accentBar.addColorStop(1, "#7c3aed");
+    context.fillStyle = accentBar; context.fillRect(0, 0, WIDTH, 6);
     const logoWidth = drawMateLogo(context, logo, MARGIN, 28, 60);
     const titleX = MARGIN + logoWidth + 22;
-    context.textAlign = "left"; context.fillStyle = "#2c4433";
-    context.font = '900 42px "Noto Sans SC", "PingFang SC", sans-serif';
+    context.textAlign = "left"; context.fillStyle = "#0f172a";
+    context.font = '900 42px "Plus Jakarta Sans", "Noto Sans SC", "PingFang SC", sans-serif';
     context.fillText("定数表", titleX, 76);
-    context.font = '500 23px "Noto Sans SC", "PingFang SC", sans-serif'; context.fillStyle = "#607465";
+    context.font = '600 23px "Plus Jakarta Sans", "Noto Sans SC", "PingFang SC", sans-serif'; context.fillStyle = "#475569";
     context.fillText(fitText(context, subtitle(options, constants), WIDTH - MARGIN * 2), MARGIN, 120);
-    context.font = '500 17px "Noto Sans SC", "PingFang SC", sans-serif';
+    context.font = '500 17px "Plus Jakarta Sans", "Noto Sans SC", "PingFang SC", sans-serif'; context.fillStyle = "#64748b";
     context.fillText(`共 ${count} 张谱面 · ULT → MAS → EXP · 上线时间从早到晚${scale < 0.999 ? ` · 已缩放至 ${Math.round(scale * 100)}%，全部谱面均保留` : ""}`, MARGIN, 149);
     let groupY = HEADER_HEIGHT;
     groups.forEach((group, index) => {
       if (index) {
-        context.strokeStyle = "#becdb8"; context.lineWidth = 2; context.beginPath();
+        context.strokeStyle = "#cbd5e1"; context.lineWidth = 2; context.beginPath();
         context.moveTo(MARGIN, groupY + 2); context.lineTo(WIDTH - MARGIN, groupY + 2); context.stroke();
       }
-      context.textAlign = "left"; context.fillStyle = "#35503d";
-      context.font = '900 32px ui-monospace, "SFMono-Regular", monospace'; context.fillText(group.constant, MARGIN, groupY + 39);
-      context.font = '500 20px "Noto Sans SC", "PingFang SC", sans-serif'; context.fillStyle = "#748472";
+      context.textAlign = "left"; context.fillStyle = "#4f46e5";
+      context.font = '900 32px "JetBrains Mono", ui-monospace, "SFMono-Regular", monospace'; context.fillText(group.constant, MARGIN, groupY + 39);
+      context.font = '600 20px "Plus Jakarta Sans", "Noto Sans SC", "PingFang SC", sans-serif'; context.fillStyle = "#64748b";
       context.fillText(`${group.entries.length} 张`, MARGIN + 112, groupY + 37);
       const cardY = groupY + GROUP_HEADING;
       group.entries.forEach((entry, entryIndex) => {
