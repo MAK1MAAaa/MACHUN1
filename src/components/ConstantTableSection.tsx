@@ -7,7 +7,9 @@ import {
   CONSTANT_TABLE_AJC_COLORS,
   CONSTANT_TABLE_DIFFICULTY_COLORS,
   CONSTANT_TABLE_LAMP_LABELS,
+  CONSTANT_TABLE_SCORE_STYLES,
   constantTableLamp,
+  constantTableScoreTier,
   DEFAULT_CONSTANT_TABLE_FILTERS,
   resolveConstantTableSelection,
   validateConstantSelection,
@@ -31,9 +33,16 @@ function copyFilters(filters: ConstantTableFilters): ConstantTableFilters {
 export function ConstantTableCard({ entry, showScores }: { entry: ConstantTableEntry; showScores: boolean }) {
   const { chart, record, releaseDate } = entry;
   const lamp = constantTableLamp(record);
+  const scoreTier = constantTableScoreTier(record);
+  const scoreStyle = CONSTANT_TABLE_SCORE_STYLES[scoreTier];
+  const scoreBackground = scoreStyle.gradient
+    ? `linear-gradient(135deg, ${scoreStyle.gradient.join(", ")})`
+    : scoreStyle.background;
   const title = `${chart.title} · ${chart.difficulty} ${chart.constant.toFixed(1)} · ${releaseDate ?? "上线日期未知"}`;
-  return <li className={`constant-table-card difficulty-${chart.difficulty.toLowerCase()} lamp-${lamp}${showScores ? " with-score" : ""}`}
+  return <li className={`constant-table-card difficulty-${chart.difficulty.toLowerCase()} lamp-${lamp} score-tier-${scoreTier}${showScores ? " with-score" : ""}`}
     style={{ "--constant-difficulty-color": CONSTANT_TABLE_DIFFICULTY_COLORS[chart.difficulty],
+      "--constant-score-background": scoreBackground,
+      "--constant-score-text": scoreStyle.text,
       "--constant-achievement-background": lamp === "aj" ? `linear-gradient(130deg, ${CONSTANT_TABLE_AJ_COLORS.join(", ")})`
         : lamp === "ajc" ? `linear-gradient(130deg, ${CONSTANT_TABLE_AJC_COLORS.join(", ")})` : undefined } as CSSProperties}
     title={title} aria-label={showScores ? `${title}，${record ? `${formatScore(record.score)}，${scoreGrade(record.score)}，${CONSTANT_TABLE_LAMP_LABELS[lamp]}` : "未游玩"}` : title}
@@ -43,9 +52,13 @@ export function ConstantTableCard({ entry, showScores }: { entry: ConstantTableE
       <img src={chart.coverUrl} alt="" crossOrigin="anonymous" loading="lazy" onError={(event) => { event.currentTarget.style.opacity = "0"; }} />
     </span>
     {showScores && <span className="constant-table-score-panel">
-      <strong className="constant-table-score">{record ? formatScore(record.score) : "—"}</strong>
-      <span className="constant-table-grade">{record ? scoreGrade(record.score) : "—"}</span>
-      <span className="constant-table-lamp">{CONSTANT_TABLE_LAMP_LABELS[lamp]}</span>
+      <span className="constant-table-score-tier">
+        <strong className="constant-table-score">{record ? formatScore(record.score) : "—"}</strong>
+        <span className="constant-table-grade">{record ? scoreGrade(record.score) : "—"}</span>
+      </span>
+      <span className="constant-table-lamp-tier">
+        <span className="constant-table-lamp">{CONSTANT_TABLE_LAMP_LABELS[lamp]}</span>
+      </span>
     </span>}
   </li>;
 }

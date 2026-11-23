@@ -47,7 +47,7 @@ describe("constant table PNG", () => {
     };
   }
   const group = (entries: ConstantTableEntry[]): ConstantTableGroup[] => [{ constant: "14.0", entries }];
-  function covers() { return rectangles.filter(rectangle => ["#26212e", "#8b4bb7", "#dd2636"].includes(String(rectangle.style))); }
+  function covers() { return rectangles.filter(rectangle => ["#18181b", "#7c3aed", "#e11d48"].includes(String(rectangle.style))); }
 
   beforeEach(() => {
     vi.clearAllMocks(); texts.length = rectangles.length = gradients.length = lines.length = scales.length = encoded.length = imageUrls.length = 0;
@@ -78,7 +78,7 @@ describe("constant table PNG", () => {
     expect(result.filename).toMatch(/^machun1-constant-table-\d{4}-\d{2}-\d{2}\.png$/);
     const frames = covers();
     expect(frames).toHaveLength(11);
-    expect(frames.slice(0, 3).map(frame => frame.style)).toEqual(["#26212e", "#8b4bb7", "#dd2636"]);
+    expect(frames.slice(0, 3).map(frame => frame.style)).toEqual(["#18181b", "#7c3aed", "#e11d48"]);
     expect(new Set(frames.slice(0, 10).map(frame => frame.y)).size).toBe(1);
     expect(frames[10].x).toBe(frames[0].x);
     expect(frames[10].y).toBeGreaterThan(frames[9].y);
@@ -96,14 +96,19 @@ describe("constant table PNG", () => {
     expect(result.filename).toContain("constant-table-scores-");
     expect(new Set(frames.slice(0, 5).map(frame => frame.y)).size).toBe(1);
     expect(frames[5].y).toBeGreaterThan(frames[4].y);
-    for (const frame of frames) expect(rectangles.some(rect => rect.x === frame.x + frame.width && rect.y === frame.y && rect.width === frame.width && rect.height === frame.height)).toBe(true);
+    for (const frame of frames) {
+      const topHeight = Math.round(frame.height * 0.62);
+      const bottomHeight = frame.height - topHeight;
+      expect(rectangles.some(rect => rect.x === frame.x + frame.width && rect.y === frame.y && rect.width === frame.width && rect.height === topHeight)).toBe(true);
+      expect(rectangles.some(rect => rect.x === frame.x + frame.width && rect.y === frame.y + topHeight && rect.width === frame.width && rect.height === bottomHeight)).toBe(true);
+    }
     expect(texts.map(text => text.text)).toEqual(expect.arrayContaining(["1,009,000", "SSS+", "CLEAR", "FULL COMBO", "ALL JUSTICE", "AJC", "未游玩"]));
     expect(texts.map(text => text.text)).not.toContain("FC");
     expect(texts.map(text => text.text)).not.toContain("AJ");
-    expect(rectangles.some(rect => rect.style === "#fff4c7")).toBe(true);
+    expect(rectangles.some(rect => rect.style === "#d1fae5")).toBe(true);
     expect(gradients).toEqual(expect.arrayContaining([
-      ["#f3a5bc", "#ffe08c", "#b0e0a1", "#9dc9ef", "#c7a5e8"],
-      ["#dc7097", "#e2b64e", "#74b76d", "#5998cf", "#a179ca"],
+      ["#fbcfe8", "#fef08a", "#bbf7d0", "#bae6fd", "#ddd6fe"],
+      ["#f472b6", "#fbbf24", "#34d399", "#38bdf8", "#a78bfa"],
     ]));
   });
 
