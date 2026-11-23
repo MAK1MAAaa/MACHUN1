@@ -1,12 +1,12 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { AccountApp } from "./components/AccountApp";
+import { WorkspaceApp } from "./components/WorkspaceApp";
 import "./styles.css";
 import "./mobile.css";
 import "./workspace.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <AccountApp />
+    <WorkspaceApp />
   </StrictMode>,
 );

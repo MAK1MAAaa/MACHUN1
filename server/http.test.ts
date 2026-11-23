@@ -5,15 +5,19 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createAppServer, type HttpManager, type HttpOptions } from "./http";
 import { SyncError } from "./provider";
+import { loadLocalCatalog, openLocalDatabase } from "./db/sqlite";
+import { WorkspaceRepository } from "./workspace";
 import type { SourceConnection, SyncResult } from "../src/syncTypes";
 
 const servers: Server[] = [];
 const directories: string[] = [];
+const databases: ReturnType<typeof openLocalDatabase>[] = [];
 afterEach(async () => {
   await Promise.all(servers.splice(0).map((server) => new Promise<void>((resolve, reject) => {
     server.close((error) => error ? reject(error) : resolve());
     server.closeAllConnections();
   })));
+  for (const database of databases.splice(0)) database.close();
   await Promise.all(directories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
 });
 
@@ -32,7 +36,14 @@ async function setup(options: Partial<HttpOptions> = {}) {
   await writeFile(join(dist, "assets", "mate-logo.webp"), "webp-test-asset");
   await mkdir(join(directory, ".machun.local"));
   await writeFile(join(directory, ".machun.local", "lxns.json"), "secret-vault");
-  const server = createAppServer({ manager, distDirectory: dist, additionalOrigins: ["http://127.0.0.1:4399"], ...options });
+  const database = openLocalDatabase(join(directory, ".machun.local"));
+  databases.push(database);
+  const catalog = loadLocalCatalog();
+  const workspace = new WorkspaceRepository(database.db);
+  const server = createAppServer({
+    manager: async () => manager, workspace, catalog,
+    distDirectory: dist, additionalOrigins: ["http://127.0.0.1:4399"], ...options,
+  });
   servers.push(server);
   await new Promise<void>((resolve, reject) => { server.once("error", reject); server.listen(0, "127.0.0.1", resolve); });
   const address = server.address();
@@ -47,46 +58,43 @@ async function setup(options: Partial<HttpOptions> = {}) {
     request.on("error", reject);
     request.end(options.body);
   });
-  return { manager, send, port };
+  return { manager, send, port, catalog };
 }
 
 const writeHeaders = { "Content-Type": "application/json", "X-Machun-Request": "1" };
 
 describe("local HTTP boundary", () => {
-  it("allows direct IP access on the actual port and requires a matching origin", async () => {
-    const { send, port } = await setup({ publicIpAccess: true });
-    for (const ip of ['203.0.113.12', '[2001:db8::12]']) {
-      const host = `${ip}:${port}`;
-      expect((await send('/', { headers: { Host: host } })).status).toBe(200);
-      const synced = await send('/api/sources/rin/sync', { method: 'POST', headers: { ...writeHeaders, Host: host, Origin: `http://${host}` }, body: '{}' });
-      expect(synced.status).toBe(200);
-      expect(synced.headers['access-control-allow-origin']).toBeUndefined();
-      expect((await send('/api/sources', { headers: { Host: host, Origin: `http://203.0.113.13:${port}` } })).status).toBe(403);
-      expect((await send('/api/sources', { headers: { Host: host, Origin: `https://${host}` } })).status).toBe(403);
-      expect((await send('/api/sources', { headers: { Host: host, 'Sec-Fetch-Site': 'cross-site' } })).status).toBe(403);
-    }
-    for (const host of [`attacker.example:${port}`, '203.0.113.12:1', `0.0.0.0:${port}`, `2130706433:${port}`, `203.0.113.12:${port}/evil`]) {
-      expect((await send('/api/sources', { headers: { Host: host, 'X-Forwarded-Host': `203.0.113.12:${port}` } })).status).toBe(403);
-    }
+  it("loads and writes the local workspace without a session", async () => {
+    const { send, catalog } = await setup();
+    const first = await send("/api/workspace");
+    expect(first.status).toBe(200);
+    expect(first.headers["set-cookie"]).toBeUndefined();
+    expect(JSON.parse(first.text)).toMatchObject({ revision: 0, state: { scores: {} } });
+    const response = await send("/api/catalog");
+    expect(JSON.parse(response.text).charts).toHaveLength(catalog.charts.length);
+
+    const { id, difficulty } = catalog.charts[0];
+    const key = `${id}:${difficulty}`;
+    const stored = await send("/api/workspace/actions", {
+      method: "POST", headers: writeHeaders, body: JSON.stringify({ type: "manual", key, score: "1005000" }),
+    });
+    expect(stored.status).toBe(200);
+    expect(JSON.parse((await send("/api/workspace")).text)).toMatchObject({
+      revision: 1, state: { scores: { [key]: { score: 1005000 } } },
+    });
+    expect((await send("/api/auth/session")).status).toBe(404);
+    expect((await send("/api/auth/login", { method: "POST", headers: writeHeaders, body: "{}" })).status).toBe(404);
   });
-  it("does not enable IP access in the localhost default", async () => {
+
+  it("limits API access to loopback hosts and preserves the dev proxy host", async () => {
     const { send, port } = await setup();
-    expect((await send('/', { headers: { Host: `203.0.113.12:${port}` } })).status).toBe(403);
-  });
-  it("accepts only the configured HTTPS host and rejects foreign origins and forwarded hosts", async () => {
-    const { send } = await setup({ publicOrigin: 'https://chuni.example' });
-    expect((await send('/api/sources', { headers: { Host: 'chuni.example', Origin: 'https://chuni.example' } })).status).toBe(200);
-    for (const headers of ([{ Host: 'foreign.example' }, { Host: 'chuni.example', Origin: 'http://chuni.example' }, { Host: 'chuni.example', Origin: 'https://foreign.example' }, { Host: 'foreign.example', 'X-Forwarded-Host': 'chuni.example' }] as Record<string, string>[])) {
-      expect((await send('/api/sources', { headers })).status).toBe(403);
+    for (const host of [`203.0.113.12:${port}`, `0.0.0.0:${port}`, "fake.localhost:4399"]) {
+      expect((await send("/api/workspace", { headers: { Host: host, "X-Forwarded-Host": `127.0.0.1:${port}` } })).status).toBe(403);
     }
+    expect((await send("/api/workspace", { headers: { Host: "127.0.0.1:4399" } })).status).toBe(200);
+    expect((await send("/api/workspace", { headers: { "Sec-Fetch-Site": "cross-site" } })).status).toBe(403);
   });
-  it("allows panel page navigation while refusing cross-site API requests", async () => {
-    const { send } = await setup({ publicOrigin: 'https://chuni.example' });
-    const headers = { Host: 'chuni.example', 'Sec-Fetch-Site': 'cross-site', 'Sec-Fetch-Mode': 'navigate', 'Sec-Fetch-Dest': 'document' };
-    expect((await send('/', { headers })).status).toBe(200);
-    expect((await send('/api/sources', { headers })).status).toBe(403);
-    expect((await send('/login-view/vnc.html', { headers })).status).toBe(404);
-  });
+
   it("serves the app and safe status metadata", async () => {
     const { send } = await setup();
     expect(await send("/")).toMatchObject({ status: 200, text: "<html>local app</html>" });

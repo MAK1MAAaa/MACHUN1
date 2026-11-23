@@ -1,9 +1,7 @@
 import type { LocalState, CatalogChart } from './types';
 import type { SourceImportReport } from './core/sources';
-import type { SyncResult } from './syncTypes';
 import type { SongChartDetail } from './core/songDetails';
 
-export interface Account { username: string }
 export interface CatalogSnapshot { date: string; version: string; charts: CatalogChart[]; details: SongChartDetail[] }
 export interface WorkspaceSnapshot { state: LocalState; revision: number; legacyMigrated: boolean; exportNickname: string }
 export type WorkspaceAction =
@@ -15,4 +13,3 @@ export type WorkspaceAction =
   | { type: 'import'; source: string; raw: string; filename: string }
   | { type: 'backup'; raw: string; mode: 'merge' | 'replace' };
 export interface WorkspaceResult extends WorkspaceSnapshot { notice?: string; report?: SourceImportReport }
-export type AccountSyncResult = SyncResult & { workspace: WorkspaceSnapshot };

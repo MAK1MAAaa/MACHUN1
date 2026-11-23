@@ -1,45 +1,76 @@
-import { readFile } from "node:fs/promises";
-import { parseEnv } from "node:util";
-import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
-import { safeError } from "./manager";
+import { fileURLToPath } from "node:url";
+import { localEnvironment, runtimeConfig } from "./config";
+import { loadLocalCatalog, openLocalDatabase } from "./db/sqlite";
+import { SqliteSourceStore } from "./db/sqliteSourceStore";
 import { createAppServer } from "./http";
-import { runtimeConfig } from "./config";
-import { AccountService } from "./accountService";
-import { createDatabase, databaseUrl } from "./db/connection";
+import { SourceManager, safeError } from "./manager";
+import { SyncError } from "./provider";
+import { munetProvider } from "./providers/munet";
+import { otogameProvider } from "./providers/otogame";
+import { rinProvider } from "./providers/rin";
+import { WorkspaceRepository } from "./workspace";
 
 const projectRoot = fileURLToPath(new URL("../", import.meta.url));
-let environment = { ...process.env };
-try { environment = { ...parseEnv(await readFile(resolve(projectRoot, ".env"), "utf8")), ...process.env }; } catch { /* Docker uses environment variables. */ }
-const config = runtimeConfig(environment, projectRoot, process.argv);
-const { development, port } = config;
-try {
-  const connection = createDatabase(await databaseUrl(projectRoot));
-  const accounts = new AccountService(connection.db, config.dataDirectory, projectRoot, { companionLogin: config.companionLogin });
+
+function start() {
+  const { development, port, host, dataDirectory } = runtimeConfig(localEnvironment(projectRoot), projectRoot, process.argv);
+  const catalog = loadLocalCatalog();
+  const connection = openLocalDatabase(dataDirectory);
+  const workspace = new WorkspaceRepository(connection.db);
+  const sources = new SourceManager({
+    store: new SqliteSourceStore(connection.db, dataDirectory),
+    providers: { rin: rinProvider, munet: munetProvider, otogame: otogameProvider },
+  });
+  let initialization: Promise<SourceManager> | undefined;
+  let stopping = false;
   const server = createAppServer({
-    accounts,
-    publicOrigin: config.publicOrigin,
-    publicIpAccess: config.publicIpAccess,
+    workspace,
+    catalog,
+    manager: () => {
+      if (stopping) throw new SyncError("SHUTTING_DOWN", "服务正在关闭。", 503);
+      initialization ??= sources.initialize().then(() => sources).catch(error => {
+        initialization = undefined;
+        throw error;
+      });
+      return initialization;
+    },
     distDirectory: development ? undefined : resolve(projectRoot, "dist"),
     additionalOrigins: development ? ["http://127.0.0.1:4399", "http://localhost:4399"] : [],
   });
-  server.on("error", (error: NodeJS.ErrnoException) => {
-    console.error(error.code === "EADDRINUSE" ? `端口 ${port} 已被占用，请先关闭其他 MACHUN1 进程。` : "本地服务无法启动。");
-    void accounts.close().finally(() => connection.pool.end()).finally(() => { process.exitCode = 1; });
-  });
-  server.listen(port, config.host, () => {
-    console.log(`MACHUN1 ${development ? "同步 API" : "服务"}：${config.publicOrigin ?? `http://127.0.0.1:${port}`}`);
-  });
-  let stopping = false;
-  const stop = async () => {
+
+  async function stop() {
     if (stopping) return;
     stopping = true;
-    server.close();
-    await accounts.close();
-    await connection.pool.end();
-  };
-  process.once("SIGINT", () => { void stop(); });
-  process.once("SIGTERM", () => { void stop(); });
+    const drained = new Promise<void>(resolve => server.close(() => resolve()));
+    try {
+      await initialization?.catch(() => undefined);
+      await sources.close();
+      await drained;
+    } finally {
+      connection.close();
+    }
+  }
+  function shutdown() {
+    void stop().catch(error => {
+      console.error(safeError(error).message);
+      process.exitCode = 1;
+    });
+  }
+  server.on("error", (error: NodeJS.ErrnoException) => {
+    console.error(error.code === "EADDRINUSE" ? `端口 ${port} 已被占用，请先关闭其他 MACHUN1 进程。` : "本地服务无法启动。");
+    process.exitCode = 1;
+    shutdown();
+  });
+  server.listen(port, host, () => {
+    console.log(`MACHUN1 ${development ? "同步 API" : "工作台"} http://${host}:${port}`);
+  });
+  process.once("SIGINT", shutdown);
+  process.once("SIGTERM", shutdown);
+}
+
+try {
+  start();
 } catch (error) {
   console.error(safeError(error).message);
   process.exitCode = 1;

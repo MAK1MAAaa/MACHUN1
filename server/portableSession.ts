@@ -10,7 +10,7 @@ const KEYS: Record<BrowserSource, readonly string[]> = {
   rin: ['currentAccount'], munet: ['token', 'refreshToken', 'environmentKey'],
   otogame: ['TOKEN', 'ID_TOKEN', 'REFRESH_TOKEN'],
 };
-function invalid(): never { throw new SyncError('INVALID_SESSION', '登录会话格式无效，请重新运行登录助手。', 400); }
+function invalid(): never { throw new SyncError('INVALID_SESSION', '登录会话格式无效，请重新登录该来源。', 400); }
 function text(value: unknown, empty = false): string {
   if (typeof value !== 'string' || (!empty && !value) || value.length > 32768 || /[\r\n\x00-\x1f]/.test(value)) invalid();
   return value;

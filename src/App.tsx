@@ -11,8 +11,8 @@ import { CATALOG_DATE, CATALOG_VERSION, catalog, catalogByKey } from "./core/cat
 import { createB30Export, createB30CandidatesExport, createAjB30Export, createB50Export, downloadB30Json, generateB30Png } from "./core/b30Export";
 import { createDownloadResource, type DownloadResource } from "./core/fileDelivery";
 import { ImageExportDialog } from "./components/ImageExportDialog";
-import type { Account, WorkspaceSnapshot } from "./accountTypes";
-import { useAccountWorkspace } from "./components/useAccountWorkspace";
+import type { WorkspaceSnapshot } from "./accountTypes";
+import { useWorkspace } from "./components/useWorkspace";
 import { createFullBackup, downloadFullBackup } from "./core/backup";
 import { SourceSyncControls, useSourceSync } from "./components/SourceSyncControls";
 import { RecordsSection } from "./components/RecordsSection";
@@ -52,7 +52,7 @@ const SOURCE_HELP: Record<ExternalScoreSource, SourceHelpContent> = {
       "也可导出 MuNET CHUNITHM 存档，再点击“选择 MuNET JSON 文件”离线导入。",
     ],
     format: "支持 userMusicDetailList 中的 musicId、level、scoreMax；难度 2 / 3 / 4 对应 EXP / MAS / ULT。若包含 gameId，必须为 SDHD。仅匹配当前 13.0+ 曲库。",
-    caution: "MuNET 同步或文件导入仅在分数严格高于已有国服成绩时覆盖；同分和较低分保留国服成绩及来源。网页登录会话保存在本机后台。解绑会清除会话，但不会删除已合并成绩；文件导入由后台解析并保存到当前账号。",
+    caution: "MuNET 同步或文件导入仅在分数严格高于已有国服成绩时覆盖；同分和较低分保留国服成绩及来源。网页登录会话保存在本机后台。解绑会清除会话，已合并成绩保留。",
     documentationUrl: "https://github.com/MuNET-OSS/chunithm-data-converter",
     documentationLabel: "查看 MuNET 兼容格式参考",
   },
@@ -120,13 +120,12 @@ function sourceReportText(report: SourceImportReport): string {
 }
 
 interface AppProps {
-  account: Account;
   initial: WorkspaceSnapshot;
   initialNotice?: string;
 }
 
-function App({ account, initial, initialNotice }: AppProps) {
-  const workspace = useAccountWorkspace(initial);
+function App({ initial, initialNotice }: AppProps) {
+  const workspace = useWorkspace(initial);
   const localState = workspace.snapshot.state;
   const [exportNickname, setExportNickname] = useState(initial.exportNickname);
   const savedExportNickname = workspace.snapshot.exportNickname;
@@ -252,7 +251,7 @@ function App({ account, initial, initialNotice }: AppProps) {
         setNotice({ kind: "warning", text: "暂无 AJ 或 AJC 成绩，无法生成 AJ B30 图片。" });
         return;
       }
-      const result = await generateB30Png(data, { nickname: savedExportNickname || account.username });
+      const result = await generateB30Png(data, { nickname: savedExportNickname });
       if (version !== imageGeneration.current.version) return;
       const file = createDownloadResource(result.blob, result.filename);
       imageExportRef.current?.dispose();
@@ -303,10 +302,10 @@ function App({ account, initial, initialNotice }: AppProps) {
   };
 
   const resetAllData = async () => {
-    if (!window.confirm("确认清空当前账号的全部成绩和个人别名？此操作无法撤销。")) return;
+    if (!window.confirm("确认清空本机的全部成绩和个人别名？此操作无法撤销。")) return;
     try {
       const result = await workspace.action({ type: "clear" });
-      setNotice({ kind: "success", text: result.notice ?? "账号数据已清空" });
+      setNotice({ kind: "success", text: result.notice ?? "本地数据已清空" });
     } catch { /* Do not clear data before the database confirms the operation. */ }
   };
 
@@ -315,7 +314,7 @@ function App({ account, initial, initialNotice }: AppProps) {
     event.target.value = "";
     if (!file) return;
     if (file.size > 10 * 1024 * 1024) { setNotice({ kind: "error", text: "备份不能超过 10 MB" }); return; }
-    if (!window.confirm("确认用备份替换当前账号的全部成绩和个人别名？")) return;
+    if (!window.confirm("确认用备份替换本机的全部成绩和个人别名？")) return;
     try {
       const result = await workspace.action({ type: "backup", raw: await file.text(), mode: "replace" });
       setNotice({ kind: "success", text: result.notice ?? "备份导入完成" });
@@ -352,7 +351,7 @@ function App({ account, initial, initialNotice }: AppProps) {
         <section className="account-data-toolbar" aria-labelledby="account-data-title">
           <div className="account-data-heading">
             <span className="section-index">01</span>
-            <h2 id="account-data-title">账号数据</h2>
+            <h2 id="account-data-title">本地数据</h2>
           </div>
           <div className="account-backup-actions">
             <button type="button" disabled={workspace.busy} onClick={() => backupInputRef.current?.click()}>导入备份</button>
@@ -495,7 +494,7 @@ function App({ account, initial, initialNotice }: AppProps) {
               <form className="b30-export-settings" onSubmit={(event) => { event.preventDefault(); void saveExportNickname(); }}>
                 <label htmlFor="export-nickname">导出昵称</label>
                 <input id="export-nickname" value={exportNickname} onChange={(event) => setExportNickname(event.target.value)}
-                  placeholder={account.username} maxLength={64} disabled={workspace.busy}
+                  placeholder="选填" maxLength={64} disabled={workspace.busy}
                   aria-describedby={nicknameTooLong ? "export-nickname-hint" : undefined} aria-invalid={nicknameTooLong || undefined} />
                 <button type="submit" disabled={workspace.busy || nicknameTooLong || exportNickname.trim() === savedExportNickname}>保存</button>
                 {nicknameTooLong && <span id="export-nickname-hint" role="alert">昵称最多 32 个字符。</span>}

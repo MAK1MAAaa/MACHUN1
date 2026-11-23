@@ -7,20 +7,21 @@ import { catalog } from "./core/catalog";
 import { calculateRating } from "./core/rating";
 import type { SingleRating } from "./types";
 
-describe("account data toolbar", () => {
+describe("local data toolbar", () => {
   it("shows three ordered actions without expansion, import modes or explanatory content", () => {
     const initial: WorkspaceSnapshot = {
       state: { schemaVersion: 2, scores: {}, nicknameOverrides: {} },
       revision: 0, legacyMigrated: true, exportNickname: "",
     };
-    const html = renderToStaticMarkup(createElement(App, { account: { username: "test" }, initial }));
+    const html = renderToStaticMarkup(createElement(App, { initial }));
     const toolbar = html.match(/<section class="account-data-toolbar"[^>]*>([\s\S]*?)<\/section>/)?.[1] ?? "";
 
     expect(Boolean(toolbar)).toBe(true);
-    expect(toolbar).toContain('<h2 id="account-data-title">账号数据</h2>');
+    expect(toolbar).toContain('<h2 id="account-data-title">本地数据</h2>');
     expect([...toolbar.matchAll(/<button\b[^>]*>([^<]*)<\/button>/g)].map(match => match[1]))
       .toEqual(["导入备份", "导出备份", "清除数据"]);
-    expect(toolbar.indexOf("账号数据")).toBeLessThan(toolbar.indexOf("导入备份"));
+    expect(toolbar.indexOf("本地数据")).toBeLessThan(toolbar.indexOf("导入备份"));
+    expect(html).not.toContain('退出登录');
     expect(/<(?:select|p|small|dl|aside)\b/.test(toolbar)).toBe(false);
     expect(toolbar).toContain('type="file"');
     expect(toolbar).toContain('hidden=""');
@@ -42,7 +43,7 @@ describe("workspace B30 display", () => {
       state: { schemaVersion: 2, scores: Object.fromEntries(records.map(record => [`${record.id}:${record.difficulty}`, record])), nicknameOverrides: {} },
       revision: 0, legacyMigrated: true, exportNickname: "",
     };
-    const html = renderToStaticMarkup(createElement(App, { account: { username: "test" }, initial }));
+    const html = renderToStaticMarkup(createElement(App, { initial }));
     const expectedRating = (records.map(record => record.rating).sort((a, b) => b - a).slice(0, 30)
       .reduce((sum, rating) => sum + rating, 0) / 30).toFixed(4);
 
