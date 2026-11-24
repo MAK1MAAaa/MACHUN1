@@ -9,6 +9,8 @@ import { SyncError, type BrowserProvider, type BrowserSession, type OtogameCheck
 import { capturePortableSession } from "./portableSession";
 import { SourceStore, type SavedBinding, type SavedSource } from "./store";
 import { browserLauncher, type BrowserLauncher } from "./browser";
+import type { LoginCredentials } from "./config";
+import { attachAutomaticLogin } from "./portalLogin";
 import { LxnsProvider } from "./providers/lxns";
 
 interface Slot {
@@ -24,6 +26,7 @@ export interface ManagerOptions {
   store: SourceStore;
   providers: Record<BrowserSource, BrowserProvider>;
   launcher?: BrowserLauncher;
+  loginCredentials?: Partial<Record<BrowserSource, LoginCredentials>>;
   lxns?: LxnsProvider;
   bindTimeoutMs?: number;
   bindPollMs?: number;
@@ -152,6 +155,7 @@ export class SourceManager {
 
   private async bindBrowser(source: BrowserSource, slot: Slot, signal: AbortSignal): Promise<void> {
     let profile: string | undefined;
+    let stopAutomaticLogin: (() => void) | undefined;
     let committed = false;
     try {
       profile = await this.options.store.newProfile(source);
@@ -159,6 +163,9 @@ export class SourceManager {
       if (signal.aborted) return;
       const session = await this.launcher.open(this.options.store.profilePath(profile), provider.loginUrl, true);
       slot.session = session;
+      if (signal.aborted) return;
+      const credentials = this.options.loginCredentials?.[source];
+      if (credentials) stopAutomaticLogin = attachAutomaticLogin(session.context, source, credentials, signal);
       const portalOrigin = new URL(provider.loginUrl).origin;
       const deadline = Date.now() + (this.options.bindTimeoutMs ?? 5 * 60_000);
       let transientFailures = 0;
@@ -193,6 +200,8 @@ export class SourceManager {
         }
         if (identity) {
           if (signal.aborted) return;
+          stopAutomaticLogin?.();
+          stopAutomaticLogin = undefined;
           const portable = await capturePortableSession(session.context, source).catch(() => undefined);
           // Close the login window to flush the profile, with a session snapshot for headless sync.
           await session.context.close();
@@ -208,6 +217,7 @@ export class SourceManager {
     } catch (error) {
       if (!signal.aborted) this.fail(slot, error);
     } finally {
+      stopAutomaticLogin?.();
       await slot.session?.context.close().catch(() => undefined);
       slot.session = undefined;
       if (profile && !committed) await this.options.store.removeProfile(profile).catch(() => undefined);

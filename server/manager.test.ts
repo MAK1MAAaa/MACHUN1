@@ -3,6 +3,7 @@ import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SourceManager } from "./manager";
+import * as portalLogin from "./portalLogin";
 import { SourceStore } from "./store";
 import { SyncError, type BrowserProvider, type BrowserSession } from "./provider";
 import { LxnsProvider } from "./providers/lxns";
@@ -61,6 +62,31 @@ async function bound(manager: SourceManager, source: "rin" | "otogame" = "rin") 
 }
 
 describe("local source manager", () => {
+  it("enables automatic login only for an explicitly bound configured source", async () => {
+    const { options, launcher } = await setup();
+    const credentials = { username: "fixture@example.test", password: "fixture-autologin-password" };
+    const stop = vi.fn();
+    const attach = vi.spyOn(portalLogin, "attachAutomaticLogin").mockReturnValue(stop);
+    try {
+      const manager = new SourceManager({ ...options, loginCredentials: { rin: credentials } });
+      managers.push(manager);
+      await manager.initialize();
+      expect(attach).not.toHaveBeenCalled();
+      await bound(manager, "otogame");
+      expect(attach).not.toHaveBeenCalled();
+      await bound(manager);
+      expect(attach).toHaveBeenCalledExactlyOnceWith(expect.anything(), "rin", credentials, expect.any(AbortSignal));
+      expect(launcher.open).toHaveBeenLastCalledWith(expect.any(String), options.providers.rin.loginUrl, true);
+      expect(stop).toHaveBeenCalledOnce();
+      await manager.sync("rin");
+      expect(launcher.open).toHaveBeenLastCalledWith(expect.any(String), options.providers.rin.loginUrl, false);
+      expect(attach).toHaveBeenCalledOnce();
+      expect(JSON.stringify(await options.store.load("rin"))).not.toContain(credentials.password);
+    } finally {
+      attach.mockRestore();
+    }
+  });
+
   it("does not expose a remote login URL for native browser windows", async () => {
     const { manager, provider } = await setup();
     vi.mocked(provider.identify).mockRejectedValue(new SyncError("AUTH_REQUIRED", "等待登录", 401));

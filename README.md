@@ -1,23 +1,8 @@
 # MACHUN1
 
-MACHUN1 是一个在本机运行的 CHUNITHM 成绩工作台。你可以从 MuNET、Rin、OTO（大饼）和国服落雪同步或导入成绩，按谱面汇总最高分，查看 B30 Rating，并导出分表和定数表。
+MACHUN1 是本机运行的 CHUNITHM 成绩工作台。它汇总 MuNET、Rin、OTO（大饼）和国服落雪的成绩，按谱面保留最高分，提供 Rating 分析、曲库筛选和分表导出。
 
-[快速开始](#quick-start) · [使用指南](docs/usage.md) · [本机配置与数据恢复](docs/local.md)
-
-<a id="preview"></a>
-
-## 工作台预览
-
-![MACHUN1 桌面工作台，展示本地数据、成绩来源和 B30 Rating 柱状分析](docs/previews/redesign-desktop.png)
-
-预览使用演示成绩。桌面以表格浏览全部成绩，手机以卡片显示分数、Rating 和达成状态。
-
-<details>
-<summary>查看手机工作台</summary>
-
-<img src="docs/previews/redesign-mobile.png" alt="MACHUN1 手机工作台，展示 B30 导出操作和 Rating 图表" width="390">
-
-</details>
+[快速开始](#quick-start) · [成绩来源](#sources) · [工作台预览](#preview) · [使用指南](docs/usage.md)
 
 <a id="quick-start"></a>
 
@@ -33,20 +18,43 @@ pnpm browser:install
 pnpm start
 ```
 
-打开 [本机工作台](http://127.0.0.1:4399/)。服务仅监听本机回环地址，按 **Ctrl+C** 停止。Chromium 用于在专用浏览器中登录成绩来源。
+启动后打开工作台。服务仅监听本机回环地址，按 **Ctrl+C** 停止。[打开本机工作台](http://127.0.0.1:4399/)
 
-## 同步与导入
+<a id="sources"></a>
 
-在工作台展开「成绩来源」，按对应来源绑定账号，再点击「同步成绩」。已有成绩文件时，也可以直接通过对应的来源卡片导入。
+## 绑定、同步与导入
+
+展开「成绩来源」，绑定后点击「同步成绩」。已有成绩文件可从对应的来源卡片直接导入。
 
 | 来源 | 绑定方式 | 文件导入 |
 | --- | --- | --- |
-| MuNET | 在专用浏览器登录门户 | 存档 JSON |
-| Rin | 在专用浏览器登录门户并选定 Aime 卡 | 存档 JSON |
-| OTO（大饼） | 在专用浏览器登录门户并绑定当前主卡 | `oto.json` |
-| 国服落雪 | 填写个人 API Token | 成绩 CSV 或个人成绩 JSON |
+| MuNET | 在专用浏览器登录，出现滑块时手动验证 | 存档 JSON |
+| Rin | 使用 BEMANICN 登录，绑定门户的默认 Aime 卡 | 存档 JSON |
+| OTO（大饼） | 使用 BEMANICN 登录，绑定当前主卡 | `oto.json` |
+| 国服落雪 | 在工作台填写个人 API Token | 成绩 CSV 或个人成绩 JSON |
 
-同步与导入覆盖内置 13.0+ 评分曲库中的 EXP、MAS 和 ULT 谱面。工作台按谱面保存最高分，并记录来源提供的 CLEAR、FC、AJ、AJC 等状态。单个导入文件最大 10 MB。[查看绑定和合并规则](docs/usage.md#sync)
+同步与导入覆盖内置 13.0+ 评分曲库中的 EXP、MAS 和 ULT 谱面，并保留来源提供的 CLEAR、FC、AJ、AJC 等标记。单个导入文件最大 10 MB。[绑定与同步指南](docs/usage.md#sync)
+
+### 可选自动登录
+
+按模板在项目根目录配置本机 `.env` 并重启服务。Rin 和 OTO 共用 `BCN_EMAIL`、`BCN_PASSWORD`，MuNET 使用 `MUNET_USERNAME`、`MUNET_PASSWORD`。请将凭据留在本机。[配置模板](.env.example) · [本机配置](docs/local.md#可选配置)
+
+点击「绑定账号」或「重新登录」时，配置了完整凭据的来源会在专用浏览器里自动填表并尝试提交一次。Rin 和 OTO 的常规 BEMANICN 授权会自动确认，额外权限或条款在弹窗内处理。也可以直接在弹窗手动登录。成功后工作台保存会话，供后续同步复用和续期。
+
+<a id="preview"></a>
+
+## 工作台预览
+
+![MACHUN1 桌面工作台，展示本地数据、成绩来源和 B30 Rating 柱状分析](docs/previews/redesign-desktop.png)
+
+预览使用演示成绩。桌面以表格浏览全部成绩，手机以卡片显示分数、Rating 和达成状态。
+
+<details>
+<summary>查看手机工作台</summary>
+
+<img src="docs/previews/redesign-mobile.png" alt="MACHUN1 手机工作台，展示 B30 导出操作和 Rating 图表" width="390">
+
+</details>
 
 ## 浏览与导出
 
@@ -67,9 +75,9 @@ pnpm start
 
 ## 本地数据
 
-首次启动会在 `.machun.local/` 创建 SQLite 数据库。成绩、个人别名、导出昵称和来源会话都保存在该数据目录。端口和数据目录可分别通过 `MACHUN_PORT` 与 `MACHUN_DATA_DIR` 设置。[配置示例](.env.example)
+首次启动会在 `.machun.local/` 创建 SQLite 数据库。成绩、个人别名、导出昵称和来源会话保存在该数据目录。端口和数据目录可分别通过 `MACHUN_PORT` 与 `MACHUN_DATA_DIR` 设置。
 
-「本地数据」中的完整备份可用于换机和迁移旧版成绩。导入备份会替换当前成绩和个人别名，来源账号需在新环境重新绑定。[查看备份范围与迁移步骤](docs/local.md#restore-data)
+「本地数据」中的完整备份可用于换机和迁移旧版成绩。导入备份会替换当前成绩和个人别名，来源账号需在新环境重新绑定。[本机运行与数据恢复](docs/local.md#restore-data)
 
 ## 开发
 
