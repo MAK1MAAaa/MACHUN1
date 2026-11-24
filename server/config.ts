@@ -1,7 +1,13 @@
 import { readFileSync } from "node:fs";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import { parseEnv } from "node:util";
+import type { BrowserSource } from "../src/syncTypes";
 import { SyncError } from "./provider";
+
+export interface LoginCredentials {
+  username: string;
+  password: string;
+}
 
 export function localEnvironment(projectRoot: string): NodeJS.ProcessEnv {
   try {
@@ -10,6 +16,19 @@ export function localEnvironment(projectRoot: string): NodeJS.ProcessEnv {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
     return { ...process.env };
   }
+}
+
+function loginPair(account: string | undefined, password: string | undefined): LoginCredentials | undefined {
+  const username = account?.trim();
+  if (username && password && !/[\r\n\0]/.test(username) && !/[\r\n\0]/.test(password)) {
+    return { username, password };
+  }
+}
+
+export function configuredLoginCredentials(environment: NodeJS.ProcessEnv): Partial<Record<BrowserSource, LoginCredentials>> {
+  const bcn = loginPair(environment.BCN_EMAIL, environment.BCN_PASSWORD);
+  const munet = loginPair(environment.MUNET_USERNAME, environment.MUNET_PASSWORD);
+  return { ...(bcn && { rin: bcn, otogame: bcn }), ...(munet && { munet }) };
 }
 
 export function runtimeConfig(environment: NodeJS.ProcessEnv, projectRoot: string, args: string[] = []) {

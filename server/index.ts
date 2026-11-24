@@ -1,6 +1,6 @@
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { localEnvironment, runtimeConfig } from "./config";
+import { configuredLoginCredentials, localEnvironment, runtimeConfig } from "./config";
 import { loadLocalCatalog, openLocalDatabase } from "./db/sqlite";
 import { SqliteSourceStore } from "./db/sqliteSourceStore";
 import { createAppServer } from "./http";
@@ -14,13 +14,15 @@ import { WorkspaceRepository } from "./workspace";
 const projectRoot = fileURLToPath(new URL("../", import.meta.url));
 
 function start() {
-  const { development, port, host, dataDirectory } = runtimeConfig(localEnvironment(projectRoot), projectRoot, process.argv);
+  const environment = localEnvironment(projectRoot);
+  const { development, port, host, dataDirectory } = runtimeConfig(environment, projectRoot, process.argv);
   const catalog = loadLocalCatalog();
   const connection = openLocalDatabase(dataDirectory);
   const workspace = new WorkspaceRepository(connection.db);
   const sources = new SourceManager({
     store: new SqliteSourceStore(connection.db, dataDirectory),
     providers: { rin: rinProvider, munet: munetProvider, otogame: otogameProvider },
+    loginCredentials: configuredLoginCredentials(environment),
   });
   let initialization: Promise<SourceManager> | undefined;
   let stopping = false;

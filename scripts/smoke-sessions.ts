@@ -37,9 +37,52 @@ const provider: BrowserProvider = {
     return { userMusicDetailList: [{ musicId: catalog[0].id, level: catalog[0].difficulty, scoreMax: 1_005_000 }] };
   },
 };
+const munetProvider: BrowserProvider = {
+  ...provider,
+  source: "munet",
+  loginUrl: "https://portal.mumur.net/login",
+};
+const fixtureCredentials = { username: "fixture-munet", password: "fixture-password" };
+const munetLoginPage = `<meta charset="utf-8">
+  <input placeholder="用户名"><input type="password" placeholder="密码">
+  <button id="login" disabled>登录</button>
+  <button id="verify" hidden>完成模拟验证</button>
+  <script>
+    const [username, password] = document.querySelectorAll("input");
+    const login = document.querySelector("#login");
+    const verify = document.querySelector("#verify");
+    document.addEventListener("input", () => {
+      login.disabled = username.value !== "fixture-munet" || password.value !== "fixture-password";
+    });
+    login.addEventListener("click", () => { verify.hidden = false; });
+    verify.addEventListener("click", () => { localStorage.setItem("auth", "fixture-session"); });
+  </script>`;
 const options = {
-  providers: { rin: provider, munet: provider, otogame: provider }, bindPollMs: 50, bindTimeoutMs: 20_000,
-  launcher: { async open(path: string, url: string, visible: boolean) { opened = await browserLauncher.open(path, url, visible); return opened; } },
+  providers: { rin: provider, munet: munetProvider, otogame: provider },
+  loginCredentials: { munet: fixtureCredentials },
+  bindPollMs: 50,
+  bindTimeoutMs: 20_000,
+  launcher: {
+    async open(path: string, url: string, visible: boolean) {
+      if (url !== munetProvider.loginUrl) {
+        opened = await browserLauncher.open(path, url, visible);
+        return opened;
+      }
+      const session = await browserLauncher.open(path, "about:blank", visible);
+      try {
+        // Exercise the exact production login origin through an entirely local fixture.
+        await session.context.route("**/*", route => route.request().url() === url
+          ? route.fulfill({ contentType: "text/html", body: munetLoginPage })
+          : route.abort());
+        await session.page.goto(url);
+        opened = session;
+        return opened;
+      } catch (error) {
+        await session.context.close();
+        throw error;
+      }
+    },
+  },
 };
 let manager = new SourceManager({ ...options, store });
 async function waitUntil(condition: () => boolean) {
@@ -70,6 +113,18 @@ try {
   await assert.rejects(stat(store.profilePath(saved.binding.profile)), { code: "ENOENT" });
   assert.equal(manager.connections().find((connection) => connection.source === "rin")?.bound, false);
   console.log("PASS: isolated browser login, session restored from SQLite after restart, score sync, and profile removal on unbind");
+
+  opened = undefined;
+  await manager.bind("munet");
+  await waitUntil(() => Boolean(opened));
+  const verification = opened!.page.getByRole("button", { name: "完成模拟验证" });
+  await verification.waitFor({ timeout: 5_000 });
+  assert.equal(manager.connections().find(connection => connection.source === "munet")?.status, "binding");
+  assert.equal(await opened!.page.evaluate(() => localStorage.getItem("auth")), null);
+  await verification.click();
+  await waitUntil(() => manager.connections().some(connection => connection.source === "munet" && connection.status === "ready"));
+  assert((await new SqliteSourceStore(database.db, directory).load("munet")).binding?.profile);
+  console.log("PASS: automatic MuNET form submission hands verification to the user before binding");
 } finally {
   await manager.close();
   if (database.db.isOpen) database.close();

@@ -1,5 +1,32 @@
 import { describe, expect, it } from "vitest";
-import { runtimeConfig } from "./config";
+import { parseEnv } from "node:util";
+import { configuredLoginCredentials, runtimeConfig } from "./config";
+
+describe("optional portal login credentials", () => {
+  it("shares the BCN pair between Rin and OTO and keeps MuNET credentials separate", () => {
+    const environment = parseEnv([
+      'BCN_EMAIL="  fixture@example.test  "',
+      'BCN_PASSWORD="  fixture # bcn  "',
+      'MUNET_USERNAME=fixture-munet',
+      'MUNET_PASSWORD="fixture # munet"',
+    ].join("\n"));
+    const bcn = { username: "fixture@example.test", password: "  fixture # bcn  " };
+    expect(configuredLoginCredentials(environment)).toEqual({
+      rin: bcn,
+      otogame: bcn,
+      munet: { username: "fixture-munet", password: "fixture # munet" },
+    });
+  });
+
+  it("leaves incomplete or malformed pairs in manual login mode", () => {
+    expect(configuredLoginCredentials({})).toEqual({});
+    expect(configuredLoginCredentials({ BCN_EMAIL: "fixture@example.test", MUNET_PASSWORD: "fixture" })).toEqual({});
+    expect(configuredLoginCredentials({
+      BCN_EMAIL: "fixture@example.test", BCN_PASSWORD: "fixture\npassword",
+      MUNET_USERNAME: " ", MUNET_PASSWORD: "fixture",
+    })).toEqual({});
+  });
+});
 
 describe("local runtime configuration", () => {
   it("uses the local development, production and preview ports", () => {
